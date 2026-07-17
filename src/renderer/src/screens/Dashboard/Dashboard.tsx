@@ -109,27 +109,38 @@ function BucketCard({
   )
 }
 
-function RejectedBanner(): React.JSX.Element | null {
-  // estado atual (independe da aba de período): meus cards reprovados
-  const { data } = useIssues({ type: '7d' }, 'rejected')
+function RejectedBanner(): React.JSX.Element {
+  // estado atual (independe da aba de período): meus cards reprovados.
+  // Sempre visível — mostra "0" quando não há nenhum, pra ser fácil de achar.
+  const { data, isLoading } = useIssues({ type: '7d' }, 'rejected')
   const issues = data?.issues ?? []
-  if (issues.length === 0) return null
+  const has = issues.length > 0
   return (
     <Card
-      className="mb-4 border-red-900/50 bg-red-950/20"
+      className={`mb-4 ${has ? 'border-red-900/50 bg-red-950/20' : ''}`}
       title={
-        <span className="flex items-center gap-2 text-red-300">
-          <AlertTriangle size={15} />
+        <span className={`flex items-center gap-2 ${has ? 'text-red-300' : 'text-zinc-300'}`}>
+          <AlertTriangle size={15} className={has ? '' : 'text-zinc-500'} />
           Reprovados
-          <span className="rounded bg-red-900/50 px-1.5 text-xs">{issues.length}</span>
+          <span
+            className={`rounded px-1.5 text-xs ${has ? 'bg-red-900/50' : 'bg-zinc-800 text-zinc-400'}`}
+          >
+            {issues.length}
+          </span>
         </span>
       }
     >
-      <div className="max-h-56 space-y-0.5 overflow-y-auto">
-        {issues.map((i) => (
-          <IssueRow key={i.key} issue={i} />
-        ))}
-      </div>
+      {isLoading ? (
+        <Spinner className="text-zinc-500" />
+      ) : has ? (
+        <div className="max-h-56 space-y-0.5 overflow-y-auto">
+          {issues.map((i) => (
+            <IssueRow key={i.key} issue={i} />
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-zinc-500">Nenhum card seu reprovado no momento.</p>
+      )}
     </Card>
   )
 }
