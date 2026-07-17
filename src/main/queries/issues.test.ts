@@ -135,4 +135,23 @@ describe('queryIssues buckets', () => {
     const all = queryIssues(ctx(), { ...range, bucket: 'all', stalledDays: 3 })
     expect(all[0].url).toBe('https://x.atlassian.net/browse/BT-7')
   })
+
+  it('rejected: meus cards abertos com status de reprovação (padrão pt/en)', () => {
+    upsertIssue(db, 1, baseIssue('BT-10', { status: 'Reprovado' }))
+    upsertIssue(db, 1, baseIssue('BT-11', { status: 'REPROVADO' }))
+    upsertIssue(db, 1, baseIssue('BT-12', { status: 'Rejected' }))
+    upsertIssue(db, 1, baseIssue('BT-13', { status: 'In Progress' })) // não reprovado
+    upsertIssue(db, 1, baseIssue('BT-14', { status: 'Reprovado', assigneeAccountId: 'acc-outro' })) // não é meu
+    upsertIssue(
+      db,
+      1,
+      baseIssue('BT-15', {
+        status: 'Reprovado',
+        statusCategory: 'done',
+        resolvedAt: iso('2026-07-16T10:00:00Z')
+      })
+    ) // concluído -> fora
+    const rejected = queryIssues(ctx(), { ...range, bucket: 'rejected', stalledDays: 3 })
+    expect(rejected.map((i) => i.key).sort()).toEqual(['BT-10', 'BT-11', 'BT-12'])
+  })
 })

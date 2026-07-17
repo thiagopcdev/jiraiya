@@ -61,7 +61,9 @@ export const ipcContract = {
   'issues:query': {
     req: z.object({
       period: periodSchema,
-      bucket: z.enum(['moved', 'commented', 'done', 'inProgress', 'stalled', 'all']).optional()
+      bucket: z
+        .enum(['moved', 'commented', 'done', 'inProgress', 'stalled', 'rejected', 'all'])
+        .optional()
     }),
     res: undefined as unknown as { issues: Issue[] }
   },
@@ -128,7 +130,8 @@ export const ipcContract = {
       backfillDays: z.number().int().min(7).max(180).optional(),
       stalledDays: z.number().int().min(1).max(30).optional(),
       syncMode: z.enum(['project', 'personal']).optional(),
-      notifyCriticalAlerts: z.boolean().optional()
+      notifyCriticalAlerts: z.boolean().optional(),
+      notifyAssignedToMe: z.boolean().optional()
     }),
     res: undefined as unknown as Prefs
   },

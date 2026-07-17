@@ -142,6 +142,7 @@ export interface Prefs {
   stalledDays: number
   syncMode: 'project' | 'personal'
   notifyCriticalAlerts: boolean
+  notifyAssignedToMe: boolean
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -149,5 +150,6 @@ export const DEFAULT_PREFS: Prefs = {
   backfillDays: 30,
   stalledDays: 3,
   syncMode: 'project',
-  notifyCriticalAlerts: false
+  notifyCriticalAlerts: false,
+  notifyAssignedToMe: true
 }

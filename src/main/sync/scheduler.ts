@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3'
-import { runSync, type SyncProgress } from './engine'
+import { runSync, type AfterSyncInfo, type SyncProgress } from './engine'
 import { JiraClient } from '../jira/client'
 import { getPrefs, getLastSuccessAt } from '../db/repos/misc'
 import { getWorkspaceRow } from '../db/repos/workspace'
@@ -11,7 +11,7 @@ export interface SchedulerDeps {
   getClient: () => JiraClient | null
   onProgress: (p: SyncProgress) => void
   onComplete: (result: { success: boolean; error: string | null }) => void
-  onAfterSync?: () => void
+  onAfterSync?: (info: AfterSyncInfo) => void
 }
 
 /** Agenda o sync: no boot, a cada N minutos e sob demanda. Nunca roda 2 em paralelo. */

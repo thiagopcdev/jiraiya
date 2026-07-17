@@ -4,7 +4,13 @@ import { buildSyncJql } from '../jira/jql'
 import { deriveActivities } from './deriveActivities'
 import { mapIssue } from './mapIssue'
 import { insertActivities } from '../db/repos/activity'
-import { issuesNeedingChangelog, markChangelogSynced, upsertIssue } from '../db/repos/issue'
+import {
+  getIssueByKey,
+  issuesNeedingChangelog,
+  markChangelogSynced,
+  upsertIssue
+} from '../db/repos/issue'
+import { isFreshAssignmentToMe } from './assignment'
 import { getPrefs, getSyncCursor, setSyncState } from '../db/repos/misc'
 import { listBoards, selectedProjectKeys, upsertSprints } from '../db/repos/catalog'
 import type { JiraIssue } from '../jira/types'
@@ -20,13 +26,19 @@ export interface SyncDeps {
   client: JiraClient
   workspace: {
     id: number
+    account_id: string
     time_zone: string | null
     story_points_field_id: string | null
     sprint_field_id: string | null
   }
   onProgress?: (p: SyncProgress) => void
   /** Hook pós-sync (alertas, notificações) */
-  onAfterSync?: () => void
+  onAfterSync?: (info: AfterSyncInfo) => void
+}
+
+export interface AfterSyncInfo {
+  /** cards que passaram a ser atribuídos a mim nesta rodada */
+  assignedToMe: Array<{ key: string; summary: string }>
 }
 
 export interface SyncResult {
@@ -48,6 +60,8 @@ export async function runSync(deps: SyncDeps, opts: { full?: boolean } = {}): Pr
 
   try {
     const cursor = opts.full ? null : getSyncCursor(db, workspace.id, RESOURCE)
+    const isFirstSync = cursor === null
+    const assignedToMe: Array<{ key: string; summary: string }> = []
     const jql = buildSyncJql({
       mode: prefs.syncMode,
       projectKeys: selectedProjectKeys(db, workspace.id),
@@ -65,7 +79,19 @@ export async function runSync(deps: SyncDeps, opts: { full?: boolean } = {}): Pr
     await client.searchAll(jql, compactFieldIds(fieldIds), async (page: JiraIssue[]) => {
       const tx = db.transaction(() => {
         for (const raw of page) {
-          upsertIssue(db, workspace.id, mapIssue(raw, fieldIds))
+          const mapped = mapIssue(raw, fieldIds)
+          const existing = getIssueByKey(db, workspace.id, raw.key)
+          if (
+            isFreshAssignmentToMe({
+              previousAssignee: existing?.assignee_account_id,
+              newAssignee: mapped.assigneeAccountId,
+              myAccountId: workspace.account_id,
+              isFirstSync
+            })
+          ) {
+            assignedToMe.push({ key: raw.key, summary: mapped.summary })
+          }
+          upsertIssue(db, workspace.id, mapped)
           idToKey.set(raw.id, raw.key)
         }
       })
@@ -150,7 +176,7 @@ export async function runSync(deps: SyncDeps, opts: { full?: boolean } = {}): Pr
     }
 
     setSyncState(db, workspace.id, RESOURCE, { status: 'idle', success: true, error: null })
-    deps.onAfterSync?.()
+    deps.onAfterSync?.({ assignedToMe })
     return { issuesProcessed: processed, activitiesIssues: activitiesDone }
   } catch (err) {
     setSyncState(db, workspace.id, RESOURCE, {

@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
 import { invoke } from './client'
 import type { Period } from '@shared/periods'
-import type { IpcResponse } from '@shared/ipc-contract'
+import type { IpcRequest, IpcResponse } from '@shared/ipc-contract'
 
 export function useAuthStatus(): UseQueryResult<IpcResponse<'auth:status'>> {
   return useQuery({
@@ -28,7 +28,7 @@ export function useProjects(refresh = false): UseQueryResult<IpcResponse<'projec
 
 export function useIssues(
   period: Period,
-  bucket?: 'moved' | 'commented' | 'done' | 'inProgress' | 'stalled' | 'all'
+  bucket?: IpcRequest<'issues:query'>['bucket']
 ): UseQueryResult<IpcResponse<'issues:query'>> {
   return useQuery({
     queryKey: ['issues', period, bucket],

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { AlertTriangle } from 'lucide-react'
 import type { Period } from '@shared/periods'
 import type { Issue } from '@shared/domain'
 import { useIssues } from '../../api/hooks'
@@ -49,6 +50,8 @@ export default function Dashboard(): React.JSX.Element {
       </div>
 
       {tab.key === 'sprint' && <SprintHeader />}
+
+      <RejectedBanner />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         {buckets.map((b) => (
@@ -102,6 +105,31 @@ function BucketCard({
           )}
         </div>
       )}
+    </Card>
+  )
+}
+
+function RejectedBanner(): React.JSX.Element | null {
+  // estado atual (independe da aba de período): meus cards reprovados
+  const { data } = useIssues({ type: '7d' }, 'rejected')
+  const issues = data?.issues ?? []
+  if (issues.length === 0) return null
+  return (
+    <Card
+      className="mb-4 border-red-900/50 bg-red-950/20"
+      title={
+        <span className="flex items-center gap-2 text-red-300">
+          <AlertTriangle size={15} />
+          Reprovados
+          <span className="rounded bg-red-900/50 px-1.5 text-xs">{issues.length}</span>
+        </span>
+      }
+    >
+      <div className="max-h-56 space-y-0.5 overflow-y-auto">
+        {issues.map((i) => (
+          <IssueRow key={i.key} issue={i} />
+        ))}
+      </div>
     </Card>
   )
 }

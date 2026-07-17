@@ -159,6 +159,15 @@ function SyncSection(): React.JSX.Element {
           onChange={(v) => void update({ syncMode: v as Prefs['syncMode'] })}
         />
         <label className="flex cursor-pointer items-center justify-between text-sm text-zinc-300">
+          Notificar quando um card for atribuído a mim
+          <input
+            type="checkbox"
+            className="accent-indigo-600"
+            checked={prefs.notifyAssignedToMe}
+            onChange={(e) => void update({ notifyAssignedToMe: e.target.checked })}
+          />
+        </label>
+        <label className="flex cursor-pointer items-center justify-between text-sm text-zinc-300">
           Notificar alertas críticos (notificação nativa)
           <input
             type="checkbox"

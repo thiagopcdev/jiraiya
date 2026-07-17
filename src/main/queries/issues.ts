@@ -2,7 +2,8 @@ import type Database from 'better-sqlite3'
 import type { Issue } from '@shared/domain'
 import { rowToIssue, type IssueRow } from '../db/repos/issue'
 
-export type IssueBucket = 'moved' | 'commented' | 'done' | 'inProgress' | 'stalled' | 'all'
+export type IssueBucket =
+  'moved' | 'commented' | 'done' | 'inProgress' | 'stalled' | 'rejected' | 'all'
 
 export interface IssueQueryCtx {
   db: Database.Database
@@ -86,6 +87,24 @@ export function queryIssues(
         .all({ workspaceId, accountId, cutoff }) as IssueRow[]
       break
     }
+    case 'rejected':
+      // estado atual (ignora período): meus cards abertos cujo status indica
+      // reprovação. Padrão amplo pt/en em vez de um literal, para tolerar
+      // variações de nome de status entre times.
+      rows = db
+        .prepare(
+          `SELECT * FROM issue
+           WHERE workspace_id = @workspaceId
+             AND assignee_account_id = @accountId
+             AND (status_category IS NULL OR status_category != 'done')
+             AND (
+               LOWER(status) LIKE '%reprov%' OR LOWER(status) LIKE '%rejeit%'
+               OR LOWER(status) LIKE '%reject%' OR LOWER(status) LIKE '%devolv%'
+             )
+           ORDER BY updated_at DESC`
+        )
+        .all({ workspaceId, accountId }) as IssueRow[]
+      break
     case 'all':
       rows = db
         .prepare(

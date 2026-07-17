@@ -72,20 +72,39 @@ app.whenReady().then(() => {
     getClient: () => ctx.getClient(),
     onProgress: (p) => ctx.push('push:sync-progress', p),
     onComplete: (r) => ctx.push('push:sync-complete', r),
-    onAfterSync: () => {
+    onAfterSync: (info) => {
       const workspace = getWorkspaceRow(db)
       if (!workspace) return
       const previous = listActiveAlerts(db, workspace.id)
       const { activeCount } = runAlertEngine(db, workspace.id)
       ctx.push('push:alerts-updated', { count: activeCount })
 
-      if (getPrefs(db).notifyCriticalAlerts && Notification.isSupported()) {
+      const prefs = getPrefs(db)
+      const notify = Notification.isSupported()
+      const openIssue = (issueKey: string): void => {
+        void shell.openExternal(`${workspace.site_url.replace(/\/$/, '')}/browse/${issueKey}`)
+      }
+
+      if (prefs.notifyCriticalAlerts && notify) {
         const previousIds = new Set(previous.map((a) => `${a.ruleId}:${a.issueKey}`))
         const fresh = listActiveAlerts(db, workspace.id).filter(
           (a) => a.severity === 'critical' && !previousIds.has(`${a.ruleId}:${a.issueKey}`)
         )
         for (const alert of fresh.slice(0, 3)) {
-          new Notification({ title: 'Jiraiya', body: alert.message }).show()
+          const n = new Notification({ title: 'Jiraiya', body: alert.message })
+          if (alert.issueKey) n.on('click', () => openIssue(alert.issueKey!))
+          n.show()
+        }
+      }
+
+      if (prefs.notifyAssignedToMe && notify) {
+        for (const item of info.assignedToMe.slice(0, 5)) {
+          const n = new Notification({
+            title: 'Card atribuído a você',
+            body: `${item.key} — ${item.summary}`
+          })
+          n.on('click', () => openIssue(item.key))
+          n.show()
         }
       }
     }
