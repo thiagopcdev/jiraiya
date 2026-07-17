@@ -1,6 +1,4 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { formatDistanceToNow } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
 import {
   AlertTriangle,
   Calendar,
@@ -13,6 +11,7 @@ import {
 import { invoke } from '../api/client'
 import { useAlerts, usePushInvalidation, useSyncStatus } from '../api/hooks'
 import { Spinner } from './ui'
+import { compactAgo } from '../lib/relativeTime'
 import { t } from '../strings/ptBR'
 
 const navItems = [
@@ -63,29 +62,30 @@ export default function Shell(): React.JSX.Element {
         </nav>
         <div className="border-t border-zinc-800 p-3">
           <button
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800 disabled:cursor-default"
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-zinc-300 hover:bg-zinc-800 disabled:cursor-default disabled:text-zinc-500"
             disabled={sync?.running}
             onClick={() => void invoke('sync:run', {})}
-            title={t.sync.syncNow}
           >
             {sync?.running ? <Spinner /> : <RefreshCw size={14} />}
-            <span className="truncate">
-              {sync?.running
-                ? (t.sync.phases[sync.progress?.phase ?? ''] ?? t.sync.syncing)
-                : sync?.lastSuccessAt
-                  ? t.sync.lastSync(
-                      formatDistanceToNow(new Date(sync.lastSuccessAt), {
-                        addSuffix: true,
-                        locale: ptBR
-                      })
-                    )
-                  : t.sync.never}
-            </span>
+            <span>{sync?.running ? t.sync.syncing : t.sync.syncNow}</span>
           </button>
-          {sync?.lastError && (
-            <p className="mt-1 truncate px-2 text-xs text-red-400" title={sync.lastError}>
+          {sync?.running ? (
+            <p className="mt-1 px-2 text-xs leading-tight text-zinc-500">
+              {t.sync.phases[sync.progress?.phase ?? ''] ?? ''}
+            </p>
+          ) : sync?.lastError ? (
+            <p className="mt-1 px-2 text-xs leading-tight text-red-400" title={sync.lastError}>
               {t.sync.error}
             </p>
+          ) : sync?.lastSuccessAt ? (
+            <p
+              className="mt-1 px-2 text-xs leading-tight text-zinc-500"
+              title={new Date(sync.lastSuccessAt).toLocaleString('pt-BR')}
+            >
+              {t.sync.lastSync(compactAgo(sync.lastSuccessAt))}
+            </p>
+          ) : (
+            <p className="mt-1 px-2 text-xs leading-tight text-zinc-500">{t.sync.never}</p>
           )}
         </div>
       </aside>
