@@ -3,7 +3,7 @@ import type { Issue } from '@shared/domain'
 import { rowToIssue, type IssueRow } from '../db/repos/issue'
 
 export type IssueBucket =
-  'moved' | 'commented' | 'done' | 'inProgress' | 'stalled' | 'rejected' | 'all'
+  'moved' | 'commented' | 'done' | 'inProgress' | 'stalled' | 'rejected' | 'sprintScope' | 'all'
 
 export interface IssueQueryCtx {
   db: Database.Database
@@ -104,6 +104,21 @@ export function queryIssues(
            ORDER BY updated_at DESC`
         )
         .all({ workspaceId, accountId }) as IssueRow[]
+      break
+    case 'sprintScope':
+      // pertencem à sprint ativa (diferente de "atualizadas no período")
+      rows = db
+        .prepare(
+          `SELECT * FROM issue
+           WHERE workspace_id = @workspaceId
+             AND sprint_jira_id = (
+               SELECT jira_id FROM sprint
+               WHERE workspace_id = @workspaceId AND state = 'active'
+               ORDER BY start_date DESC LIMIT 1
+             )
+           ORDER BY updated_at DESC`
+        )
+        .all({ workspaceId }) as IssueRow[]
       break
     case 'all':
       rows = db

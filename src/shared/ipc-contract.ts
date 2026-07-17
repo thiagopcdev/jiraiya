@@ -63,7 +63,16 @@ export const ipcContract = {
     req: z.object({
       period: periodSchema,
       bucket: z
-        .enum(['moved', 'commented', 'done', 'inProgress', 'stalled', 'rejected', 'all'])
+        .enum([
+          'moved',
+          'commented',
+          'done',
+          'inProgress',
+          'stalled',
+          'rejected',
+          'sprintScope',
+          'all'
+        ])
         .optional()
     }),
     res: undefined as unknown as { issues: Issue[] }

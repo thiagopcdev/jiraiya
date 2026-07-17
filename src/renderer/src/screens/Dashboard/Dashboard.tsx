@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { differenceInCalendarDays } from 'date-fns'
 import { AlertTriangle } from 'lucide-react'
@@ -6,6 +6,8 @@ import type { Period } from '@shared/periods'
 import type { Issue } from '@shared/domain'
 import { invoke } from '../../api/client'
 import { useIssues } from '../../api/hooks'
+import { computeBurndown } from '../../lib/burndown'
+import { BurndownChart } from '../../components/BurndownChart'
 import { Card, EmptyState, Spinner } from '../../components/ui'
 import { IssueRow } from '../../components/IssueRow'
 import { IssuesByStatus } from '../../components/IssuesByStatus'
@@ -149,40 +151,66 @@ function RejectedBanner(): React.JSX.Element {
 }
 
 function SprintHeader(): React.JSX.Element {
-  const { data } = useIssues({ type: 'sprint' }, 'all')
+  const { data } = useIssues({ type: 'sprint' }, 'sprintScope')
   const { data: sprintData } = useQuery({
     queryKey: ['sprint-active'],
     queryFn: () => invoke('sprint:active', {})
   })
   const sprint = sprintData?.sprint ?? null
-  const issues = data?.issues ?? []
+  const issues = useMemo(() => data?.issues ?? [], [data])
   const done = issues.filter((i) => i.statusCategory === 'done').length
   const open = issues.length - done
   const daysLeft = sprint?.endDate
     ? differenceInCalendarDays(new Date(sprint.endDate), new Date())
     : null
+
+  const burndown = useMemo(
+    () =>
+      sprint?.startDate && sprint.endDate
+        ? computeBurndown(issues, sprint.startDate, sprint.endDate)
+        : null,
+    [issues, sprint]
+  )
+
   return (
-    <div className="mb-4 flex items-center gap-6 rounded-lg border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm">
-      <div>
-        <div className="text-sm font-semibold text-zinc-100">
-          {sprint?.name ?? 'Sem sprint ativa'}
+    <div className="mb-4 rounded-lg border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm">
+      <div className="flex items-center gap-6">
+        <div>
+          <div className="text-sm font-semibold text-zinc-100">
+            {sprint?.name ?? 'Sem sprint ativa'}
+          </div>
+          {daysLeft !== null && (
+            <div className={`text-xs ${daysLeft <= 2 ? 'text-amber-400' : 'text-zinc-500'}`}>
+              {daysLeft < 0
+                ? 'encerrada'
+                : daysLeft === 0
+                  ? 'termina hoje'
+                  : `termina em ${daysLeft} dia${daysLeft === 1 ? '' : 's'}`}
+            </div>
+          )}
         </div>
-        {daysLeft !== null && (
-          <div className={`text-xs ${daysLeft <= 2 ? 'text-amber-400' : 'text-zinc-500'}`}>
-            {daysLeft < 0
-              ? 'encerrada'
-              : daysLeft === 0
-                ? 'termina hoje'
-                : `termina em ${daysLeft} dia${daysLeft === 1 ? '' : 's'}`}
+        <Stat label="Na sprint" value={issues.length} />
+        <Stat label="Concluídas" value={done} />
+        <Stat label="Abertas" value={open} />
+        {issues.length > 0 && (
+          <div className="ml-auto text-xs text-zinc-500">
+            {Math.round((done / issues.length) * 100)}% concluído
           </div>
         )}
       </div>
-      <Stat label="Na sprint" value={issues.length} />
-      <Stat label="Concluídas" value={done} />
-      <Stat label="Abertas" value={open} />
-      {issues.length > 0 && (
-        <div className="ml-auto text-xs text-zinc-500">
-          {Math.round((done / issues.length) * 100)}% concluído
+      {burndown && sprint?.startDate && sprint.endDate && burndown.scope > 0 && (
+        <div className="mt-3 border-t border-zinc-800 pt-3">
+          <BurndownChart
+            burndown={burndown}
+            sprintStart={sprint.startDate}
+            sprintEnd={sprint.endDate}
+          />
+          {burndown.unestimatedCount > 0 && (
+            <p className="mt-1 text-xs text-zinc-600">
+              {burndown.unestimatedCount} issue{burndown.unestimatedCount === 1 ? '' : 's'} sem
+              estimativa fora do gráfico
+            </p>
+          )}
         </div>
       )}
     </div>
