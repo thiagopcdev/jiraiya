@@ -1,0 +1,63 @@
+import { AppError, handle } from '../registry'
+import type { AppContext } from '../../appContext'
+import { getWorkspaceRow } from '../../db/repos/workspace'
+import { getPrefs, deleteSummary, listSummaries, saveSummary } from '../../db/repos/misc'
+import { buildPeriodDigest } from '../../summaries/selectors'
+import { templates } from '../../summaries/templates'
+import { claudeStatus, enhanceWithClaude } from '../../summaries/claude'
+import { resolveWithSprint } from './issues'
+
+export function registerSummaryHandlers(ctx: AppContext): void {
+  handle('summaries:generate', async ({ period, template, useClaude }) => {
+    const workspace = getWorkspaceRow(ctx.db)
+    if (!workspace) throw new AppError('NOT_CONNECTED', 'Nenhuma conta Jira conectada')
+
+    const range = resolveWithSprint(ctx, workspace.id, period)
+    const prefs = getPrefs(ctx.db)
+    const digest = buildPeriodDigest(ctx.db, workspace, range, prefs.stalledDays)
+    const markdown = templates[template](digest)
+
+    if (useClaude) {
+      try {
+        const enhanced = await enhanceWithClaude({
+          templateMarkdown: markdown,
+          digestJson: JSON.stringify(digest, null, 2)
+        })
+        return { markdown: enhanced, generatedBy: 'claude' as const }
+      } catch {
+        // fallback silencioso pro template — o renderer avisa via generatedBy
+      }
+    }
+    return { markdown, generatedBy: 'template' as const }
+  })
+
+  handle('summaries:save', ({ period, template, contentMd, generatedBy }) => {
+    const workspace = getWorkspaceRow(ctx.db)
+    if (!workspace) throw new AppError('NOT_CONNECTED', 'Nenhuma conta Jira conectada')
+    const range = resolveWithSprint(ctx, workspace.id, period)
+    const id = saveSummary(ctx.db, workspace.id, {
+      periodType: period.type,
+      periodStart: range.start,
+      periodEnd: range.end,
+      template,
+      contentMd,
+      generatedBy
+    })
+    return { id }
+  })
+
+  handle('summaries:list', () => {
+    const workspace = getWorkspaceRow(ctx.db)
+    if (!workspace) return { summaries: [] }
+    return { summaries: listSummaries(ctx.db, workspace.id) }
+  })
+
+  handle('summaries:delete', ({ id }) => {
+    const workspace = getWorkspaceRow(ctx.db)
+    if (!workspace) throw new AppError('NOT_CONNECTED', 'Nenhuma conta Jira conectada')
+    deleteSummary(ctx.db, workspace.id, id)
+    return { ok: true as const }
+  })
+
+  handle('claude:status', () => claudeStatus())
+}

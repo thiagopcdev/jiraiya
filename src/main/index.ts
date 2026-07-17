@@ -11,6 +11,7 @@ import { registerSyncHandlers } from './ipc/handlers/sync'
 import { registerPrefsHandlers } from './ipc/handlers/prefs'
 import { registerAlertHandlers } from './ipc/handlers/alerts'
 import { registerIssueHandlers } from './ipc/handlers/issues'
+import { registerSummaryHandlers } from './ipc/handlers/summaries'
 
 let ctx: AppContext
 
@@ -75,6 +76,7 @@ app.whenReady().then(() => {
   registerPrefsHandlers(ctx)
   registerAlertHandlers(ctx)
   registerIssueHandlers(ctx)
+  registerSummaryHandlers(ctx)
 
   createWindow()
   ctx.scheduler.start()

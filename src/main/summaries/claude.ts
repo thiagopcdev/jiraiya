@@ -1,0 +1,108 @@
+import { execFile } from 'child_process'
+import { existsSync } from 'fs'
+import { homedir } from 'os'
+import { join } from 'path'
+import { app } from 'electron'
+
+/**
+ * Integração com Claude via CLI `claude -p` (modo não-interativo).
+ * Usa a assinatura do login local do Claude Code — sem API key.
+ * Camada isolada: qualquer falha cai no template determinístico.
+ *
+ * Apps GUI no macOS não herdam o PATH do shell, então o binário é
+ * resolvido explicitamente nos caminhos usuais.
+ */
+
+const CANDIDATE_PATHS = [
+  join(homedir(), '.local', 'bin', 'claude'),
+  '/opt/homebrew/bin/claude',
+  '/usr/local/bin/claude',
+  join(homedir(), '.claude', 'local', 'claude')
+]
+
+const TIMEOUT_MS = 90_000
+
+export function resolveClaudeBinary(): string | null {
+  for (const p of CANDIDATE_PATHS) {
+    if (existsSync(p)) return p
+  }
+  return null
+}
+
+export function claudeStatus(): { available: boolean; path: string | null } {
+  const path = resolveClaudeBinary()
+  return { available: path !== null, path }
+}
+
+export class ClaudeUnavailableError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ClaudeUnavailableError'
+  }
+}
+
+interface ClaudeCliResult {
+  result?: string
+  is_error?: boolean
+  subtype?: string
+}
+
+/**
+ * Reescreve o markdown do template com o Claude. Lança ClaudeUnavailableError
+ * em qualquer falha — o chamador decide o fallback.
+ */
+export async function enhanceWithClaude(input: {
+  templateMarkdown: string
+  digestJson: string
+}): Promise<string> {
+  const binary = resolveClaudeBinary()
+  if (!binary) throw new ClaudeUnavailableError('CLI do Claude não encontrado')
+
+  const prompt = [
+    'Você recebe um resumo de trabalho gerado automaticamente a partir de dados do Jira, mais o JSON com os fatos brutos.',
+    'Reescreva o resumo em português do Brasil, com tom profissional e conciso, bom para colar numa daily/weekly.',
+    'Regras: não invente fatos; mantenha as chaves dos tickets (ex.: BT-123) exatamente como estão; mantenha a estrutura de seções em markdown; agrupe itens relacionados quando fizer sentido; corte redundância.',
+    'Responda SOMENTE com o markdown final, sem preâmbulo.',
+    '',
+    '=== RESUMO (template) ===',
+    input.templateMarkdown,
+    '',
+    '=== FATOS (JSON) ===',
+    input.digestJson
+  ].join('\n')
+
+  const output = await new Promise<string>((resolve, reject) => {
+    execFile(
+      binary,
+      ['-p', prompt, '--output-format', 'json', '--model', 'sonnet'],
+      {
+        timeout: TIMEOUT_MS,
+        maxBuffer: 4 * 1024 * 1024,
+        cwd: app.getPath('userData'),
+        env: { ...process.env }
+      },
+      (err, stdout, stderr) => {
+        if (err) {
+          reject(
+            new ClaudeUnavailableError(
+              `CLI do Claude falhou: ${stderr?.toString().slice(0, 300) || err.message}`
+            )
+          )
+          return
+        }
+        resolve(stdout.toString())
+      }
+    )
+  })
+
+  let parsed: ClaudeCliResult
+  try {
+    parsed = JSON.parse(output) as ClaudeCliResult
+  } catch {
+    throw new ClaudeUnavailableError('Resposta do CLI do Claude em formato inesperado')
+  }
+  if (parsed.is_error || typeof parsed.result !== 'string' || parsed.result.trim() === '') {
+    throw new ClaudeUnavailableError('Claude retornou erro ou resposta vazia')
+  }
+  return parsed.result.trim()
+}
