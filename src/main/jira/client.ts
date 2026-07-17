@@ -172,6 +172,7 @@ export class JiraClient {
 export function discoverCustomFields(fields: JiraFieldDef[]): {
   storyPointsFieldId: string | null
   sprintFieldId: string | null
+  flaggedFieldId: string | null
 } {
   const byName = (names: string[]): JiraFieldDef | undefined =>
     fields.find((f) => f.custom && names.includes(f.name.toLowerCase()))
@@ -184,8 +185,17 @@ export function discoverCustomFields(fields: JiraFieldDef[]): {
     fields.find((f) => f.schema?.custom === 'com.pyxis.greenhopper.jira:gh-sprint') ??
     byName(['sprint'])
 
+  // "Flagged" (impedimento) é um multicheckbox custom; o nome varia por locale
+  const flagged =
+    fields.find(
+      (f) =>
+        f.schema?.custom === 'com.atlassian.jira.plugin.system.customfieldtypes:multicheckboxes' &&
+        /flag|impedimento|sinaliz/i.test(f.name)
+    ) ?? byName(['flagged'])
+
   return {
     storyPointsFieldId: storyPoints?.id ?? null,
-    sprintFieldId: sprint?.id ?? null
+    sprintFieldId: sprint?.id ?? null,
+    flaggedFieldId: flagged?.id ?? null
   }
 }

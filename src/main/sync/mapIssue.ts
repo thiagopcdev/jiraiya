@@ -5,7 +5,11 @@ import type { AdfNode, JiraIssue, JiraSprintValue } from '../jira/types'
 /** Converte a issue crua da API no shape de upsert do banco. */
 export function mapIssue(
   raw: JiraIssue,
-  fieldIds: { storyPointsFieldId: string | null; sprintFieldId: string | null }
+  fieldIds: {
+    storyPointsFieldId: string | null
+    sprintFieldId: string | null
+    flaggedFieldId: string | null
+  }
 ): IssueUpsert {
   const f = raw.fields
 
@@ -23,6 +27,13 @@ export function mapIssue(
       const active = sprints.find((s) => s.state === 'active')
       sprintJiraId = (active ?? sprints[sprints.length - 1])?.id ?? null
     }
+  }
+
+  // "Flagged" vem como array de opções ([{value: 'Impediment'}]); vazio/ausente = sem flag
+  let flagged = false
+  if (fieldIds.flaggedFieldId) {
+    const v = f[fieldIds.flaggedFieldId]
+    flagged = Array.isArray(v) && v.length > 0
   }
 
   const descriptionText = f.description ? adfToText(f.description as AdfNode) : null
@@ -44,7 +55,7 @@ export function mapIssue(
     sprintJiraId,
     labels: f.labels ?? [],
     parentKey: f.parent?.key ?? null,
-    flagged: false,
+    flagged,
     createdAt: f.created ? new Date(f.created).toISOString() : null,
     updatedAt: f.updated ? new Date(f.updated).toISOString() : null,
     resolvedAt: f.resolutiondate ? new Date(f.resolutiondate).toISOString() : null

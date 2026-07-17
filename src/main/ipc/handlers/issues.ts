@@ -44,6 +44,11 @@ export function registerIssueHandlers(ctx: AppContext): void {
     return { issues }
   })
 
+  handle('sprint:active', () => {
+    const workspace = requireWorkspace(ctx)
+    return { sprint: getActiveSprint(ctx.db, workspace.id) }
+  })
+
   handle('activity:timeline', ({ period, onlyMine, projectKey }) => {
     const workspace = requireWorkspace(ctx)
     const range = resolveWithSprint(ctx, workspace.id, period)

@@ -6,6 +6,7 @@ import type {
   IssueActivity,
   Prefs,
   Project,
+  Sprint,
   Summary,
   SummaryTemplate,
   SyncStatus,
@@ -150,6 +151,10 @@ export const ipcContract = {
   'team:narrative': {
     req: z.object({ period: periodSchema }),
     res: undefined as unknown as { ok: boolean; markdown: string }
+  },
+  'sprint:active': {
+    req: z.object({}),
+    res: undefined as unknown as { sprint: Sprint | null }
   }
 } as const
 

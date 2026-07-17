@@ -1,7 +1,10 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { differenceInCalendarDays } from 'date-fns'
 import { AlertTriangle } from 'lucide-react'
 import type { Period } from '@shared/periods'
 import type { Issue } from '@shared/domain'
+import { invoke } from '../../api/client'
 import { useIssues } from '../../api/hooks'
 import { Card, EmptyState, Spinner } from '../../components/ui'
 import { IssueRow } from '../../components/IssueRow'
@@ -147,11 +150,33 @@ function RejectedBanner(): React.JSX.Element {
 
 function SprintHeader(): React.JSX.Element {
   const { data } = useIssues({ type: 'sprint' }, 'all')
+  const { data: sprintData } = useQuery({
+    queryKey: ['sprint-active'],
+    queryFn: () => invoke('sprint:active', {})
+  })
+  const sprint = sprintData?.sprint ?? null
   const issues = data?.issues ?? []
   const done = issues.filter((i) => i.statusCategory === 'done').length
   const open = issues.length - done
+  const daysLeft = sprint?.endDate
+    ? differenceInCalendarDays(new Date(sprint.endDate), new Date())
+    : null
   return (
     <div className="mb-4 flex items-center gap-6 rounded-lg border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm">
+      <div>
+        <div className="text-sm font-semibold text-zinc-100">
+          {sprint?.name ?? 'Sem sprint ativa'}
+        </div>
+        {daysLeft !== null && (
+          <div className={`text-xs ${daysLeft <= 2 ? 'text-amber-400' : 'text-zinc-500'}`}>
+            {daysLeft < 0
+              ? 'encerrada'
+              : daysLeft === 0
+                ? 'termina hoje'
+                : `termina em ${daysLeft} dia${daysLeft === 1 ? '' : 's'}`}
+          </div>
+        )}
+      </div>
       <Stat label="Na sprint" value={issues.length} />
       <Stat label="Concluídas" value={done} />
       <Stat label="Abertas" value={open} />

@@ -4,6 +4,7 @@ import { JiraClient } from './jira/client'
 import { JiraHttp } from './jira/http'
 import { getCredential } from './security/credentials'
 import { getWorkspaceRow } from './db/repos/workspace'
+import { logJiraRequest } from './lib/requestLog'
 import type { SyncScheduler } from './sync/scheduler'
 import type { PushChannel, PushEvents } from '@shared/ipc-contract'
 
@@ -30,7 +31,8 @@ export class AppContext {
       siteUrl: workspace.site_url,
       email: workspace.email,
       apiToken: token,
-      onAuthError: () => this.push('push:auth-invalid', {})
+      onAuthError: () => this.push('push:auth-invalid', {}),
+      logger: logJiraRequest
     })
     this.cachedClient = new JiraClient(http)
     return this.cachedClient

@@ -153,6 +153,10 @@ const migrations: string[] = [
     key TEXT PRIMARY KEY,
     value_json TEXT NOT NULL
   );
+  `,
+  // 002 — id do custom field "Flagged" (impedimento); 'none' = procurado e ausente
+  `
+  ALTER TABLE workspace ADD COLUMN flagged_field_id TEXT;
   `
 ]
 

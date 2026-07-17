@@ -10,6 +10,7 @@ interface WorkspaceRow {
   time_zone: string | null
   story_points_field_id: string | null
   sprint_field_id: string | null
+  flagged_field_id: string | null
 }
 
 function toDto(row: WorkspaceRow): Workspace {
@@ -72,7 +73,11 @@ export function createWorkspace(
 export function setWorkspaceFields(
   db: Database.Database,
   workspaceId: number,
-  fields: { storyPointsFieldId?: string | null; sprintFieldId?: string | null }
+  fields: {
+    storyPointsFieldId?: string | null
+    sprintFieldId?: string | null
+    flaggedFieldId?: string | null
+  }
 ): void {
   if (fields.storyPointsFieldId !== undefined) {
     db.prepare('UPDATE workspace SET story_points_field_id = ? WHERE id = ?').run(
@@ -83,6 +88,12 @@ export function setWorkspaceFields(
   if (fields.sprintFieldId !== undefined) {
     db.prepare('UPDATE workspace SET sprint_field_id = ? WHERE id = ?').run(
       fields.sprintFieldId,
+      workspaceId
+    )
+  }
+  if (fields.flaggedFieldId !== undefined) {
+    db.prepare('UPDATE workspace SET flagged_field_id = ? WHERE id = ?').run(
+      fields.flaggedFieldId,
       workspaceId
     )
   }

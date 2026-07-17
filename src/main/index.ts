@@ -61,6 +61,11 @@ function createWindow(): void {
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('br.com.biud.jiraiya')
 
+  // ícone do dock em dev (no app empacotado o icns já se aplica)
+  if (process.platform === 'darwin' && is.dev) {
+    app.dock?.setIcon(icon)
+  }
+
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })

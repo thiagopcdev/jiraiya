@@ -13,6 +13,8 @@ import {
 import { isFreshAssignmentToMe } from './assignment'
 import { getPrefs, getSyncCursor, setSyncState } from '../db/repos/misc'
 import { listBoards, selectedProjectKeys, upsertSprints } from '../db/repos/catalog'
+import { setWorkspaceFields } from '../db/repos/workspace'
+import { discoverCustomFields } from '../jira/client'
 import type { JiraIssue } from '../jira/types'
 
 export interface SyncProgress {
@@ -30,6 +32,7 @@ export interface SyncDeps {
     time_zone: string | null
     story_points_field_id: string | null
     sprint_field_id: string | null
+    flagged_field_id: string | null
   }
   onProgress?: (p: SyncProgress) => void
   /** Hook pós-sync (alertas, notificações) */
@@ -51,9 +54,19 @@ const RESOURCE = 'issues'
 export async function runSync(deps: SyncDeps, opts: { full?: boolean } = {}): Promise<SyncResult> {
   const { db, client, workspace, onProgress } = deps
   const prefs = getPrefs(db)
+
+  // workspaces conectados antes da migration 002 não têm o flagged field
+  // descoberto — descobre uma única vez ('none' = procurado e ausente)
+  if (workspace.flagged_field_id === null) {
+    const discovered = discoverCustomFields(await client.listFields())
+    workspace.flagged_field_id = discovered.flaggedFieldId ?? 'none'
+    setWorkspaceFields(db, workspace.id, { flaggedFieldId: workspace.flagged_field_id })
+  }
+
   const fieldIds = {
     storyPointsFieldId: workspace.story_points_field_id,
-    sprintFieldId: workspace.sprint_field_id
+    sprintFieldId: workspace.sprint_field_id,
+    flaggedFieldId: workspace.flagged_field_id === 'none' ? null : workspace.flagged_field_id
   }
 
   setSyncState(db, workspace.id, RESOURCE, { status: 'running', error: null })
@@ -132,7 +145,14 @@ export async function runSync(deps: SyncDeps, opts: { full?: boolean } = {}): Pr
       const raw = rawIssueByKey(db, workspace.id, key)
       if (!raw) continue
       const issueId = raw.jira_id
-      const changelog = changelogsByIssueId.get(issueId) ?? changelogsByIssueId.get(key) ?? []
+      // fallback: issue ausente do bulk (changelog gigante ou não retornado) e
+      // que teve mudanças (updated != created) -> pagina por issue
+      let changelog = changelogsByIssueId.get(issueId) ?? changelogsByIssueId.get(key) ?? null
+      if (changelog === null) {
+        const hadChanges =
+          raw.updated_at !== null && raw.created_at !== null && raw.updated_at !== raw.created_at
+        changelog = hadChanges ? await client.issueChangelog(key).catch(() => []) : []
+      }
       const comments = await client.issueComments(key)
       const activities = deriveActivities({
         issue: {
@@ -190,8 +210,9 @@ export async function runSync(deps: SyncDeps, opts: { full?: boolean } = {}): Pr
 function compactFieldIds(fieldIds: {
   storyPointsFieldId: string | null
   sprintFieldId: string | null
+  flaggedFieldId: string | null
 }): string[] {
-  return [fieldIds.storyPointsFieldId, fieldIds.sprintFieldId].filter(
+  return [fieldIds.storyPointsFieldId, fieldIds.sprintFieldId, fieldIds.flaggedFieldId].filter(
     (id): id is string => id !== null
   )
 }
@@ -200,6 +221,7 @@ interface RawIssueRow {
   jira_id: string
   summary: string
   created_at: string | null
+  updated_at: string | null
   reporter_account_id: string | null
 }
 
@@ -211,7 +233,7 @@ function rawIssueByKey(
   return (
     (db
       .prepare(
-        'SELECT jira_id, summary, created_at, reporter_account_id FROM issue WHERE workspace_id = ? AND key = ?'
+        'SELECT jira_id, summary, created_at, updated_at, reporter_account_id FROM issue WHERE workspace_id = ? AND key = ?'
       )
       .get(workspaceId, key) as RawIssueRow | undefined) ?? null
   )

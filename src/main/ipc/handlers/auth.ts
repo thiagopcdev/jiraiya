@@ -55,7 +55,9 @@ export function registerAuthHandlers(ctx: AppContext): void {
     }
     setWorkspaceFields(ctx.db, workspace.id, {
       storyPointsFieldId: fields.storyPointsFieldId,
-      sprintFieldId: fields.sprintFieldId
+      sprintFieldId: fields.sprintFieldId,
+      // 'none' = procurado e ausente na instância (evita re-descoberta a cada sync)
+      flaggedFieldId: fields.flaggedFieldId ?? 'none'
     })
     deleteCredentials(ctx.db, workspace.id)
     storeCredential(ctx.db, workspace.id, 'jira_api_token', apiToken)
