@@ -85,7 +85,19 @@ export async function runSync(deps: SyncDeps, opts: { full?: boolean } = {}): Pr
       }
     })
 
-    // fase 2: changelogs + comentários -> activities
+    // fase 2: changelogs + comentários -> activities.
+    // Além das issues desta rodada, recupera pendências de rodadas que
+    // falharam no meio (issue gravada, activity não derivada).
+    const pendingRows = db
+      .prepare(
+        `SELECT key FROM issue
+         WHERE workspace_id = ? AND (changelog_synced_at IS NULL OR updated_at > changelog_synced_at)`
+      )
+      .all(workspace.id) as Array<{ key: string }>
+    for (const { key } of pendingRows) {
+      if (!changedKeys.includes(key)) changedKeys.push(key)
+    }
+
     onProgress?.({ phase: 'activities', done: 0, total: changedKeys.length })
     const changelogsByIssueId = await client.bulkChangelogs(changedKeys)
     let activitiesDone = 0

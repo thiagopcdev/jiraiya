@@ -93,4 +93,35 @@ describe('deriveActivities', () => {
     expect(first.fromValue).toBe('To Do')
     expect(first.toValue).toBe('In Progress')
   })
+
+  it('item sem toString/fromString no JSON não vaza função do prototype', () => {
+    // JSON.parse reproduz o payload real: sem a própria chave "toString",
+    // item.toString resolve para Object.prototype.toString (função)
+    const parsed = JSON.parse(
+      JSON.stringify([
+        {
+          id: '200',
+          author: { accountId: 'acc-me', displayName: 'Thiago' },
+          created: '2026-07-16T20:00:00.000+0000',
+          items: [{ field: 'assignee', from: 'acc-a', to: 'acc-b' }]
+        }
+      ])
+    )
+    const out = deriveActivities({
+      issue: { key: 'BT-99', fields: { summary: 'x' } },
+      changelog: parsed,
+      comments: [],
+      storyPointsFieldId: null
+    })
+    const assignment = out.find((a) => a.kind === 'assignment')!
+    expect(assignment.fromValue).toBe('acc-a')
+    expect(assignment.toValue).toBe('acc-b')
+    for (const a of out) {
+      for (const v of [a.fromValue, a.toValue, a.bodyText, a.field]) {
+        expect(v === null || typeof v === 'string').toBe(true)
+      }
+    }
+    // resolution vazia (toString ausente) não gera "resolved"
+    expect(out.some((a) => a.kind === 'resolved')).toBe(false)
+  })
 })

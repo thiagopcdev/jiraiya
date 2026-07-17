@@ -42,11 +42,15 @@ export function deriveActivities(input: {
     history.items.forEach((item, idx) => {
       const sourceId = `changelog:${history.id}:${idx}`
       const fieldLower = item.field.toLowerCase()
+      // "toString" herda Object.prototype.toString (função) quando o JSON não
+      // traz o campo — sem o typeof, uma função vazaria pro bind do SQLite.
+      const fromValue = (typeof item.fromString === 'string' ? item.fromString : null) ?? item.from ?? null
+      const toValue = (typeof item.toString === 'string' ? item.toString : null) ?? item.to ?? null
       const common = {
         ...base,
         field: item.field,
-        fromValue: item.fromString ?? item.from ?? null,
-        toValue: item.toString ?? item.to ?? null
+        fromValue,
+        toValue
       }
       if (fieldLower === 'status') {
         out.push({ ...common, kind: 'status_change', sourceId })
@@ -63,7 +67,7 @@ export function deriveActivities(input: {
           fieldLower === 'story point estimate')
       ) {
         out.push({ ...common, kind: 'estimate_change', sourceId })
-      } else if (fieldLower === 'resolution' && (item.toString ?? item.to)) {
+      } else if (fieldLower === 'resolution' && toValue) {
         out.push({ ...common, kind: 'resolved', sourceId })
       }
     })
