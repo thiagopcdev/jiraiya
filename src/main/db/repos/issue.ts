@@ -130,9 +130,8 @@ export function getIssueByKey(
   key: string
 ): IssueRow | null {
   return (
-    (db
-      .prepare('SELECT * FROM issue WHERE workspace_id = ? AND key = ?')
-      .get(workspaceId, key) as IssueRow | undefined) ?? null
+    (db.prepare('SELECT * FROM issue WHERE workspace_id = ? AND key = ?').get(workspaceId, key) as
+      IssueRow | undefined) ?? null
   )
 }
 
@@ -154,11 +153,7 @@ export function issuesNeedingChangelog(
   return rows.map((r) => r.key)
 }
 
-export function markChangelogSynced(
-  db: Database.Database,
-  workspaceId: number,
-  key: string
-): void {
+export function markChangelogSynced(db: Database.Database, workspaceId: number, key: string): void {
   db.prepare(
     `UPDATE issue SET changelog_synced_at = updated_at WHERE workspace_id = ? AND key = ?`
   ).run(workspaceId, key)

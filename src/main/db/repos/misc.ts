@@ -200,8 +200,7 @@ export function getLastSuccessAt(db: Database.Database, workspaceId: number): st
 
 export function getPrefs(db: Database.Database): Prefs {
   const row = db.prepare(`SELECT value_json FROM user_pref WHERE key = 'prefs'`).get() as
-    | { value_json: string }
-    | undefined
+    { value_json: string } | undefined
   if (!row) return { ...DEFAULT_PREFS }
   return { ...DEFAULT_PREFS, ...(JSON.parse(row.value_json) as Partial<Prefs>) }
 }

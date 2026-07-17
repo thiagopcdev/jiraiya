@@ -30,7 +30,10 @@ export function Input({
   hint,
   className = '',
   ...props
-}: InputHTMLAttributes<HTMLInputElement> & { label?: string; hint?: ReactNode }): React.JSX.Element {
+}: InputHTMLAttributes<HTMLInputElement> & {
+  label?: string
+  hint?: ReactNode
+}): React.JSX.Element {
   return (
     <label className="block">
       {label && <span className="mb-1 block text-sm font-medium text-zinc-300">{label}</span>}
@@ -80,18 +83,12 @@ export function Badge({
     indigo: 'bg-indigo-900/50 text-indigo-300'
   }[color]
   return (
-    <span className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap ${styles}`}>
+    <span
+      className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap ${styles}`}
+    >
       {children}
     </span>
   )
-}
-
-export function statusColor(
-  category: string | null | undefined
-): 'zinc' | 'blue' | 'green' {
-  if (category === 'done') return 'green'
-  if (category === 'indeterminate') return 'blue'
-  return 'zinc'
 }
 
 export function EmptyState({ message }: { message: string }): React.JSX.Element {

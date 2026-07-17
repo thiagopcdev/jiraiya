@@ -61,7 +61,12 @@ export function selectedProjectKeys(db: Database.Database, workspaceId: number):
 export function upsertBoards(
   db: Database.Database,
   workspaceId: number,
-  boards: Array<{ jiraId: number; name: string | null; type: string | null; projectKey: string | null }>
+  boards: Array<{
+    jiraId: number
+    name: string | null
+    type: string | null
+    projectKey: string | null
+  }>
 ): void {
   const stmt = db.prepare(
     `INSERT INTO board (workspace_id, jira_id, name, type, project_key)

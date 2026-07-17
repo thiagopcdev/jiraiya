@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { templates } from './index'
-import type { PeriodDigest } from '../selectors'
+import type { DigestItem, PeriodDigest } from '../selectors'
 
-const item = (key: string, summary: string, detail?: string) => ({
+const item = (key: string, summary: string, detail?: string): DigestItem => ({
   key,
   summary,
   url: `https://x.atlassian.net/browse/${key}`,

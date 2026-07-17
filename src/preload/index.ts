@@ -1,5 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { IpcChannel, IpcRequest, IpcResult, PushChannel, PushEvents, RendererApi } from '@shared/ipc-contract'
+import type {
+  IpcChannel,
+  IpcRequest,
+  IpcResult,
+  PushChannel,
+  PushEvents,
+  RendererApi
+} from '@shared/ipc-contract'
 
 const ALLOWED_PUSH: readonly string[] = [
   'push:sync-progress',

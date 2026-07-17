@@ -1,7 +1,8 @@
 import { ExternalLink } from 'lucide-react'
 import type { Issue } from '@shared/domain'
 import { invoke } from '../api/client'
-import { Badge, statusColor } from './ui'
+import { Badge } from './ui'
+import { statusColor } from './statusColor'
 
 export function IssueRow({ issue }: { issue: Issue }): React.JSX.Element {
   return (

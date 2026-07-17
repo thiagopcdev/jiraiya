@@ -18,7 +18,9 @@ describe('buildSyncJql', () => {
       timeZone: 'America/Sao_Paulo'
     })
     // 12:00Z - 10min = 11:50Z = 08:50 em SP
-    expect(jql).toBe('project IN ("BT", "BUGS") AND updated >= "2026-07-17 08:50" ORDER BY updated ASC')
+    expect(jql).toBe(
+      'project IN ("BT", "BUGS") AND updated >= "2026-07-17 08:50" ORDER BY updated ASC'
+    )
   })
 
   it('sem cursor usa backfill relativo', () => {

@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow } from 'electron'
+import { app, shell, BrowserWindow, Notification } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -12,6 +12,9 @@ import { registerPrefsHandlers } from './ipc/handlers/prefs'
 import { registerAlertHandlers } from './ipc/handlers/alerts'
 import { registerIssueHandlers } from './ipc/handlers/issues'
 import { registerSummaryHandlers } from './ipc/handlers/summaries'
+import { runAlertEngine } from './alerts/engine'
+import { getWorkspaceRow } from './db/repos/workspace'
+import { getPrefs, listActiveAlerts } from './db/repos/misc'
 
 let ctx: AppContext
 
@@ -67,7 +70,24 @@ app.whenReady().then(() => {
     db,
     getClient: () => ctx.getClient(),
     onProgress: (p) => ctx.push('push:sync-progress', p),
-    onComplete: (r) => ctx.push('push:sync-complete', r)
+    onComplete: (r) => ctx.push('push:sync-complete', r),
+    onAfterSync: () => {
+      const workspace = getWorkspaceRow(db)
+      if (!workspace) return
+      const previous = listActiveAlerts(db, workspace.id)
+      const { activeCount } = runAlertEngine(db, workspace.id)
+      ctx.push('push:alerts-updated', { count: activeCount })
+
+      if (getPrefs(db).notifyCriticalAlerts && Notification.isSupported()) {
+        const previousIds = new Set(previous.map((a) => `${a.ruleId}:${a.issueKey}`))
+        const fresh = listActiveAlerts(db, workspace.id).filter(
+          (a) => a.severity === 'critical' && !previousIds.has(`${a.ruleId}:${a.issueKey}`)
+        )
+        for (const alert of fresh.slice(0, 3)) {
+          new Notification({ title: 'Jiraiya', body: alert.message }).show()
+        }
+      }
+    }
   })
 
   registerAuthHandlers(ctx)

@@ -36,7 +36,10 @@ export function registerAuthHandlers(ctx: AppContext): void {
     // workspace único: reconectar substitui o anterior (mantém o cache de dados
     // apenas se for a mesma conta no mesmo site)
     const existing = getWorkspaceRow(ctx.db)
-    if (existing && (existing.site_url !== normalized || existing.account_id !== myself.accountId)) {
+    if (
+      existing &&
+      (existing.site_url !== normalized || existing.account_id !== myself.accountId)
+    ) {
       deleteWorkspace(ctx.db, existing.id)
     }
 

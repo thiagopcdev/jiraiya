@@ -1,7 +1,14 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { AlertTriangle, Calendar, FileText, LayoutDashboard, RefreshCw, Settings } from 'lucide-react'
+import {
+  AlertTriangle,
+  Calendar,
+  FileText,
+  LayoutDashboard,
+  RefreshCw,
+  Settings
+} from 'lucide-react'
 import { invoke } from '../api/client'
 import { useAlerts, usePushInvalidation, useSyncStatus } from '../api/hooks'
 import { Spinner } from './ui'

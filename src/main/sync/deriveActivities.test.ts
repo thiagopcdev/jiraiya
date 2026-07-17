@@ -50,7 +50,11 @@ describe('deriveActivities', () => {
     deriveActivities({
       issue: {
         key: 'BT-42',
-        fields: { summary: 'Ajustar login', created: '2026-07-10T09:00:00.000+0000', reporter: other }
+        fields: {
+          summary: 'Ajustar login',
+          created: '2026-07-10T09:00:00.000+0000',
+          reporter: other
+        }
       },
       changelog,
       comments,

@@ -25,8 +25,7 @@ function toDto(row: WorkspaceRow): Workspace {
 
 export function getWorkspace(db: Database.Database): Workspace | null {
   const row = db.prepare('SELECT * FROM workspace ORDER BY id LIMIT 1').get() as
-    | WorkspaceRow
-    | undefined
+    WorkspaceRow | undefined
   return row ? toDto(row) : null
 }
 

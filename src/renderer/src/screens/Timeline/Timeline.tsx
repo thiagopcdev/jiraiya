@@ -77,7 +77,9 @@ export default function Timeline(): React.JSX.Element {
             <button
               key={p.key}
               className={`rounded-md px-2.5 py-1 text-sm font-medium ${
-                periodKey === p.key ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'
+                periodKey === p.key
+                  ? 'bg-zinc-700 text-zinc-100'
+                  : 'text-zinc-400 hover:text-zinc-200'
               }`}
               onClick={() => setPeriodKey(p.key)}
             >

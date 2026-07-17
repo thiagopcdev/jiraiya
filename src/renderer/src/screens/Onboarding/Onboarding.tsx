@@ -12,8 +12,14 @@ type Step = 'connect' | 'projects' | 'sync'
 export default function Onboarding(): React.JSX.Element {
   const [step, setStep] = useState<Step>('connect')
   return (
-    <div className="flex h-full items-center justify-center p-6" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
-      <div className="w-full max-w-lg" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+    <div
+      className="flex h-full items-center justify-center p-6"
+      style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+    >
+      <div
+        className="w-full max-w-lg"
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+      >
         <h1 className="mb-1 text-center text-3xl font-bold text-zinc-100">{t.app.name}</h1>
         <p className="mb-6 text-center text-sm text-zinc-500">
           Seu histórico de trabalho no Jira, sem planilha.

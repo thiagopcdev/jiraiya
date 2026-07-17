@@ -71,9 +71,7 @@ export class JiraClient {
   }
 
   /** Changelogs em lote (até 1000 issues por request, paginado por token). */
-  async bulkChangelogs(
-    issueKeys: string[]
-  ): Promise<Map<string, JiraChangelogHistory[]>> {
+  async bulkChangelogs(issueKeys: string[]): Promise<Map<string, JiraChangelogHistory[]>> {
     const result = new Map<string, JiraChangelogHistory[]>()
     for (let i = 0; i < issueKeys.length; i += 500) {
       const batch = issueKeys.slice(i, i + 500)

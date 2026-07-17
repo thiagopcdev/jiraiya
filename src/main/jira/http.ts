@@ -81,8 +81,7 @@ export class JiraHttp {
 
   constructor(opts: JiraHttpOptions) {
     this.baseUrl = opts.siteUrl.replace(/\/$/, '')
-    this.authHeader =
-      'Basic ' + Buffer.from(`${opts.email}:${opts.apiToken}`).toString('base64')
+    this.authHeader = 'Basic ' + Buffer.from(`${opts.email}:${opts.apiToken}`).toString('base64')
     this.queue = new TaskQueue(opts.concurrency ?? 4)
     this.maxRetries = opts.maxRetries ?? 5
     this.onAuthError = opts.onAuthError

@@ -19,7 +19,9 @@ export class AppError extends Error {
   }
 }
 
-type Handler<C extends IpcChannel> = (req: IpcRequest<C>) => Promise<IpcResponse<C>> | IpcResponse<C>
+type Handler<C extends IpcChannel> = (
+  req: IpcRequest<C>
+) => Promise<IpcResponse<C>> | IpcResponse<C>
 
 /**
  * Registra um handler com validação zod do payload e envelope de erro

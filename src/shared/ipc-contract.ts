@@ -60,9 +60,7 @@ export const ipcContract = {
   'issues:query': {
     req: z.object({
       period: periodSchema,
-      bucket: z
-        .enum(['moved', 'commented', 'done', 'inProgress', 'stalled', 'all'])
-        .optional()
+      bucket: z.enum(['moved', 'commented', 'done', 'inProgress', 'stalled', 'all']).optional()
     }),
     res: undefined as unknown as { issues: Issue[] }
   },
@@ -146,8 +144,7 @@ export type IpcResponse<C extends IpcChannel> = IpcContract[C]['res']
 
 /** Envelope de resposta: handlers nunca vazam stack trace pro renderer. */
 export type IpcResult<C extends IpcChannel> =
-  | { ok: true; data: IpcResponse<C> }
-  | { ok: false; code: string; message: string }
+  { ok: true; data: IpcResponse<C> } | { ok: false; code: string; message: string }
 
 /** Canais push main -> renderer */
 export interface PushEvents {

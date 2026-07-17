@@ -13,7 +13,11 @@ function requireWorkspace(ctx: AppContext): NonNullable<ReturnType<typeof getWor
   return workspace
 }
 
-export function resolveWithSprint(ctx: AppContext, workspaceId: number, period: Period) {
+export function resolveWithSprint(
+  ctx: AppContext,
+  workspaceId: number,
+  period: Period
+): ReturnType<typeof resolvePeriod> {
   const sprint = period.type === 'sprint' ? getActiveSprint(ctx.db, workspaceId) : null
   return resolvePeriod(period, new Date(), sprint ?? undefined)
 }
