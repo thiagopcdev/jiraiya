@@ -61,6 +61,13 @@ export function usePrefs(): UseQueryResult<IpcResponse<'prefs:get'>> {
   })
 }
 
+export function useTeam(period: Period): UseQueryResult<IpcResponse<'team:summary'>> {
+  return useQuery({
+    queryKey: ['team', period],
+    queryFn: () => invoke('team:summary', { period })
+  })
+}
+
 /** Assina os canais push uma única vez e invalida os caches relevantes. */
 export function usePushInvalidation(): void {
   const queryClient = useQueryClient()

@@ -44,7 +44,8 @@ export function deriveActivities(input: {
       const fieldLower = item.field.toLowerCase()
       // "toString" herda Object.prototype.toString (função) quando o JSON não
       // traz o campo — sem o typeof, uma função vazaria pro bind do SQLite.
-      const fromValue = (typeof item.fromString === 'string' ? item.fromString : null) ?? item.from ?? null
+      const fromValue =
+        (typeof item.fromString === 'string' ? item.fromString : null) ?? item.from ?? null
       const toValue = (typeof item.toString === 'string' ? item.toString : null) ?? item.to ?? null
       const common = {
         ...base,

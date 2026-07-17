@@ -7,7 +7,8 @@ import {
   FileText,
   LayoutDashboard,
   RefreshCw,
-  Settings
+  Settings,
+  Users
 } from 'lucide-react'
 import { invoke } from '../api/client'
 import { useAlerts, usePushInvalidation, useSyncStatus } from '../api/hooks'
@@ -18,6 +19,7 @@ const navItems = [
   { to: '/', label: t.nav.dashboard, icon: LayoutDashboard },
   { to: '/timeline', label: t.nav.timeline, icon: Calendar },
   { to: '/resumos', label: t.nav.summaries, icon: FileText },
+  { to: '/time', label: t.nav.team, icon: Users },
   { to: '/alertas', label: t.nav.alerts, icon: AlertTriangle },
   { to: '/config', label: t.nav.settings, icon: Settings }
 ]

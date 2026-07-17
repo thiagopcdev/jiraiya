@@ -9,6 +9,7 @@ import type {
   Summary,
   SummaryTemplate,
   SyncStatus,
+  TeamMemberSummary,
   Workspace
 } from './domain'
 
@@ -134,6 +135,18 @@ export const ipcContract = {
   'shell:openIssue': {
     req: z.object({ issueKey: z.string() }),
     res: undefined as unknown as { ok: true }
+  },
+  'team:summary': {
+    req: z.object({ period: periodSchema }),
+    res: undefined as unknown as {
+      members: TeamMemberSummary[]
+      periodLabel: string
+      syncMode: 'project' | 'personal'
+    }
+  },
+  'team:narrative': {
+    req: z.object({ period: periodSchema }),
+    res: undefined as unknown as { ok: boolean; markdown: string }
   }
 } as const
 

@@ -6,6 +6,7 @@ export const t = {
     dashboard: 'Dashboard',
     timeline: 'Timeline',
     summaries: 'Resumos',
+    team: 'Time',
     alerts: 'Alertas',
     settings: 'Configurações'
   },

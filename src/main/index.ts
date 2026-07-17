@@ -12,6 +12,7 @@ import { registerPrefsHandlers } from './ipc/handlers/prefs'
 import { registerAlertHandlers } from './ipc/handlers/alerts'
 import { registerIssueHandlers } from './ipc/handlers/issues'
 import { registerSummaryHandlers } from './ipc/handlers/summaries'
+import { registerTeamHandlers } from './ipc/handlers/team'
 import { runAlertEngine } from './alerts/engine'
 import { getWorkspaceRow } from './db/repos/workspace'
 import { getPrefs, listActiveAlerts } from './db/repos/misc'
@@ -97,6 +98,7 @@ app.whenReady().then(() => {
   registerAlertHandlers(ctx)
   registerIssueHandlers(ctx)
   registerSummaryHandlers(ctx)
+  registerTeamHandlers(ctx)
 
   createWindow()
   ctx.scheduler.start()

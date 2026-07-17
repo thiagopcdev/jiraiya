@@ -7,6 +7,7 @@ import Onboarding from './screens/Onboarding/Onboarding'
 import Dashboard from './screens/Dashboard/Dashboard'
 import Timeline from './screens/Timeline/Timeline'
 import Summaries from './screens/Summaries/Summaries'
+import Team from './screens/Team/Team'
 import Alerts from './screens/Alerts/Alerts'
 import Settings from './screens/Settings/Settings'
 
@@ -45,6 +46,7 @@ export default function App(): React.JSX.Element {
             <Route path="/" element={<Dashboard />} />
             <Route path="/timeline" element={<Timeline />} />
             <Route path="/resumos" element={<Summaries />} />
+            <Route path="/time" element={<Team />} />
             <Route path="/alertas" element={<Alerts />} />
             <Route path="/config" element={<Settings />} />
           </Route>

@@ -48,28 +48,12 @@ interface ClaudeCliResult {
 }
 
 /**
- * Reescreve o markdown do template com o Claude. Lança ClaudeUnavailableError
- * em qualquer falha — o chamador decide o fallback.
+ * Executa um prompt no CLI do Claude e devolve o texto do resultado.
+ * Lança ClaudeUnavailableError em qualquer falha — o chamador decide o fallback.
  */
-export async function enhanceWithClaude(input: {
-  templateMarkdown: string
-  digestJson: string
-}): Promise<string> {
+export async function runClaudePrompt(prompt: string): Promise<string> {
   const binary = resolveClaudeBinary()
   if (!binary) throw new ClaudeUnavailableError('CLI do Claude não encontrado')
-
-  const prompt = [
-    'Você recebe um resumo de trabalho gerado automaticamente a partir de dados do Jira, mais o JSON com os fatos brutos.',
-    'Reescreva o resumo em português do Brasil, com tom profissional e conciso, bom para colar numa daily/weekly.',
-    'Regras: não invente fatos; mantenha as chaves dos tickets (ex.: BT-123) exatamente como estão; mantenha a estrutura de seções em markdown; agrupe itens relacionados quando fizer sentido; corte redundância.',
-    'Responda SOMENTE com o markdown final, sem preâmbulo.',
-    '',
-    '=== RESUMO (template) ===',
-    input.templateMarkdown,
-    '',
-    '=== FATOS (JSON) ===',
-    input.digestJson
-  ].join('\n')
 
   const output = await new Promise<string>((resolve, reject) => {
     execFile(
@@ -77,7 +61,7 @@ export async function enhanceWithClaude(input: {
       ['-p', prompt, '--output-format', 'json', '--model', 'sonnet'],
       {
         timeout: TIMEOUT_MS,
-        maxBuffer: 4 * 1024 * 1024,
+        maxBuffer: 8 * 1024 * 1024,
         cwd: app.getPath('userData'),
         env: { ...process.env }
       },
@@ -105,4 +89,49 @@ export async function enhanceWithClaude(input: {
     throw new ClaudeUnavailableError('Claude retornou erro ou resposta vazia')
   }
   return parsed.result.trim()
+}
+
+/**
+ * Reescreve o markdown do template com o Claude. Lança ClaudeUnavailableError
+ * em qualquer falha — o chamador decide o fallback.
+ */
+export function enhanceWithClaude(input: {
+  templateMarkdown: string
+  digestJson: string
+}): Promise<string> {
+  const prompt = [
+    'Você recebe um resumo de trabalho gerado automaticamente a partir de dados do Jira, mais o JSON com os fatos brutos.',
+    'Reescreva o resumo em português do Brasil, com tom profissional e conciso, bom para colar numa daily/weekly.',
+    'Regras: não invente fatos; mantenha as chaves dos tickets (ex.: BT-123) exatamente como estão; mantenha a estrutura de seções em markdown; agrupe itens relacionados quando fizer sentido; corte redundância.',
+    'Responda SOMENTE com o markdown final, sem preâmbulo.',
+    '',
+    '=== RESUMO (template) ===',
+    input.templateMarkdown,
+    '',
+    '=== FATOS (JSON) ===',
+    input.digestJson
+  ].join('\n')
+  return runClaudePrompt(prompt)
+}
+
+/**
+ * Resumo do time em uma única chamada ao Claude (todos os membros de uma vez —
+ * evita N chamadas caras). Foco em colaboração/awareness, não em ranking.
+ */
+export function summarizeTeamWithClaude(input: {
+  periodLabel: string
+  teamJson: string
+}): Promise<string> {
+  const prompt = [
+    'Você recebe, em JSON, o que cada membro de um time está fazendo no Jira em um período: trabalho em andamento, entregas, tickets parados e contagens de atividade.',
+    `Período: ${input.periodLabel}.`,
+    'Escreva um panorama do time em português do Brasil, curto e útil para alguém se situar antes de uma reunião.',
+    'Foque em: o que está em andamento, quem está bloqueado ou com tickets parados, e onde pode haver necessidade de sincronizar/ajudar.',
+    'NÃO faça ranking de produtividade nem compare desempenho entre pessoas. Não invente fatos. Mantenha as chaves dos tickets (ex.: BT-123).',
+    'Formato: um parágrafo curto por pessoa (comece com o nome em negrito), ou bullets. Responda SOMENTE com o markdown, sem preâmbulo.',
+    '',
+    '=== TIME (JSON) ===',
+    input.teamJson
+  ].join('\n')
+  return runClaudePrompt(prompt)
 }

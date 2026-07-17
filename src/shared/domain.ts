@@ -119,6 +119,23 @@ export interface SyncStatus {
   progress: { phase: string; done: number; total: number | null } | null
 }
 
+/** Radar de um membro do time no período (não é placar de produtividade). */
+export interface TeamMemberSummary {
+  accountId: string
+  name: string
+  isMe: boolean
+  /** atribuídas à pessoa, em andamento agora */
+  inProgress: Issue[]
+  /** concluídas pela pessoa no período */
+  done: Issue[]
+  /** em andamento sem atividade há N dias */
+  stalled: Array<Issue & { stalledDays: number }>
+  /** contagem de mudanças de status feitas pela pessoa no período */
+  movedCount: number
+  /** contagem de comentários feitos pela pessoa no período */
+  commentedCount: number
+}
+
 export interface Prefs {
   syncIntervalMinutes: number
   backfillDays: number
