@@ -6,6 +6,7 @@ import { invoke } from '../../api/client'
 import { useTeam } from '../../api/hooks'
 import { Badge, Button, Card, EmptyState, Spinner } from '../../components/ui'
 import { statusColor } from '../../components/statusColor'
+import { IssuesByStatus } from '../../components/IssuesByStatus'
 
 const periodOptions: Array<{ key: string; label: string; period: Period }> = [
   { key: 'today', label: 'Hoje', period: { type: 'today' } },
@@ -168,7 +169,7 @@ function MemberCard({ member }: { member: TeamMemberSummary }): React.JSX.Elemen
         {member.inProgress.length === 0 ? (
           <p className="text-xs text-zinc-600">Nada em andamento.</p>
         ) : (
-          <IssueList issues={member.inProgress} />
+          <IssuesByStatus issues={member.inProgress} />
         )}
       </div>
     </Card>

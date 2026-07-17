@@ -4,6 +4,7 @@ import type { Issue } from '@shared/domain'
 import { useIssues } from '../../api/hooks'
 import { Card, EmptyState, Spinner } from '../../components/ui'
 import { IssueRow } from '../../components/IssueRow'
+import { IssuesByStatus } from '../../components/IssuesByStatus'
 
 const tabs: Array<{ key: string; label: string; period: Period }> = [
   { key: 'today', label: 'Hoje', period: { type: 'today' } },
@@ -89,10 +90,16 @@ function BucketCard({
       {isLoading && <Spinner className="text-zinc-500" />}
       {!isLoading && issues.length === 0 && <EmptyState message={empty} />}
       {issues.length > 0 && (
-        <div className="max-h-64 space-y-0.5 overflow-y-auto">
-          {issues.map((i: Issue) => (
-            <IssueRow key={i.key} issue={i} />
-          ))}
+        <div className="max-h-64 overflow-y-auto">
+          {bucket === 'inProgress' ? (
+            <IssuesByStatus issues={issues} />
+          ) : (
+            <div className="space-y-0.5">
+              {issues.map((i: Issue) => (
+                <IssueRow key={i.key} issue={i} />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </Card>
