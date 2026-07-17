@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, XCircle } from 'lucide-react'
+import { CheckCircle2, ExternalLink, XCircle } from 'lucide-react'
 import type { Prefs } from '@shared/domain'
 import { invoke } from '../../api/client'
 import { useAuthStatus, usePrefs, useProjects } from '../../api/hooks'
@@ -15,6 +15,7 @@ export default function Settings(): React.JSX.Element {
       <ProjectsSection />
       <SyncSection />
       <ClaudeSection />
+      <AboutSection />
     </div>
   )
 }
@@ -234,6 +235,34 @@ function ClaudeSection(): React.JSX.Element {
           </p>
         </div>
       )}
+    </Card>
+  )
+}
+
+function AboutSection(): React.JSX.Element {
+  const { data } = useQuery({
+    queryKey: ['app-info'],
+    queryFn: () => invoke('app:info', {})
+  })
+  return (
+    <Card title="Sobre">
+      <div className="flex items-center justify-between gap-4 text-sm">
+        <div>
+          <div className="text-zinc-200">Jiraiya{data?.version ? ` v${data.version}` : ''}</div>
+          <div className="text-xs text-zinc-500">
+            Seu histórico de trabalho no Jira, sem planilha.
+          </div>
+        </div>
+        <a
+          className="flex items-center gap-1.5 text-indigo-400 hover:underline"
+          href="https://github.com/thiagopcdev"
+          target="_blank"
+          rel="noreferrer"
+        >
+          <ExternalLink size={14} />
+          feito por @thiagopcdev
+        </a>
+      </div>
     </Card>
   )
 }

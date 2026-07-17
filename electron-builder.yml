@@ -1,5 +1,6 @@
 appId: br.com.biud.jiraiya
 productName: Jiraiya
+copyright: © Thiago Carvalho (@thiagopcdev)
 directories:
   buildResources: build
 files:

@@ -1,4 +1,4 @@
-import { clipboard, dialog, shell } from 'electron'
+import { app, clipboard, dialog, shell } from 'electron'
 import { writeFile } from 'fs/promises'
 import { AppError, handle } from '../registry'
 import type { AppContext } from '../../appContext'
@@ -7,6 +7,8 @@ import { getWorkspaceRow } from '../../db/repos/workspace'
 
 export function registerPrefsHandlers(ctx: AppContext): void {
   handle('prefs:get', () => getPrefs(ctx.db))
+
+  handle('app:info', () => ({ version: app.getVersion() }))
 
   handle('prefs:set', (patch) => {
     const prefs = setPrefs(ctx.db, patch)

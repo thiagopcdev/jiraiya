@@ -164,6 +164,10 @@ export const ipcContract = {
   'sprint:active': {
     req: z.object({}),
     res: undefined as unknown as { sprint: Sprint | null }
+  },
+  'app:info': {
+    req: z.object({}),
+    res: undefined as unknown as { version: string }
   }
 } as const
 
