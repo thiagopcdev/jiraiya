@@ -1,7 +1,56 @@
+import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { useAuthStatus } from './api/hooks'
+import { Spinner } from './components/ui'
+import Shell from './components/Shell'
+import Onboarding from './screens/Onboarding/Onboarding'
+import Dashboard from './screens/Dashboard/Dashboard'
+import Timeline from './screens/Timeline/Timeline'
+import Summaries from './screens/Summaries/Summaries'
+import Alerts from './screens/Alerts/Alerts'
+import Settings from './screens/Settings/Settings'
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { retry: 1, staleTime: 15_000 }
+  }
+})
+
+function AuthGate({ children }: { children: React.JSX.Element }): React.JSX.Element {
+  const { data, isLoading } = useAuthStatus()
+  if (isLoading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Spinner className="text-zinc-500" />
+      </div>
+    )
+  }
+  if (!data?.connected) return <Navigate to="/onboarding" replace />
+  return children
+}
+
 export default function App(): React.JSX.Element {
   return (
-    <div className="flex h-full items-center justify-center">
-      <h1 className="text-2xl font-semibold text-zinc-300">Jiraiya</h1>
-    </div>
+    <QueryClientProvider client={queryClient}>
+      <HashRouter>
+        <Routes>
+          <Route path="/onboarding" element={<Onboarding />} />
+          <Route
+            element={
+              <AuthGate>
+                <Shell />
+              </AuthGate>
+            }
+          >
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/timeline" element={<Timeline />} />
+            <Route path="/resumos" element={<Summaries />} />
+            <Route path="/alertas" element={<Alerts />} />
+            <Route path="/config" element={<Settings />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </HashRouter>
+    </QueryClientProvider>
   )
 }
