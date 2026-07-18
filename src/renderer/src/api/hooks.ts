@@ -76,11 +76,12 @@ export function useMentions(): UseQueryResult<IpcResponse<'mentions:list'>> {
 }
 
 export function useIssueTypes(
-  projectKey: string | null
+  projectKey: string | null,
+  includeSubtasks = false
 ): UseQueryResult<IpcResponse<'issueTypes:list'>> {
   return useQuery({
-    queryKey: ['issue-types', projectKey],
-    queryFn: () => invoke('issueTypes:list', { projectKey: projectKey! }),
+    queryKey: ['issue-types', projectKey, includeSubtasks],
+    queryFn: () => invoke('issueTypes:list', { projectKey: projectKey!, includeSubtasks }),
     enabled: !!projectKey,
     staleTime: 10 * 60_000
   })

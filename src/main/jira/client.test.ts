@@ -165,3 +165,30 @@ describe('JiraClient.createIssue', () => {
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({ fields })
   })
 })
+
+describe('JiraClient.addComment', () => {
+  it('faz POST em /rest/api/3/issue/BT-1/comment com body { body: <payload> }', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonRes({}))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const commentBody = { type: 'doc', version: 1, content: [] }
+    await makeClient().addComment('BT-1', commentBody)
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url as string).toBe('https://x.atlassian.net/rest/api/3/issue/BT-1/comment')
+    expect((init as RequestInit).method).toBe('POST')
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ body: commentBody })
+  })
+
+  it('URL-encoda a key quando ela tem caractere especial (espaço)', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonRes({}))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await makeClient().addComment('BT 1', { text: 'x' })
+
+    const url = fetchMock.mock.calls[0][0] as string
+    expect(url).toBe(
+      `https://x.atlassian.net/rest/api/3/issue/${encodeURIComponent('BT 1')}/comment`
+    )
+  })
+})

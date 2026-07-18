@@ -3,7 +3,15 @@ import type { Issue } from '@shared/domain'
 import { rowToIssue, type IssueRow } from '../db/repos/issue'
 
 export type IssueBucket =
-  'moved' | 'commented' | 'done' | 'inProgress' | 'stalled' | 'rejected' | 'sprintScope' | 'all'
+  | 'moved'
+  | 'commented'
+  | 'done'
+  | 'inProgress'
+  | 'stalled'
+  | 'rejected'
+  | 'sprintScope'
+  | 'mine'
+  | 'all'
 
 export interface IssueQueryCtx {
   db: Database.Database
@@ -101,6 +109,18 @@ export function queryIssues(
                LOWER(status) LIKE '%reprov%' OR LOWER(status) LIKE '%rejeit%'
                OR LOWER(status) LIKE '%reject%' OR LOWER(status) LIKE '%devolv%'
              )
+           ORDER BY updated_at DESC`
+        )
+        .all({ workspaceId, accountId }) as IssueRow[]
+      break
+    case 'mine':
+      // estado atual (ignora período): meus cards abertos
+      rows = db
+        .prepare(
+          `SELECT * FROM issue
+           WHERE workspace_id = @workspaceId
+             AND assignee_account_id = @accountId
+             AND (status_category IS NULL OR status_category != 'done')
            ORDER BY updated_at DESC`
         )
         .all({ workspaceId, accountId }) as IssueRow[]

@@ -21,12 +21,15 @@ function requireClient(ctx: AppContext): NonNullable<ReturnType<typeof ctx.getCl
 }
 
 export function registerCreateHandlers(ctx: AppContext): void {
-  handle('issueTypes:list', async ({ projectKey }) => {
+  handle('issueTypes:list', async ({ projectKey, includeSubtasks }) => {
     const client = requireClient(ctx)
     const raw = await client.listCreateIssueTypes(projectKey)
-    const issueTypes: CreateIssueType[] = raw
-      .filter((t) => t.subtask !== true)
-      .map((t) => ({ id: t.id, name: t.name, subtask: false }))
+    const visible = includeSubtasks ? raw : raw.filter((t) => t.subtask !== true)
+    const issueTypes: CreateIssueType[] = visible.map((t) => ({
+      id: t.id,
+      name: t.name,
+      subtask: t.subtask === true
+    }))
     return { issueTypes }
   })
 
@@ -93,7 +96,7 @@ export function registerCreateHandlers(ctx: AppContext): void {
 }
 
 /** Extrai mensagens legíveis do corpo 400 do Jira; fallback genérico se não parsear. */
-function parseCreateError(err: JiraHttpError): string {
+export function parseCreateError(err: JiraHttpError): string {
   try {
     const body = JSON.parse(err.body ?? '') as {
       errorMessages?: string[]

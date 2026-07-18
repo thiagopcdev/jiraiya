@@ -154,4 +154,44 @@ describe('queryIssues buckets', () => {
     const rejected = queryIssues(ctx(), { ...range, bucket: 'rejected', stalledDays: 3 })
     expect(rejected.map((i) => i.key).sort()).toEqual(['BT-10', 'BT-11', 'BT-12'])
   })
+
+  it('mine: meus cards abertos (new/indeterminate/null), exclui done e outro assignee, ignora período e ordena por updated_at DESC', () => {
+    upsertIssue(
+      db,
+      1,
+      baseIssue('BT-20', { statusCategory: 'new', updatedAt: iso('2026-07-16T09:00:00Z') })
+    )
+    upsertIssue(
+      db,
+      1,
+      baseIssue('BT-21', {
+        statusCategory: 'indeterminate',
+        updatedAt: iso('2026-07-17T09:00:00Z')
+      })
+    )
+    upsertIssue(
+      db,
+      1,
+      baseIssue('BT-22', { statusCategory: null, updatedAt: iso('2026-07-15T09:00:00Z') })
+    )
+    upsertIssue(
+      db,
+      1,
+      baseIssue('BT-23', { statusCategory: 'done', updatedAt: iso('2026-07-17T10:00:00Z') })
+    ) // done -> excluído mesmo sendo o mais recente
+    upsertIssue(
+      db,
+      1,
+      baseIssue('BT-24', { statusCategory: 'new', assigneeAccountId: 'acc-outro' })
+    ) // outro assignee -> excluído
+    upsertIssue(db, 1, baseIssue('BT-25', { statusCategory: 'new', assigneeAccountId: null })) // sem assignee -> excluído
+    upsertIssue(
+      db,
+      1,
+      baseIssue('BT-26', { statusCategory: 'new', updatedAt: iso('2020-01-01T00:00:00Z') })
+    ) // fora do range [start,end) -> ainda aparece (bucket ignora período)
+
+    const mine = queryIssues(ctx(), { ...range, bucket: 'mine', stalledDays: 3 })
+    expect(mine.map((i) => i.key)).toEqual(['BT-21', 'BT-20', 'BT-22', 'BT-26'])
+  })
 })

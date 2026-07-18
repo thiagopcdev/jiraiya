@@ -5,6 +5,7 @@ import { getActiveSprint } from '../../db/repos/catalog'
 import { getPrefs } from '../../db/repos/misc'
 import { queryTimeline } from '../../db/repos/activity'
 import { queryIssues } from '../../queries/issues'
+import { getIssueByKey, rowToIssue } from '../../db/repos/issue'
 import { resolvePeriod, type Period } from '@shared/periods'
 
 function requireWorkspace(ctx: AppContext): NonNullable<ReturnType<typeof getWorkspaceRow>> {
@@ -42,6 +43,12 @@ export function registerIssueHandlers(ctx: AppContext): void {
       }
     )
     return { issues }
+  })
+
+  handle('issues:get', ({ key }) => {
+    const workspace = requireWorkspace(ctx)
+    const row = getIssueByKey(ctx.db, workspace.id, key.trim().toUpperCase())
+    return { issue: row ? rowToIssue(row, workspace.site_url) : null }
   })
 
   handle('sprint:active', () => {

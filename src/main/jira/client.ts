@@ -193,6 +193,13 @@ export class JiraClient {
   createIssue(fields: Record<string, unknown>): Promise<JiraCreatedIssue> {
     return this.http.post<JiraCreatedIssue>('/rest/api/3/issue', { fields })
   }
+
+  /** Posta um comentário na issue. body em ADF (o chamador converte com textToAdf). */
+  async addComment(issueKey: string, body: unknown): Promise<void> {
+    await this.http.post<unknown>(`/rest/api/3/issue/${encodeURIComponent(issueKey)}/comment`, {
+      body
+    })
+  }
 }
 
 export function discoverCustomFields(fields: JiraFieldDef[]): {

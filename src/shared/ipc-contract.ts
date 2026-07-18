@@ -18,6 +18,12 @@ import type {
 
 /** Fonte única de verdade dos canais IPC: schema zod do request + tipo do response. */
 
+/** Item de divisão de card (título + descrição em texto simples). */
+const splitItemSchema = z.object({
+  title: z.string().trim().min(1).max(255),
+  description: z.string().max(20000)
+})
+
 const periodSchema = z.object({
   type: z.enum(['today', 'yesterday', '7d', '30d', 'sprint', 'custom']),
   start: z.string().optional(),
@@ -73,6 +79,7 @@ export const ipcContract = {
           'stalled',
           'rejected',
           'sprintScope',
+          'mine',
           'all'
         ])
         .optional()
@@ -173,8 +180,34 @@ export const ipcContract = {
     res: undefined as unknown as { version: string }
   },
   'issueTypes:list': {
-    req: z.object({ projectKey: z.string().min(1) }),
+    req: z.object({ projectKey: z.string().min(1), includeSubtasks: z.boolean().optional() }),
     res: undefined as unknown as { issueTypes: CreateIssueType[] }
+  },
+  'issues:get': {
+    req: z.object({ key: z.string().trim().min(1).max(64) }),
+    res: undefined as unknown as { issue: Issue | null }
+  },
+  'issues:splitDraft': {
+    req: z.object({
+      parentKey: z.string().trim().min(1).max(64),
+      feedback: z.string().max(4000).optional(),
+      currentItems: z.array(splitItemSchema).max(10).optional()
+    }),
+    res: undefined as unknown as {
+      items: Array<{ title: string; description: string }>
+      rationale: string
+      generatedBy: 'claude'
+    }
+  },
+  'issues:split': {
+    req: z.object({
+      parentKey: z.string().trim().min(1).max(64),
+      mode: z.enum(['subtask', 'sibling']),
+      issueTypeId: z.string().min(1),
+      items: z.array(splitItemSchema).min(1).max(10),
+      assignToMe: z.boolean().optional()
+    }),
+    res: undefined as unknown as { keys: string[]; commentPosted: boolean }
   },
   'issues:draft': {
     req: z.object({

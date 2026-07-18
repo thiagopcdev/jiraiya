@@ -14,6 +14,7 @@ import { registerAlertHandlers } from './ipc/handlers/alerts'
 import { registerIssueHandlers } from './ipc/handlers/issues'
 import { registerSummaryHandlers } from './ipc/handlers/summaries'
 import { registerCreateHandlers } from './ipc/handlers/create'
+import { registerSplitHandlers } from './ipc/handlers/split'
 import { registerTeamHandlers } from './ipc/handlers/team'
 import { registerMentionHandlers } from './ipc/handlers/mentions'
 import { runAlertEngine } from './alerts/engine'
@@ -162,6 +163,7 @@ app.whenReady().then(() => {
   registerIssueHandlers(ctx)
   registerSummaryHandlers(ctx)
   registerCreateHandlers(ctx)
+  registerSplitHandlers(ctx)
   registerTeamHandlers(ctx)
   registerMentionHandlers(ctx)
 
