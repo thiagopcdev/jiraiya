@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   RefreshCw,
   Settings,
+  SquarePen,
   Users
 } from 'lucide-react'
 import { invoke } from '../api/client'
@@ -17,6 +18,7 @@ import { t } from '../strings/ptBR'
 
 const navItems = [
   { to: '/', label: t.nav.dashboard, icon: LayoutDashboard },
+  { to: '/criar', label: t.nav.create, icon: SquarePen },
   { to: '/timeline', label: t.nav.timeline, icon: Calendar },
   { to: '/mencoes', label: t.nav.mentions, icon: AtSign },
   { to: '/resumos', label: t.nav.summaries, icon: FileText },

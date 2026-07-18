@@ -75,6 +75,17 @@ export function useMentions(): UseQueryResult<IpcResponse<'mentions:list'>> {
   })
 }
 
+export function useIssueTypes(
+  projectKey: string | null
+): UseQueryResult<IpcResponse<'issueTypes:list'>> {
+  return useQuery({
+    queryKey: ['issue-types', projectKey],
+    queryFn: () => invoke('issueTypes:list', { projectKey: projectKey! }),
+    enabled: !!projectKey,
+    staleTime: 10 * 60_000
+  })
+}
+
 /** Assina os canais push uma única vez e invalida os caches relevantes. */
 export function usePushInvalidation(): void {
   const queryClient = useQueryClient()

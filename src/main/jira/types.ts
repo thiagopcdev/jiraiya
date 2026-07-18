@@ -5,6 +5,27 @@ export interface AdfNode {
   text?: string
   content?: AdfNode[]
   attrs?: Record<string, unknown>
+  marks?: Array<{ type: string }>
+  version?: number
+}
+
+export interface JiraCreateMetaIssueType {
+  id: string
+  name: string
+  subtask?: boolean
+}
+
+export interface JiraCreateMetaIssueTypesResponse {
+  startAt: number
+  maxResults: number
+  total: number
+  issueTypes: JiraCreateMetaIssueType[]
+}
+
+export interface JiraCreatedIssue {
+  id: string
+  key: string
+  self: string
 }
 
 export interface JiraMyself {

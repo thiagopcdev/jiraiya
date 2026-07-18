@@ -3,6 +3,7 @@ import type {
   Alert,
   Mention,
   Board,
+  CreateIssueType,
   Issue,
   IssueActivity,
   Prefs,
@@ -170,6 +171,30 @@ export const ipcContract = {
   'app:info': {
     req: z.object({}),
     res: undefined as unknown as { version: string }
+  },
+  'issueTypes:list': {
+    req: z.object({ projectKey: z.string().min(1) }),
+    res: undefined as unknown as { issueTypes: CreateIssueType[] }
+  },
+  'issues:draft': {
+    req: z.object({
+      idea: z.string().min(1).max(4000),
+      projectKey: z.string().min(1),
+      issueType: z.string().min(1)
+    }),
+    res: undefined as unknown as { title: string; description: string; generatedBy: 'claude' }
+  },
+  'issues:create': {
+    req: z.object({
+      projectKey: z.string().min(1),
+      issueTypeId: z.string().min(1),
+      summary: z.string().min(1).max(255),
+      description: z.string(),
+      assignToMe: z.boolean().optional(),
+      addToActiveSprint: z.boolean().optional(),
+      storyPoints: z.number().positive().optional()
+    }),
+    res: undefined as unknown as { key: string }
   },
   'mentions:list': {
     req: z.object({}),

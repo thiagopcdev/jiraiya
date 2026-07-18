@@ -1,0 +1,286 @@
+import { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { CheckCircle2, ExternalLink, Sparkles } from 'lucide-react'
+import { invoke, IpcError } from '../../api/client'
+import { useIssueTypes, useProjects } from '../../api/hooks'
+import { Button, Card, EmptyState, Input, Spinner } from '../../components/ui'
+import { t } from '../../strings/ptBR'
+
+export default function Create(): React.JSX.Element {
+  const queryClient = useQueryClient()
+
+  const { data: projectsData } = useProjects()
+  const projects = projectsData?.projects ?? []
+
+  const [projectKeyChoice, setProjectKeyChoice] = useState<string | null>(null)
+  const [issueTypeIdChoice, setIssueTypeIdChoice] = useState<string | null>(null)
+
+  // Default: primeiro projeto acompanhado, até o usuário escolher outro.
+  const projectKey =
+    projectKeyChoice ?? (projects.find((p) => p.selected) ?? projects[0])?.key ?? null
+
+  const { data: issueTypesData, isLoading: issueTypesLoading } = useIssueTypes(projectKey)
+  const issueTypes = (issueTypesData?.issueTypes ?? []).filter((it) => !it.subtask)
+  // Default: primeiro tipo disponível; se a escolha do usuário não existir mais
+  // (ex. trocou de projeto), volta a cair no primeiro tipo da lista atual.
+  const issueTypeId = issueTypes.some((it) => it.id === issueTypeIdChoice)
+    ? issueTypeIdChoice
+    : (issueTypes[0]?.id ?? null)
+  const selectedIssueType = issueTypes.find((it) => it.id === issueTypeId) ?? null
+
+  const { data: claudeInfo } = useQuery({
+    queryKey: ['claude-status'],
+    queryFn: () => invoke('claude:status', {})
+  })
+  const { data: sprintData } = useQuery({
+    queryKey: ['sprint-active'],
+    queryFn: () => invoke('sprint:active', {})
+  })
+  const activeSprint = sprintData?.sprint ?? null
+
+  const [idea, setIdea] = useState('')
+  const [draftBusy, setDraftBusy] = useState(false)
+  const [draftError, setDraftError] = useState<string | null>(null)
+
+  const [summary, setSummary] = useState('')
+  const [description, setDescription] = useState('')
+  const [assignToMe, setAssignToMe] = useState(true)
+  const [addToActiveSprint, setAddToActiveSprint] = useState(false)
+  const [storyPoints, setStoryPoints] = useState('')
+
+  const [createBusy, setCreateBusy] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
+  const [createdKey, setCreatedKey] = useState<string | null>(null)
+
+  const resetForm = (): void => {
+    setIdea('')
+    setSummary('')
+    setDescription('')
+    setAssignToMe(true)
+    setAddToActiveSprint(false)
+    setStoryPoints('')
+    setDraftError(null)
+    setCreateError(null)
+    setCreatedKey(null)
+  }
+
+  const generateDraft = async (): Promise<void> => {
+    if (!projectKey || !selectedIssueType) return
+    setDraftBusy(true)
+    setDraftError(null)
+    try {
+      const res = await invoke('issues:draft', {
+        idea,
+        projectKey,
+        issueType: selectedIssueType.name
+      })
+      setSummary(res.title)
+      setDescription(res.description)
+    } catch (err) {
+      setDraftError(err instanceof IpcError ? err.message : t.common.error)
+    } finally {
+      setDraftBusy(false)
+    }
+  }
+
+  const submit = async (): Promise<void> => {
+    if (!projectKey || !selectedIssueType) return
+    setCreateBusy(true)
+    setCreateError(null)
+    try {
+      const points = Number(storyPoints)
+      const res = await invoke('issues:create', {
+        projectKey,
+        issueTypeId: selectedIssueType.id,
+        summary,
+        description,
+        assignToMe,
+        addToActiveSprint: activeSprint ? addToActiveSprint : undefined,
+        storyPoints: storyPoints.trim() && points > 0 ? points : undefined
+      })
+      setCreatedKey(res.key)
+      void invoke('shell:openIssue', { issueKey: res.key })
+      void invoke('sync:run', { full: false })
+      void queryClient.invalidateQueries()
+    } catch (err) {
+      setCreateError(err instanceof IpcError ? err.message : t.common.error)
+    } finally {
+      setCreateBusy(false)
+    }
+  }
+
+  const draftDisabled =
+    draftBusy || !claudeInfo?.available || !idea.trim() || !projectKey || !selectedIssueType
+  const submitDisabled = createBusy || !projectKey || !selectedIssueType || !summary.trim()
+
+  return (
+    <div className="max-w-2xl space-y-5 p-6">
+      <h2 className="text-xl font-semibold text-zinc-100">{t.create.title}</h2>
+
+      {createdKey ? (
+        <Card className="border-green-900 bg-green-950/30">
+          <div className="flex items-start gap-3">
+            <CheckCircle2 className="mt-0.5 shrink-0 text-green-400" size={20} />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-zinc-100">
+                {t.create.createdTitle(createdKey)}
+              </p>
+              <p className="mt-1 text-sm text-zinc-400">{t.create.createdHint}</p>
+              <div className="mt-3 flex gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => void invoke('shell:openIssue', { issueKey: createdKey })}
+                >
+                  <ExternalLink size={14} />
+                  {t.create.openInJira}
+                </Button>
+                <Button variant="ghost" onClick={resetForm}>
+                  {t.create.createAnother}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </Card>
+      ) : (
+        <>
+          <Card title={t.create.whereTitle}>
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-zinc-400">
+                  {t.create.project}
+                </span>
+                <select
+                  className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
+                  value={projectKey ?? ''}
+                  onChange={(e) => {
+                    setProjectKeyChoice(e.target.value)
+                    setIssueTypeIdChoice(null)
+                  }}
+                >
+                  {projects.map((p) => (
+                    <option key={p.key} value={p.key}>
+                      {p.key} — {p.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-zinc-400">
+                  {t.create.issueType}
+                </span>
+                <select
+                  className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
+                  value={issueTypeId ?? ''}
+                  disabled={issueTypesLoading || issueTypes.length === 0}
+                  onChange={(e) => setIssueTypeIdChoice(e.target.value)}
+                >
+                  {issueTypes.map((it) => (
+                    <option key={it.id} value={it.id}>
+                      {it.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {issueTypesLoading && (
+                <span className="flex items-center gap-2 pb-1.5 text-sm text-zinc-400">
+                  <Spinner /> {t.create.loadingIssueTypes}
+                </span>
+              )}
+            </div>
+            {!issueTypesLoading && projectKey && issueTypes.length === 0 && (
+              <EmptyState message={t.create.noIssueTypes} />
+            )}
+          </Card>
+
+          <Card title={t.create.aiTitle}>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-zinc-400">
+                {t.create.ideaLabel}
+              </span>
+              <textarea
+                className="h-24 w-full resize-y rounded-md border border-zinc-800 bg-zinc-950 p-3 text-sm text-zinc-200 outline-none focus:border-indigo-600"
+                placeholder={t.create.ideaPlaceholder}
+                value={idea}
+                onChange={(e) => setIdea(e.target.value)}
+              />
+            </label>
+            <div className="mt-3 flex items-center gap-3">
+              <Button
+                variant="secondary"
+                disabled={draftDisabled}
+                onClick={() => void generateDraft()}
+              >
+                {draftBusy ? <Spinner /> : <Sparkles size={14} />}
+                {draftBusy ? t.create.generating : t.create.generate}
+              </Button>
+              {!claudeInfo?.available && (
+                <span className="text-xs text-amber-400">{t.create.claudeUnavailableHint}</span>
+              )}
+            </div>
+            {draftError && <p className="mt-2 text-sm text-amber-400">{draftError}</p>}
+          </Card>
+
+          <Card title={t.create.cardTitle}>
+            <div className="space-y-3">
+              <Input
+                label={t.create.summary}
+                value={summary}
+                maxLength={255}
+                onChange={(e) => setSummary(e.target.value)}
+                hint={`${summary.length}/255`}
+              />
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-zinc-300">
+                  {t.create.description}
+                </span>
+                <textarea
+                  className="h-64 w-full resize-y rounded-md border border-zinc-700 bg-zinc-900 p-3 font-mono text-sm text-zinc-100 outline-none focus:border-indigo-500"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
+                <span className="mt-1 block text-xs text-zinc-500">{t.create.descriptionHint}</span>
+              </label>
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-300">
+                <input
+                  type="checkbox"
+                  className="accent-indigo-600"
+                  checked={assignToMe}
+                  onChange={(e) => setAssignToMe(e.target.checked)}
+                />
+                {t.create.assignToMe}
+              </label>
+              {activeSprint && (
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-300">
+                  <input
+                    type="checkbox"
+                    className="accent-indigo-600"
+                    checked={addToActiveSprint}
+                    onChange={(e) => setAddToActiveSprint(e.target.checked)}
+                  />
+                  {t.create.addToActiveSprint(activeSprint.name ?? '')}
+                </label>
+              )}
+              <Input
+                label={t.create.storyPoints}
+                type="number"
+                min={0}
+                step="1"
+                className="max-w-32"
+                value={storyPoints}
+                onChange={(e) => setStoryPoints(e.target.value)}
+                hint={t.create.storyPointsHint}
+              />
+            </div>
+          </Card>
+
+          {createError && <p className="text-sm text-red-400">{createError}</p>}
+
+          <Button className="w-full" disabled={submitDisabled} onClick={() => void submit()}>
+            {createBusy && <Spinner />}
+            {createBusy ? t.create.submitting : t.create.submit}
+          </Button>
+        </>
+      )}
+    </div>
+  )
+}

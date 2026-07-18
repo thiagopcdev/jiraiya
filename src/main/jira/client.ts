@@ -8,6 +8,9 @@ import type {
   JiraChangelogPageResponse,
   JiraComment,
   JiraCommentsResponse,
+  JiraCreatedIssue,
+  JiraCreateMetaIssueType,
+  JiraCreateMetaIssueTypesResponse,
   JiraFieldDef,
   JiraIssue,
   JiraMyself,
@@ -166,6 +169,29 @@ export class JiraClient {
       if (res.isLast !== false || res.values.length === 0) return all
       startAt += res.maxResults
     }
+  }
+
+  /**
+   * Tipos de issue criáveis num projeto via createmeta novo
+   * (`/issue/createmeta/{key}/issuetypes` — o `/issue/createmeta` antigo foi removido).
+   * Pagina acumulando até coletados >= total ou página vazia (guarda contra loop).
+   */
+  async listCreateIssueTypes(projectKey: string): Promise<JiraCreateMetaIssueType[]> {
+    const all: JiraCreateMetaIssueType[] = []
+    let startAt = 0
+    for (;;) {
+      const res = await this.http.get<JiraCreateMetaIssueTypesResponse>(
+        `/rest/api/3/issue/createmeta/${encodeURIComponent(projectKey)}/issuetypes?startAt=${startAt}&maxResults=50`
+      )
+      const page = res.issueTypes ?? []
+      all.push(...page)
+      if (page.length === 0 || all.length >= res.total) return all
+      startAt += page.length
+    }
+  }
+
+  createIssue(fields: Record<string, unknown>): Promise<JiraCreatedIssue> {
+    return this.http.post<JiraCreatedIssue>('/rest/api/3/issue', { fields })
   }
 }
 

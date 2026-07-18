@@ -4,6 +4,7 @@ export const t = {
   },
   nav: {
     dashboard: 'Dashboard',
+    create: 'Criar task',
     timeline: 'Timeline',
     mentions: 'Menções',
     summaries: 'Resumos',
@@ -60,5 +61,35 @@ export const t = {
     error: 'Algo deu errado',
     retry: 'Tentar novamente'
   },
-  authInvalid: 'Credenciais do Jira expiraram — reconecte em Configurações.'
+  authInvalid: 'Credenciais do Jira expiraram — reconecte em Configurações.',
+  create: {
+    title: 'Criar task',
+    whereTitle: 'Onde',
+    project: 'Projeto',
+    issueType: 'Tipo',
+    loadingIssueTypes: 'Carregando tipos…',
+    noIssueTypes: 'Não é possível criar issues neste projeto por aqui.',
+    aiTitle: 'Gerar com IA',
+    ideaLabel: 'Descreva a ideia da task',
+    ideaPlaceholder:
+      'Ex.: contexto (onde/por que isso importa), o que precisa ser feito e o comportamento esperado ao final.',
+    generate: 'Gerar título e descrição',
+    generating: 'Gerando…',
+    claudeUnavailableHint: 'Instale o Claude Code para gerar rascunhos',
+    cardTitle: 'Card',
+    summary: 'Título',
+    description: 'Descrição',
+    descriptionHint:
+      'Use ###, **negrito**, - listas e - [ ] checklists — o Jiraiya converte para o formato do Jira.',
+    assignToMe: 'Atribuir a mim',
+    addToActiveSprint: (sprintName: string) => `Adicionar à sprint ativa — ${sprintName}`,
+    storyPoints: 'Story points',
+    storyPointsHint: 'Opcional',
+    submit: 'Criar no Jira',
+    submitting: 'Criando…',
+    createdTitle: (key: string) => `Task ${key} criada`,
+    createdHint: 'Ela aparece no app após a sincronização (alguns segundos).',
+    openInJira: 'Abrir no Jira',
+    createAnother: 'Criar outra'
+  }
 }

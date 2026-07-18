@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { JiraClient, discoverCustomFields } from './client'
 import { JiraHttp } from './http'
-import type { JiraFieldDef, JiraIssue } from './types'
+import type { JiraCreateMetaIssueType, JiraFieldDef, JiraIssue } from './types'
 
 const jsonRes = (body: unknown): Response =>
   new Response(JSON.stringify(body), {
@@ -100,5 +100,68 @@ describe('discoverCustomFields', () => {
       )
     ])
     expect(out.flaggedFieldId).toBeNull()
+  })
+})
+
+describe('JiraClient.listCreateIssueTypes', () => {
+  const issueType = (id: string): JiraCreateMetaIssueType => ({ id, name: `Tipo ${id}` })
+
+  it('busca em /issue/createmeta/{key}/issuetypes com paginação inicial', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      jsonRes({
+        startAt: 0,
+        maxResults: 50,
+        total: 2,
+        issueTypes: [issueType('10001'), issueType('10002')]
+      })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const types = await makeClient().listCreateIssueTypes('BT')
+
+    expect(types).toEqual([issueType('10001'), issueType('10002')])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const url = fetchMock.mock.calls[0][0] as string
+    expect(url).toContain('/rest/api/3/issue/createmeta/BT/issuetypes?startAt=0&maxResults=50')
+  })
+
+  it('pagina e concatena quando total excede o tamanho da página (total=60: 50 + 10)', async () => {
+    const page1 = Array.from({ length: 50 }, (_, i) => issueType(String(i)))
+    const page2 = Array.from({ length: 10 }, (_, i) => issueType(String(50 + i)))
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonRes({ startAt: 0, maxResults: 50, total: 60, issueTypes: page1 }))
+      .mockResolvedValueOnce(jsonRes({ startAt: 50, maxResults: 50, total: 60, issueTypes: page2 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const types = await makeClient().listCreateIssueTypes('BT')
+
+    expect(types).toHaveLength(60)
+    expect(types).toEqual([...page1, ...page2])
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const secondUrl = fetchMock.mock.calls[1][0] as string
+    expect(secondUrl).toContain('startAt=50')
+  })
+})
+
+describe('JiraClient.createIssue', () => {
+  it('faz POST em /rest/api/3/issue com body {fields} e retorna a issue criada', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      jsonRes({
+        id: '10001',
+        key: 'BT-123',
+        self: 'https://x.atlassian.net/rest/api/3/issue/10001'
+      })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const fields = { summary: 'Nova task', project: { key: 'BT' } }
+    const created = await makeClient().createIssue(fields)
+
+    expect(created.key).toBe('BT-123')
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url as string).toContain('/rest/api/3/issue')
+    expect((init as RequestInit).method).toBe('POST')
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ fields })
   })
 })

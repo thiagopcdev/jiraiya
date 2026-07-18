@@ -35,6 +35,13 @@ export interface Sprint {
   endDate: string | null
 }
 
+/** Tipo de issue criável num projeto (descoberto via createmeta). */
+export interface CreateIssueType {
+  id: string
+  name: string
+  subtask: boolean
+}
+
 export type StatusCategory = 'new' | 'indeterminate' | 'done'
 
 export interface Issue {

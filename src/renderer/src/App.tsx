@@ -5,6 +5,7 @@ import { Spinner } from './components/ui'
 import Shell from './components/Shell'
 import Onboarding from './screens/Onboarding/Onboarding'
 import Dashboard from './screens/Dashboard/Dashboard'
+import Create from './screens/Create/Create'
 import Timeline from './screens/Timeline/Timeline'
 import Mentions from './screens/Mentions/Mentions'
 import Summaries from './screens/Summaries/Summaries'
@@ -45,6 +46,7 @@ export default function App(): React.JSX.Element {
             }
           >
             <Route path="/" element={<Dashboard />} />
+            <Route path="/criar" element={<Create />} />
             <Route path="/timeline" element={<Timeline />} />
             <Route path="/mencoes" element={<Mentions />} />
             <Route path="/resumos" element={<Summaries />} />

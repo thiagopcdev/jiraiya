@@ -1,0 +1,111 @@
+import { AppError, handle } from '../registry'
+import type { AppContext } from '../../appContext'
+import type { CreateIssueType } from '@shared/domain'
+import { getWorkspaceRow } from '../../db/repos/workspace'
+import { getActiveSprint } from '../../db/repos/catalog'
+import { textToAdf } from '../../jira/adf'
+import { JiraHttpError } from '../../jira/http'
+import { claudeStatus, ClaudeUnavailableError } from '../../summaries/claude'
+import { draftIssueWithClaude } from '../../issues/draft'
+
+function requireWorkspace(ctx: AppContext): NonNullable<ReturnType<typeof getWorkspaceRow>> {
+  const workspace = getWorkspaceRow(ctx.db)
+  if (!workspace) throw new AppError('NOT_CONNECTED', 'Nenhuma conta Jira conectada')
+  return workspace
+}
+
+function requireClient(ctx: AppContext): NonNullable<ReturnType<typeof ctx.getClient>> {
+  const client = ctx.getClient()
+  if (!client) throw new AppError('NOT_CONNECTED', 'Nenhuma conta Jira conectada')
+  return client
+}
+
+export function registerCreateHandlers(ctx: AppContext): void {
+  handle('issueTypes:list', async ({ projectKey }) => {
+    const client = requireClient(ctx)
+    const raw = await client.listCreateIssueTypes(projectKey)
+    const issueTypes: CreateIssueType[] = raw
+      .filter((t) => t.subtask !== true)
+      .map((t) => ({ id: t.id, name: t.name, subtask: false }))
+    return { issueTypes }
+  })
+
+  handle('issues:draft', async ({ idea, projectKey, issueType }) => {
+    if (!claudeStatus().available) {
+      throw new AppError(
+        'CLAUDE_UNAVAILABLE',
+        'CLI do Claude não encontrado — instale o Claude Code para gerar rascunhos'
+      )
+    }
+    try {
+      const draft = await draftIssueWithClaude({ idea, projectKey, issueType })
+      return { ...draft, generatedBy: 'claude' as const }
+    } catch (err) {
+      const message =
+        err instanceof ClaudeUnavailableError || err instanceof Error
+          ? err.message
+          : 'Não foi possível gerar o rascunho com o Claude'
+      throw new AppError('CLAUDE_UNAVAILABLE', message)
+    }
+  })
+
+  handle(
+    'issues:create',
+    async ({
+      projectKey,
+      issueTypeId,
+      summary,
+      description,
+      assignToMe,
+      addToActiveSprint,
+      storyPoints
+    }) => {
+      const workspace = requireWorkspace(ctx)
+      const client = requireClient(ctx)
+
+      const fields: Record<string, unknown> = {
+        project: { key: projectKey },
+        issuetype: { id: issueTypeId },
+        summary
+      }
+      if (description.trim()) fields.description = textToAdf(description)
+      if (assignToMe !== false) fields.assignee = { id: workspace.account_id }
+      if (addToActiveSprint && workspace.sprint_field_id && workspace.sprint_field_id !== 'none') {
+        const sprint = getActiveSprint(ctx.db, workspace.id)
+        // No create, o campo Sprint aceita o id numérico da sprint ativa
+        if (sprint) fields[workspace.sprint_field_id] = Number(sprint.jiraId)
+      }
+      if (storyPoints != null && workspace.story_points_field_id) {
+        fields[workspace.story_points_field_id] = storyPoints
+      }
+
+      try {
+        const created = await client.createIssue(fields)
+        return { key: created.key }
+      } catch (err) {
+        if (err instanceof JiraHttpError && err.status === 400) {
+          throw new AppError('JIRA_CREATE', 'O Jira recusou a criação: ' + parseCreateError(err))
+        }
+        throw err
+      }
+    }
+  )
+}
+
+/** Extrai mensagens legíveis do corpo 400 do Jira; fallback genérico se não parsear. */
+function parseCreateError(err: JiraHttpError): string {
+  try {
+    const body = JSON.parse(err.body ?? '') as {
+      errorMessages?: string[]
+      errors?: Record<string, string>
+    }
+    const msgs = [
+      ...(body.errorMessages ?? []),
+      ...Object.entries(body.errors ?? {}).map(([field, msg]) => `${field}: ${msg}`)
+    ]
+    if (msgs.length > 0) return msgs.join('; ')
+  } catch {
+    // corpo não-JSON — cai no fallback
+  }
+  return `o Jira respondeu ${err.status}`
+}
