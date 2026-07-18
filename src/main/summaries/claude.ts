@@ -20,7 +20,7 @@ const CANDIDATE_PATHS = [
   join(homedir(), '.claude', 'local', 'claude')
 ]
 
-const TIMEOUT_MS = 90_000
+const TIMEOUT_MS = 240_000
 
 export function resolveClaudeBinary(): string | null {
   for (const p of CANDIDATE_PATHS) {
@@ -56,7 +56,7 @@ export async function runClaudePrompt(prompt: string): Promise<string> {
   if (!binary) throw new ClaudeUnavailableError('CLI do Claude não encontrado')
 
   const output = await new Promise<string>((resolve, reject) => {
-    execFile(
+    const child = execFile(
       binary,
       ['-p', prompt, '--output-format', 'json', '--model', 'sonnet'],
       {
@@ -67,9 +67,24 @@ export async function runClaudePrompt(prompt: string): Promise<string> {
       },
       (err, stdout, stderr) => {
         if (err) {
+          // processo morto pelo timeout do execFile → mensagem específica
+          if (err.killed || err.signal === 'SIGTERM') {
+            reject(
+              new ClaudeUnavailableError(
+                `CLI do Claude excedeu o tempo limite (${TIMEOUT_MS / 1000}s) — tente de novo ou simplifique o pedido`
+              )
+            )
+            return
+          }
+          // warnings no stderr (ex.: aviso de stdin) não são a causa — filtra
+          const stderrText = stderr
+            ?.toString()
+            .split('\n')
+            .filter((l) => l.trim() !== '' && !l.startsWith('Warning:'))
+            .join('\n')
           reject(
             new ClaudeUnavailableError(
-              `CLI do Claude falhou: ${stderr?.toString().slice(0, 300) || err.message}`
+              `CLI do Claude falhou: ${stderrText?.slice(0, 300) || err.message}`
             )
           )
           return
@@ -77,6 +92,8 @@ export async function runClaudePrompt(prompt: string): Promise<string> {
         resolve(stdout.toString())
       }
     )
+    // fecha o stdin: sem isso o CLI espera 3s por dados no pipe e emite warning
+    child.stdin?.end()
   })
 
   let parsed: ClaudeCliResult
