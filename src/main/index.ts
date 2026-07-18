@@ -1,4 +1,5 @@
 import { app, shell, BrowserWindow, Notification } from 'electron'
+import type Database from 'better-sqlite3'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -13,11 +14,34 @@ import { registerAlertHandlers } from './ipc/handlers/alerts'
 import { registerIssueHandlers } from './ipc/handlers/issues'
 import { registerSummaryHandlers } from './ipc/handlers/summaries'
 import { registerTeamHandlers } from './ipc/handlers/team'
+import { registerMentionHandlers } from './ipc/handlers/mentions'
 import { runAlertEngine } from './alerts/engine'
 import { getWorkspaceRow } from './db/repos/workspace'
 import { getPrefs, listActiveAlerts } from './db/repos/misc'
+import { seedMentionHistory, unreadCount } from './db/repos/mentions'
 
 let ctx: AppContext
+
+/**
+ * Popula o inbox de menções uma única vez a partir do histórico já
+ * sincronizado. Marca a flag em user_pref para não reprocessar.
+ */
+function seedMentionsOnce(db: Database.Database): void {
+  const row = db.prepare(`SELECT value_json FROM user_pref WHERE key = 'mentionSeedDone'`).get() as
+    { value_json: string } | undefined
+  if (row?.value_json === '1') return
+  const workspace = getWorkspaceRow(db)
+  // sem workspace ainda (não conectado) — não marca a flag, tenta de novo no
+  // próximo boot depois que a conta e o histórico existirem
+  if (!workspace) return
+  if (workspace.display_name) {
+    seedMentionHistory(db, workspace.id, workspace.display_name)
+  }
+  db.prepare(
+    `INSERT INTO user_pref (key, value_json) VALUES ('mentionSeedDone', '1')
+     ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json`
+  ).run()
+}
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -71,6 +95,7 @@ app.whenReady().then(() => {
   })
 
   const db = openDb()
+  seedMentionsOnce(db)
   ctx = new AppContext(db)
   ctx.scheduler = new SyncScheduler({
     db,
@@ -112,6 +137,19 @@ app.whenReady().then(() => {
           n.show()
         }
       }
+
+      ctx.push('push:mentions-updated', { unreadCount: unreadCount(db, workspace.id) })
+
+      if (prefs.notifyMentions && notify) {
+        for (const item of info.newMentions.slice(0, 5)) {
+          const n = new Notification({
+            title: `${item.authorName ?? 'Alguém'} mencionou você em ${item.issueKey}`,
+            body: item.excerpt ?? ''
+          })
+          n.on('click', () => openIssue(item.issueKey))
+          n.show()
+        }
+      }
     }
   })
 
@@ -123,6 +161,7 @@ app.whenReady().then(() => {
   registerIssueHandlers(ctx)
   registerSummaryHandlers(ctx)
   registerTeamHandlers(ctx)
+  registerMentionHandlers(ctx)
 
   createWindow()
   ctx.scheduler.start()

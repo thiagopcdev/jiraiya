@@ -68,6 +68,13 @@ export function useTeam(period: Period): UseQueryResult<IpcResponse<'team:summar
   })
 }
 
+export function useMentions(): UseQueryResult<IpcResponse<'mentions:list'>> {
+  return useQuery({
+    queryKey: ['mentions'],
+    queryFn: () => invoke('mentions:list', {})
+  })
+}
+
 /** Assina os canais push uma única vez e invalida os caches relevantes. */
 export function usePushInvalidation(): void {
   const queryClient = useQueryClient()
@@ -81,6 +88,9 @@ export function usePushInvalidation(): void {
     const offAlerts = window.api.on('push:alerts-updated', () => {
       void queryClient.invalidateQueries({ queryKey: ['alerts'] })
     })
+    const offMentions = window.api.on('push:mentions-updated', () => {
+      void queryClient.invalidateQueries({ queryKey: ['mentions'] })
+    })
     const offAuth = window.api.on('push:auth-invalid', () => {
       void queryClient.invalidateQueries({ queryKey: ['auth'] })
     })
@@ -88,6 +98,7 @@ export function usePushInvalidation(): void {
       offProgress()
       offComplete()
       offAlerts()
+      offMentions()
       offAuth()
     }
   }, [queryClient])

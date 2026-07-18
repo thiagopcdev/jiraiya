@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import {
   AlertTriangle,
+  AtSign,
   Calendar,
   FileText,
   LayoutDashboard,
@@ -9,7 +10,7 @@ import {
   Users
 } from 'lucide-react'
 import { invoke } from '../api/client'
-import { useAlerts, usePushInvalidation, useSyncStatus } from '../api/hooks'
+import { useAlerts, useMentions, usePushInvalidation, useSyncStatus } from '../api/hooks'
 import { Spinner } from './ui'
 import { compactAgo } from '../lib/relativeTime'
 import { t } from '../strings/ptBR'
@@ -17,6 +18,7 @@ import { t } from '../strings/ptBR'
 const navItems = [
   { to: '/', label: t.nav.dashboard, icon: LayoutDashboard },
   { to: '/timeline', label: t.nav.timeline, icon: Calendar },
+  { to: '/mencoes', label: t.nav.mentions, icon: AtSign },
   { to: '/resumos', label: t.nav.summaries, icon: FileText },
   { to: '/time', label: t.nav.team, icon: Users },
   { to: '/alertas', label: t.nav.alerts, icon: AlertTriangle },
@@ -27,7 +29,9 @@ export default function Shell(): React.JSX.Element {
   usePushInvalidation()
   const { data: sync } = useSyncStatus()
   const { data: alertsData } = useAlerts()
+  const { data: mentionsData } = useMentions()
   const alertCount = alertsData?.alerts.length ?? 0
+  const mentionsUnreadCount = mentionsData?.unreadCount ?? 0
 
   return (
     <div className="flex h-full">
@@ -55,6 +59,11 @@ export default function Shell(): React.JSX.Element {
               {to === '/alertas' && alertCount > 0 && (
                 <span className="rounded-full bg-red-900/70 px-1.5 text-xs font-semibold text-red-200">
                   {alertCount}
+                </span>
+              )}
+              {to === '/mencoes' && mentionsUnreadCount > 0 && (
+                <span className="rounded-full bg-indigo-900/70 px-1.5 text-xs font-semibold text-indigo-200">
+                  {mentionsUnreadCount}
                 </span>
               )}
             </NavLink>

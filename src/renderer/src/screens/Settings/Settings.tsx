@@ -169,6 +169,15 @@ function SyncSection(): React.JSX.Element {
           />
         </label>
         <label className="flex cursor-pointer items-center justify-between text-sm text-zinc-300">
+          Notificar quando eu for mencionado
+          <input
+            type="checkbox"
+            className="accent-indigo-600"
+            checked={prefs.notifyMentions}
+            onChange={(e) => void update({ notifyMentions: e.target.checked })}
+          />
+        </label>
+        <label className="flex cursor-pointer items-center justify-between text-sm text-zinc-300">
           Notificar alertas críticos (notificação nativa)
           <input
             type="checkbox"

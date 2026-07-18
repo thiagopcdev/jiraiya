@@ -11,6 +11,8 @@ import {
   upsertIssue
 } from '../db/repos/issue'
 import { isFreshAssignmentToMe } from './assignment'
+import { extractMentions } from './mentions'
+import { insertMentions } from '../db/repos/mentions'
 import { getPrefs, getSyncCursor, setSyncState } from '../db/repos/misc'
 import { listBoards, selectedProjectKeys, upsertSprints } from '../db/repos/catalog'
 import { setWorkspaceFields } from '../db/repos/workspace'
@@ -42,6 +44,8 @@ export interface SyncDeps {
 export interface AfterSyncInfo {
   /** cards que passaram a ser atribuídos a mim nesta rodada */
   assignedToMe: Array<{ key: string; summary: string }>
+  /** menções novas a mim nesta rodada (exceto auto-menção e primeiro sync) */
+  newMentions: Array<{ issueKey: string; authorName: string | null; excerpt: string | null }>
 }
 
 export interface SyncResult {
@@ -75,6 +79,7 @@ export async function runSync(deps: SyncDeps, opts: { full?: boolean } = {}): Pr
     const cursor = opts.full ? null : getSyncCursor(db, workspace.id, RESOURCE)
     const isFirstSync = cursor === null
     const assignedToMe: Array<{ key: string; summary: string }> = []
+    const newMentions: AfterSyncInfo['newMentions'] = []
     const jql = buildSyncJql({
       mode: prefs.syncMode,
       projectKeys: selectedProjectKeys(db, workspace.id),
@@ -154,6 +159,25 @@ export async function runSync(deps: SyncDeps, opts: { full?: boolean } = {}): Pr
         changelog = hadChanges ? await client.issueChangelog(key).catch(() => []) : []
       }
       const comments = await client.issueComments(key)
+      const mentions = extractMentions({
+        issueKey: key,
+        comments,
+        myAccountId: workspace.account_id
+      })
+      const insertedMentions = insertMentions(db, workspace.id, mentions, {
+        markRead: isFirstSync
+      })
+      if (!isFirstSync) {
+        for (const m of insertedMentions) {
+          if (m.authorAccountId !== workspace.account_id) {
+            newMentions.push({
+              issueKey: m.issueKey,
+              authorName: m.authorName,
+              excerpt: m.excerpt
+            })
+          }
+        }
+      }
       const activities = deriveActivities({
         issue: {
           key,
@@ -196,7 +220,7 @@ export async function runSync(deps: SyncDeps, opts: { full?: boolean } = {}): Pr
     }
 
     setSyncState(db, workspace.id, RESOURCE, { status: 'idle', success: true, error: null })
-    deps.onAfterSync?.({ assignedToMe })
+    deps.onAfterSync?.({ assignedToMe, newMentions })
     return { issuesProcessed: processed, activitiesIssues: activitiesDone }
   } catch (err) {
     setSyncState(db, workspace.id, RESOURCE, {

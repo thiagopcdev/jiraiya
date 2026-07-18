@@ -5,6 +5,7 @@ export const t = {
   nav: {
     dashboard: 'Dashboard',
     timeline: 'Timeline',
+    mentions: 'Menções',
     summaries: 'Resumos',
     team: 'Time',
     alerts: 'Alertas',

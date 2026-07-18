@@ -98,3 +98,26 @@ function walk(node: AdfNode, out: string[], listDepth: number): void {
 function children(node: AdfNode, out: string[], listDepth: number): void {
   for (const child of node.content ?? []) walk(child, out, listDepth)
 }
+
+/**
+ * Coleta os accountIds mencionados num ADF (nós `type: 'mention'`, `attrs.id`).
+ * Sem duplicatas, na ordem de aparição.
+ */
+export function collectMentionAccountIds(node: AdfNode | null | undefined): string[] {
+  const ids: string[] = []
+  const seen = new Set<string>()
+  walkMentions(node, ids, seen)
+  return ids
+}
+
+function walkMentions(node: AdfNode | null | undefined, ids: string[], seen: Set<string>): void {
+  if (!node) return
+  if (node.type === 'mention') {
+    const id = node.attrs?.id
+    if (typeof id === 'string' && !seen.has(id)) {
+      seen.add(id)
+      ids.push(id)
+    }
+  }
+  for (const child of node.content ?? []) walkMentions(child, ids, seen)
+}
