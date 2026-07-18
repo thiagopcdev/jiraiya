@@ -12,6 +12,7 @@ const ALLOWED_PUSH: readonly string[] = [
   'push:sync-progress',
   'push:sync-complete',
   'push:alerts-updated',
+  'push:mentions-updated',
   'push:auth-invalid'
 ]
 

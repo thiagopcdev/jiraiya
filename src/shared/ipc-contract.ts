@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type {
   Alert,
+  Mention,
   Board,
   Issue,
   IssueActivity,
@@ -141,7 +142,8 @@ export const ipcContract = {
       stalledDays: z.number().int().min(1).max(30).optional(),
       syncMode: z.enum(['project', 'personal']).optional(),
       notifyCriticalAlerts: z.boolean().optional(),
-      notifyAssignedToMe: z.boolean().optional()
+      notifyAssignedToMe: z.boolean().optional(),
+      notifyMentions: z.boolean().optional()
     }),
     res: undefined as unknown as Prefs
   },
@@ -168,6 +170,14 @@ export const ipcContract = {
   'app:info': {
     req: z.object({}),
     res: undefined as unknown as { version: string }
+  },
+  'mentions:list': {
+    req: z.object({}),
+    res: undefined as unknown as { mentions: Mention[]; unreadCount: number }
+  },
+  'mentions:markAllRead': {
+    req: z.object({}),
+    res: undefined as unknown as { ok: true }
   }
 } as const
 
@@ -185,6 +195,7 @@ export interface PushEvents {
   'push:sync-progress': { phase: string; done: number; total: number | null }
   'push:sync-complete': { success: boolean; error: string | null }
   'push:alerts-updated': { count: number }
+  'push:mentions-updated': { unreadCount: number }
   'push:auth-invalid': Record<string, never>
 }
 export type PushChannel = keyof PushEvents
@@ -193,6 +204,7 @@ export const PUSH_CHANNELS: PushChannel[] = [
   'push:sync-progress',
   'push:sync-complete',
   'push:alerts-updated',
+  'push:mentions-updated',
   'push:auth-invalid'
 ]
 

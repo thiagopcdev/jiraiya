@@ -100,6 +100,18 @@ export interface Summary {
   editedAt: string | null
 }
 
+/** Menção ao usuário do workspace num comentário do Jira. */
+export interface Mention {
+  id: number
+  issueKey: string
+  issueSummary: string | null
+  authorAccountId: string | null
+  authorName: string | null
+  excerpt: string | null
+  occurredAt: string
+  readAt: string | null
+}
+
 export type AlertSeverity = 'info' | 'warning' | 'critical'
 
 export interface Alert {
@@ -143,6 +155,7 @@ export interface Prefs {
   syncMode: 'project' | 'personal'
   notifyCriticalAlerts: boolean
   notifyAssignedToMe: boolean
+  notifyMentions: boolean
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -151,5 +164,6 @@ export const DEFAULT_PREFS: Prefs = {
   stalledDays: 3,
   syncMode: 'project',
   notifyCriticalAlerts: false,
-  notifyAssignedToMe: true
+  notifyAssignedToMe: true,
+  notifyMentions: true
 }

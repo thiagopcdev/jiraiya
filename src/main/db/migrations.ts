@@ -157,6 +157,22 @@ const migrations: string[] = [
   // 002 — id do custom field "Flagged" (impedimento); 'none' = procurado e ausente
   `
   ALTER TABLE workspace ADD COLUMN flagged_field_id TEXT;
+  `,
+  // 003 — menções ao usuário do workspace em comentários (inbox de marcações)
+  `
+  CREATE TABLE mention (
+    id INTEGER PRIMARY KEY,
+    workspace_id INTEGER NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,
+    issue_key TEXT NOT NULL,
+    source_id TEXT NOT NULL,
+    author_account_id TEXT,
+    author_name TEXT,
+    excerpt TEXT,
+    occurred_at TEXT NOT NULL,
+    read_at TEXT,
+    UNIQUE(workspace_id, source_id)
+  );
+  CREATE INDEX idx_mention_time ON mention(workspace_id, occurred_at);
   `
 ]
 
