@@ -35,6 +35,7 @@ export function registerTeamHandlers(ctx: AppContext): void {
 
     try {
       const markdown = await summarizeTeamWithClaude({
+        model: prefs.modelTeam,
         periodLabel: range.label,
         teamJson: JSON.stringify(compact, null, 2)
       })

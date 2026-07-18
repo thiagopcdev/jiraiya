@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { runClaudePrompt } from '../summaries/claude'
+import type { ClaudeModel } from '@shared/domain'
 import { CARD_PATTERN, patternBlockFor } from './cardPattern'
 
 const draftSchema = z.object({
@@ -33,6 +34,7 @@ export async function draftIssueWithClaude(input: {
   idea: string
   projectKey: string
   issueType: string
+  model?: ClaudeModel
 }): Promise<{ title: string; description: string }> {
   const bloco = patternBlockFor(input.issueType)
 
@@ -60,6 +62,6 @@ export async function draftIssueWithClaude(input: {
     'Responda SOMENTE com JSON válido no formato {"title": "...", "description": "..."} — sem cerca de código, sem texto antes ou depois.'
   ].join('\n')
 
-  const raw = await runClaudePrompt(prompt)
+  const raw = await runClaudePrompt(prompt, input.model)
   return parseDraftResponse(raw)
 }

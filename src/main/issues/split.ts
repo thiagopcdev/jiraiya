@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { runClaudePrompt } from '../summaries/claude'
+import type { ClaudeModel } from '@shared/domain'
 import { CARD_PATTERN, patternBlockFor } from './cardPattern'
 
 export interface SplitItem {
@@ -56,6 +57,7 @@ export async function splitIssueWithClaude(input: {
   parentIssueType: string | null
   feedback?: string
   currentItems?: SplitItem[]
+  model?: ClaudeModel
 }): Promise<{ items: SplitItem[]; rationale: string }> {
   const bloco = patternBlockFor(input.parentIssueType)
   const isIteration = Boolean(input.currentItems?.length)
@@ -101,6 +103,6 @@ export async function splitIssueWithClaude(input: {
     'Responda SOMENTE com JSON válido no formato {"items":[{"title":"...","description":"..."}], "rationale":"..."} — rationale com 1-2 frases explicando o critério da divisão. Sem cerca de código, sem texto antes ou depois.'
   ].join('\n')
 
-  const raw = await runClaudePrompt(prompt)
+  const raw = await runClaudePrompt(prompt, input.model)
   return parseSplitResponse(raw)
 }

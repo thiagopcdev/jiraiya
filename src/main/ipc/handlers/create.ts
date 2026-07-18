@@ -2,6 +2,7 @@ import { AppError, handle } from '../registry'
 import type { AppContext } from '../../appContext'
 import type { CreateIssueType } from '@shared/domain'
 import { getWorkspaceRow } from '../../db/repos/workspace'
+import { getPrefs } from '../../db/repos/misc'
 import { getActiveSprint } from '../../db/repos/catalog'
 import { textToAdf } from '../../jira/adf'
 import { JiraHttpError } from '../../jira/http'
@@ -41,7 +42,12 @@ export function registerCreateHandlers(ctx: AppContext): void {
       )
     }
     try {
-      const draft = await draftIssueWithClaude({ idea, projectKey, issueType })
+      const draft = await draftIssueWithClaude({
+        idea,
+        projectKey,
+        issueType,
+        model: getPrefs(ctx.db).modelDraft
+      })
       return { ...draft, generatedBy: 'claude' as const }
     } catch (err) {
       const message =

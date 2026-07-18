@@ -155,6 +155,9 @@ export interface TeamMemberSummary {
   commentedCount: number
 }
 
+/** Alias de modelo do CLI do Claude (resolvido pelo CLI para a versão mais nova). */
+export type ClaudeModel = 'haiku' | 'sonnet' | 'opus'
+
 export interface Prefs {
   syncIntervalMinutes: number
   backfillDays: number
@@ -163,6 +166,10 @@ export interface Prefs {
   notifyCriticalAlerts: boolean
   notifyAssignedToMe: boolean
   notifyMentions: boolean
+  modelSummaries: ClaudeModel
+  modelTeam: ClaudeModel
+  modelDraft: ClaudeModel
+  modelSplit: ClaudeModel
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -172,5 +179,10 @@ export const DEFAULT_PREFS: Prefs = {
   syncMode: 'project',
   notifyCriticalAlerts: false,
   notifyAssignedToMe: true,
-  notifyMentions: true
+  notifyMentions: true,
+  modelSummaries: 'sonnet',
+  modelTeam: 'sonnet',
+  modelDraft: 'sonnet',
+  // divisão é a tarefa mais pesada de raciocínio — vale o modelo mais forte
+  modelSplit: 'opus'
 }

@@ -220,19 +220,67 @@ function SelectRow({
   )
 }
 
+const CLAUDE_MODEL_OPTIONS: Array<[string, string]> = [
+  ['haiku', 'Haiku (mais rápido)'],
+  ['sonnet', 'Sonnet (equilíbrio)'],
+  ['opus', 'Opus (mais capaz)']
+]
+
 function ClaudeSection(): React.JSX.Element {
+  const queryClient = useQueryClient()
   const { data } = useQuery({
     queryKey: ['claude-status'],
     queryFn: () => invoke('claude:status', {})
   })
+  const { data: prefs } = usePrefs()
+
+  const update = async (patch: Partial<Prefs>): Promise<void> => {
+    await invoke('prefs:set', patch)
+    void queryClient.invalidateQueries({ queryKey: ['prefs'] })
+  }
+
   return (
     <Card title="Claude">
       {data?.available ? (
-        <p className="flex items-center gap-2 text-sm text-zinc-300">
-          <CheckCircle2 size={15} className="text-green-400" />
-          Claude disponível
-          <span className="truncate font-mono text-xs text-zinc-500">{data.path}</span>
-        </p>
+        <div className="space-y-4">
+          <p className="flex items-center gap-2 text-sm text-zinc-300">
+            <CheckCircle2 size={15} className="text-green-400" />
+            Claude disponível
+            <span className="truncate font-mono text-xs text-zinc-500">{data.path}</span>
+          </p>
+          {prefs && (
+            <>
+              <p className="text-xs text-zinc-500">
+                Modelo usado em cada funcionalidade (os aliases apontam para a versão mais recente
+                disponível na sua conta):
+              </p>
+              <SelectRow
+                label="Resumos (daily/weekly/1:1)"
+                value={prefs.modelSummaries}
+                options={CLAUDE_MODEL_OPTIONS}
+                onChange={(v) => void update({ modelSummaries: v as Prefs['modelSummaries'] })}
+              />
+              <SelectRow
+                label="Narrativa do time"
+                value={prefs.modelTeam}
+                options={CLAUDE_MODEL_OPTIONS}
+                onChange={(v) => void update({ modelTeam: v as Prefs['modelTeam'] })}
+              />
+              <SelectRow
+                label="Criar task (rascunho)"
+                value={prefs.modelDraft}
+                options={CLAUDE_MODEL_OPTIONS}
+                onChange={(v) => void update({ modelDraft: v as Prefs['modelDraft'] })}
+              />
+              <SelectRow
+                label="Dividir task (análise)"
+                value={prefs.modelSplit}
+                options={CLAUDE_MODEL_OPTIONS}
+                onChange={(v) => void update({ modelSplit: v as Prefs['modelSplit'] })}
+              />
+            </>
+          )}
+        </div>
       ) : (
         <div className="text-sm text-zinc-400">
           <p className="flex items-center gap-2">

@@ -1,6 +1,7 @@
 import { AppError, handle } from '../registry'
 import type { AppContext } from '../../appContext'
 import { getWorkspaceRow } from '../../db/repos/workspace'
+import { getPrefs } from '../../db/repos/misc'
 import { getIssueByKey } from '../../db/repos/issue'
 import { textToAdf } from '../../jira/adf'
 import { JiraHttpError } from '../../jira/http'
@@ -43,7 +44,8 @@ export function registerSplitHandlers(ctx: AppContext): void {
         parentDescription: row.description_text,
         parentIssueType: row.issue_type,
         feedback,
-        currentItems
+        currentItems,
+        model: getPrefs(ctx.db).modelSplit
       })
       return { items, rationale, generatedBy: 'claude' as const }
     } catch (err) {

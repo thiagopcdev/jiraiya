@@ -20,6 +20,7 @@ export function registerSummaryHandlers(ctx: AppContext): void {
     if (useClaude) {
       try {
         const enhanced = await enhanceWithClaude({
+          model: prefs.modelSummaries,
           templateMarkdown: markdown,
           digestJson: JSON.stringify(digest, null, 2)
         })

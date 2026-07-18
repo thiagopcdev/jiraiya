@@ -18,6 +18,8 @@ import type {
 
 /** Fonte única de verdade dos canais IPC: schema zod do request + tipo do response. */
 
+const claudeModelSchema = z.enum(['haiku', 'sonnet', 'opus']).optional()
+
 /** Item de divisão de card (título + descrição em texto simples). */
 const splitItemSchema = z.object({
   title: z.string().trim().min(1).max(255),
@@ -151,7 +153,11 @@ export const ipcContract = {
       syncMode: z.enum(['project', 'personal']).optional(),
       notifyCriticalAlerts: z.boolean().optional(),
       notifyAssignedToMe: z.boolean().optional(),
-      notifyMentions: z.boolean().optional()
+      notifyMentions: z.boolean().optional(),
+      modelSummaries: claudeModelSchema,
+      modelTeam: claudeModelSchema,
+      modelDraft: claudeModelSchema,
+      modelSplit: claudeModelSchema
     }),
     res: undefined as unknown as Prefs
   },

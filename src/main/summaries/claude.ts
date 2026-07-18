@@ -3,6 +3,7 @@ import { existsSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
 import { app } from 'electron'
+import type { ClaudeModel } from '@shared/domain'
 
 /**
  * Integração com Claude via CLI `claude -p` (modo não-interativo).
@@ -51,14 +52,17 @@ interface ClaudeCliResult {
  * Executa um prompt no CLI do Claude e devolve o texto do resultado.
  * Lança ClaudeUnavailableError em qualquer falha — o chamador decide o fallback.
  */
-export async function runClaudePrompt(prompt: string): Promise<string> {
+export async function runClaudePrompt(
+  prompt: string,
+  model: ClaudeModel = 'sonnet'
+): Promise<string> {
   const binary = resolveClaudeBinary()
   if (!binary) throw new ClaudeUnavailableError('CLI do Claude não encontrado')
 
   const output = await new Promise<string>((resolve, reject) => {
     const child = execFile(
       binary,
-      ['-p', prompt, '--output-format', 'json', '--model', 'sonnet'],
+      ['-p', prompt, '--output-format', 'json', '--model', model],
       {
         timeout: TIMEOUT_MS,
         maxBuffer: 8 * 1024 * 1024,
@@ -115,6 +119,7 @@ export async function runClaudePrompt(prompt: string): Promise<string> {
 export function enhanceWithClaude(input: {
   templateMarkdown: string
   digestJson: string
+  model?: ClaudeModel
 }): Promise<string> {
   const prompt = [
     'Você recebe um resumo de trabalho gerado automaticamente a partir de dados do Jira, mais o JSON com os fatos brutos.',
@@ -128,7 +133,7 @@ export function enhanceWithClaude(input: {
     '=== FATOS (JSON) ===',
     input.digestJson
   ].join('\n')
-  return runClaudePrompt(prompt)
+  return runClaudePrompt(prompt, input.model)
 }
 
 /**
@@ -138,6 +143,7 @@ export function enhanceWithClaude(input: {
 export function summarizeTeamWithClaude(input: {
   periodLabel: string
   teamJson: string
+  model?: ClaudeModel
 }): Promise<string> {
   const prompt = [
     'Você recebe, em JSON, o que cada membro de um time está fazendo no Jira em um período: trabalho em andamento, entregas, tickets parados e contagens de atividade.',
@@ -150,5 +156,5 @@ export function summarizeTeamWithClaude(input: {
     '=== TIME (JSON) ===',
     input.teamJson
   ].join('\n')
-  return runClaudePrompt(prompt)
+  return runClaudePrompt(prompt, input.model)
 }
