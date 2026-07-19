@@ -132,6 +132,52 @@ export function upsertSprints(
   run()
 }
 
+export interface SprintWindowRow {
+  jiraId: number
+  boardJiraId: number | null
+  name: string | null
+  state: 'active' | 'closed'
+  startDate: string
+  endDate: string | null
+  completeDate: string | null
+}
+
+/**
+ * Sprints ativas ou fechadas com data de início, da mais recente para a mais
+ * antiga. Exclui `future` e sprints sem `start_date` (não entram no velocity).
+ */
+export function listRecentSprints(
+  db: Database.Database,
+  workspaceId: number,
+  limit: number
+): SprintWindowRow[] {
+  const rows = db
+    .prepare(
+      `SELECT jira_id, board_jira_id, name, state, start_date, end_date, complete_date
+       FROM sprint
+       WHERE workspace_id = ? AND state IN ('active','closed') AND start_date IS NOT NULL
+       ORDER BY start_date DESC LIMIT ?`
+    )
+    .all(workspaceId, limit) as Array<{
+    jira_id: number
+    board_jira_id: number | null
+    name: string | null
+    state: string
+    start_date: string
+    end_date: string | null
+    complete_date: string | null
+  }>
+  return rows.map((r) => ({
+    jiraId: r.jira_id,
+    boardJiraId: r.board_jira_id,
+    name: r.name,
+    state: r.state as 'active' | 'closed',
+    startDate: r.start_date,
+    endDate: r.end_date,
+    completeDate: r.complete_date
+  }))
+}
+
 export function getActiveSprint(db: Database.Database, workspaceId: number): Sprint | null {
   const r = db
     .prepare(

@@ -6,7 +6,8 @@ import { insertActivities } from '../db/repos/activity'
 import { queryIssues } from './issues'
 
 const ME = 'acc-me'
-const now = new Date('2026-07-17T12:00:00Z')
+// dinâmico: o bucket 'stalled' compara com o relógio real (Date.now())
+const now = new Date()
 const iso = (d: string): string => new Date(d).toISOString()
 
 function baseIssue(key: string, over: Partial<IssueUpsert> = {}): IssueUpsert {

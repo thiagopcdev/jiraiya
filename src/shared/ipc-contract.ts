@@ -13,6 +13,7 @@ import type {
   SummaryTemplate,
   SyncStatus,
   TeamMemberSummary,
+  VelocitySummary,
   Workspace
 } from './domain'
 
@@ -172,6 +173,10 @@ export const ipcContract = {
       periodLabel: string
       syncMode: 'project' | 'personal'
     }
+  },
+  'team:velocity': {
+    req: z.object({ sprintCount: z.number().int().min(3).max(20).optional() }),
+    res: undefined as unknown as VelocitySummary
   },
   'team:narrative': {
     req: z.object({ period: periodSchema }),

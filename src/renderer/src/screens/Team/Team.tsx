@@ -3,10 +3,11 @@ import { AlertTriangle, Info, Sparkles } from 'lucide-react'
 import type { Period } from '@shared/periods'
 import type { Issue, TeamMemberSummary } from '@shared/domain'
 import { invoke } from '../../api/client'
-import { useTeam } from '../../api/hooks'
+import { useTeam, useVelocity } from '../../api/hooks'
 import { Badge, Button, Card, EmptyState, Spinner } from '../../components/ui'
 import { statusColor } from '../../components/statusColor'
 import { IssuesByStatus } from '../../components/IssuesByStatus'
+import { VelocityChart } from '../../components/VelocityChart'
 
 const periodOptions: Array<{ key: string; label: string; period: Period }> = [
   { key: 'today', label: 'Hoje', period: { type: 'today' } },
@@ -22,6 +23,7 @@ export default function Team(): React.JSX.Element {
   const [periodKey, setPeriodKey] = useState('7d')
   const period = periodOptions.find((p) => p.key === periodKey)!.period
   const { data, isLoading } = useTeam(period)
+  const { data: velocity, isLoading: velocityLoading } = useVelocity()
 
   const [narrative, setNarrative] = useState<string | null>(null)
   const [narrativeBusy, setNarrativeBusy] = useState(false)
@@ -78,6 +80,34 @@ export default function Team(): React.JSX.Element {
             trabalho. Para ver o time completo, troque para o modo projeto em Configurações.
           </span>
         </div>
+      )}
+
+      {(velocityLoading || (velocity && velocity.sprints.length > 0)) && (
+        <Card
+          title={
+            <span>
+              Entregas por sprint
+              <span className="ml-2 font-normal text-zinc-500">
+                últimas 8 sprints · pontos concluídos na janela de cada sprint
+              </span>
+            </span>
+          }
+          className="mb-4"
+        >
+          {velocityLoading ? (
+            <Spinner className="text-zinc-500" />
+          ) : (
+            velocity && (
+              <>
+                <VelocityChart velocity={velocity} />
+                <p className="mt-2 text-xs text-zinc-400">
+                  No período: {velocity.totals.myPoints} SP seus · {velocity.totals.teamPoints} SP
+                  do time · {velocity.totals.teamCount} cards
+                </p>
+              </>
+            )
+          )}
+        </Card>
       )}
 
       {narrative && (

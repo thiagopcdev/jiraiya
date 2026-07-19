@@ -155,6 +155,31 @@ export interface TeamMemberSummary {
   commentedCount: number
 }
 
+/**
+ * Entregas de uma sprint: story points com resolved_at dentro da janela
+ * temporal da sprint (nunca por associação sprint_jira_id, que só guarda a
+ * última sprint do card e é infiel para histórico).
+ */
+export interface VelocitySprint {
+  sprintJiraId: number
+  name: string | null
+  state: 'active' | 'closed'
+  startDate: string
+  /** Fim efetivo da janela usada no cálculo (complete_date ?? end_date ?? agora). */
+  endDate: string
+  myPoints: number
+  teamPoints: number
+  myCount: number
+  teamCount: number
+}
+
+export interface VelocitySummary {
+  /** Da mais antiga para a mais nova. */
+  sprints: VelocitySprint[]
+  /** Totais deduplicados sobre a janela global (issue conta uma vez mesmo em sprints sobrepostas). */
+  totals: { myPoints: number; teamPoints: number; myCount: number; teamCount: number }
+}
+
 /** Alias de modelo do CLI do Claude (resolvido pelo CLI para a versão mais nova). */
 export type ClaudeModel = 'haiku' | 'sonnet' | 'opus'
 

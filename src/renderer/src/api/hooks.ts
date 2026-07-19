@@ -68,6 +68,13 @@ export function useTeam(period: Period): UseQueryResult<IpcResponse<'team:summar
   })
 }
 
+export function useVelocity(sprintCount?: number): UseQueryResult<IpcResponse<'team:velocity'>> {
+  return useQuery({
+    queryKey: ['velocity', sprintCount],
+    queryFn: () => invoke('team:velocity', sprintCount ? { sprintCount } : {})
+  })
+}
+
 export function useMentions(): UseQueryResult<IpcResponse<'mentions:list'>> {
   return useQuery({
     queryKey: ['mentions'],

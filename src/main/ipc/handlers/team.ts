@@ -3,6 +3,7 @@ import type { AppContext } from '../../appContext'
 import { getWorkspaceRow } from '../../db/repos/workspace'
 import { getPrefs } from '../../db/repos/misc'
 import { buildTeamSummary } from '../../queries/team'
+import { buildVelocity } from '../../queries/velocity'
 import { summarizeTeamWithClaude } from '../../summaries/claude'
 import { resolveWithSprint } from './issues'
 
@@ -43,5 +44,14 @@ export function registerTeamHandlers(ctx: AppContext): void {
     } catch {
       return { ok: false, markdown: 'Claude indisponível — mostrando apenas o radar do time.' }
     }
+  })
+
+  handle('team:velocity', ({ sprintCount }) => {
+    const workspace = getWorkspaceRow(ctx.db)
+    if (!workspace) throw new AppError('NOT_CONNECTED', 'Nenhuma conta Jira conectada')
+    return buildVelocity(
+      { db: ctx.db, workspaceId: workspace.id, accountId: workspace.account_id },
+      { sprintCount: sprintCount ?? 8 }
+    )
   })
 }
