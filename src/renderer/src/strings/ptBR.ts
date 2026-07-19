@@ -1,6 +1,7 @@
 export const t = {
   app: {
-    name: 'Jiraiya'
+    name: 'Jiraiya',
+    paletteHint: '⌘K busca'
   },
   nav: {
     dashboard: 'Dashboard',
@@ -130,5 +131,31 @@ export const t = {
     commentFailedHint: 'Os cards foram criados, mas o comentário no card original falhou.',
     openParentInJira: 'Abrir card original no Jira',
     splitAnother: 'Dividir outro'
+  },
+  detail: {
+    openInJira: 'Abrir no Jira',
+    close: 'Fechar',
+    notSynced: 'Este card ainda não foi sincronizado localmente.',
+    storyPoints: (n: number) => `${n} pts`,
+    description: 'Descrição',
+    showAll: 'mostrar tudo',
+    timeInStatus: 'Tempo por status',
+    cardTimeline: 'Timeline do card',
+    noActivity: 'Nenhuma atividade registrada.',
+    commentTitle: 'Comentar',
+    commentPlaceholder: 'Escreva um comentário para postar no Jira…',
+    commentSubmit: 'Comentar no Jira',
+    commentSending: 'Enviando…',
+    aiStructure: 'Estruturar com IA',
+    aiNotesPlaceholder: 'Notas rápidas — o Claude estrutura em um comentário.',
+    aiGenerate: 'Gerar comentário',
+    aiGenerating: 'Gerando…',
+    claudeUnavailableHint: 'Instale o Claude Code para estruturar comentários com IA'
+  },
+  palette: {
+    placeholder: 'Buscar card por key, título ou texto…',
+    minChars: 'Digite ao menos 2 caracteres para buscar.',
+    noResults: 'Nada encontrado.',
+    hintOpen: '↵ abrir · ⌘↵ abrir no Jira'
   }
 }

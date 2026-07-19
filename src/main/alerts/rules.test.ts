@@ -37,6 +37,7 @@ function snap(over: Partial<AlertSnapshot> = {}): AlertSnapshot {
       endDate: '2026-07-21T00:00:00.000Z'
     },
     stalledDays: 3,
+    myAccountId: 'acc-me',
     now,
     ...over
   }
@@ -131,5 +132,99 @@ describe('alert rules', () => {
 
   it('sprint-acabando: não dispara longe do fim', () => {
     expect(byId['sprint-acabando'].evaluate(snap({ openIssues: [issue('BT-1')] }))).toHaveLength(0)
+  })
+})
+
+describe('reprovado', () => {
+  it('dispara para MEUS openIssues com status casando /reprov|rejeit|reject/i', () => {
+    const s = snap({
+      openIssues: [
+        issue('BT-1', { status: 'REPROVADO' }),
+        issue('BT-2', { status: 'Rejected' }),
+        issue('BT-3') // status normal ('In Progress') -> não dispara
+      ]
+    })
+    const out = byId['reprovado'].evaluate(s)
+    expect(out.map((c) => c.issueKey).sort()).toEqual(['BT-1', 'BT-2'])
+    expect(out[0].severity).toBe('critical')
+    expect(out.every((c) => c.message.includes(c.issueKey as string))).toBe(true)
+  })
+
+  it('não dispara para card alheio nem para status normal', () => {
+    const s = snap({
+      openIssues: [
+        issue('BT-1', { status: 'Reprovado', assigneeAccountId: 'acc-outro' }),
+        issue('BT-2', { status: 'In Progress' })
+      ]
+    })
+    expect(byId['reprovado'].evaluate(s)).toHaveLength(0)
+  })
+})
+
+describe('sprint-risco', () => {
+  it('dispara quando a sprint ativa termina em até 2 dias e há SP em aberto na sprint', () => {
+    const s = snap({
+      activeSprint: {
+        jiraId: 7,
+        boardJiraId: 1,
+        name: 'Sprint 42',
+        state: 'active',
+        startDate: '2026-07-07T00:00:00.000Z',
+        endDate: '2026-07-19T00:00:00.000Z' // ~1.5 dias de "now"
+      },
+      openIssues: [
+        issue('BT-1', { storyPoints: 3 }),
+        issue('BT-2', { sprintJiraId: 99, storyPoints: 5 }) // outra sprint -> não conta
+      ]
+    })
+    const out = byId['sprint-risco'].evaluate(s)
+    expect(out).toHaveLength(1)
+    expect(out[0].issueKey).toBeNull()
+    expect(out[0].message).toContain('Sprint 42')
+  })
+
+  it('não dispara se a sprint termina em 5 dias', () => {
+    const s = snap({
+      activeSprint: {
+        jiraId: 7,
+        boardJiraId: 1,
+        name: 'Sprint 42',
+        state: 'active',
+        startDate: '2026-07-07T00:00:00.000Z',
+        endDate: '2026-07-22T12:00:00.000Z'
+      },
+      openIssues: [issue('BT-1', { storyPoints: 3 })]
+    })
+    expect(byId['sprint-risco'].evaluate(s)).toHaveLength(0)
+  })
+
+  it('não dispara se o SP em aberto na sprint é 0', () => {
+    const s = snap({
+      activeSprint: {
+        jiraId: 7,
+        boardJiraId: 1,
+        name: 'Sprint 42',
+        state: 'active',
+        startDate: '2026-07-07T00:00:00.000Z',
+        endDate: '2026-07-19T00:00:00.000Z'
+      },
+      openIssues: [issue('BT-1', { storyPoints: null })]
+    })
+    expect(byId['sprint-risco'].evaluate(s)).toHaveLength(0)
+  })
+
+  it('não dispara se o endDate já passou', () => {
+    const s = snap({
+      activeSprint: {
+        jiraId: 7,
+        boardJiraId: 1,
+        name: 'Sprint 42',
+        state: 'active',
+        startDate: '2026-07-07T00:00:00.000Z',
+        endDate: '2026-07-16T00:00:00.000Z'
+      },
+      openIssues: [issue('BT-1', { storyPoints: 3 })]
+    })
+    expect(byId['sprint-risco'].evaluate(s)).toHaveLength(0)
   })
 })

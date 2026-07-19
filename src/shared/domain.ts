@@ -180,6 +180,22 @@ export interface VelocitySummary {
   totals: { myPoints: number; teamPoints: number; myCount: number; teamCount: number }
 }
 
+/** Tempo médio (dias) que MEUS cards passam num status, na janela analisada. */
+export interface LeadTimeStat {
+  status: string
+  avgDays: number
+  samples: number
+}
+
+/** Sprint resumida para seleção (retro, filtros). */
+export interface SprintListItem {
+  jiraId: number
+  name: string | null
+  state: 'active' | 'closed'
+  startDate: string
+  endDate: string | null
+}
+
 /** Alias de modelo do CLI do Claude (resolvido pelo CLI para a versão mais nova). */
 export type ClaudeModel = 'haiku' | 'sonnet' | 'opus'
 
@@ -195,6 +211,7 @@ export interface Prefs {
   modelTeam: ClaudeModel
   modelDraft: ClaudeModel
   modelSplit: ClaudeModel
+  modelComment: ClaudeModel
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -209,5 +226,6 @@ export const DEFAULT_PREFS: Prefs = {
   modelTeam: 'sonnet',
   modelDraft: 'sonnet',
   // divisão é a tarefa mais pesada de raciocínio — vale o modelo mais forte
-  modelSplit: 'opus'
+  modelSplit: 'opus',
+  modelComment: 'sonnet'
 }

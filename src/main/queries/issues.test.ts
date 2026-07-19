@@ -3,7 +3,7 @@ import Database from 'better-sqlite3'
 import { runMigrations } from '../db/migrations'
 import { upsertIssue, type IssueUpsert } from '../db/repos/issue'
 import { insertActivities } from '../db/repos/activity'
-import { queryIssues } from './issues'
+import { queryIssues, searchIssues } from './issues'
 
 const ME = 'acc-me'
 // dinâmico: o bucket 'stalled' compara com o relógio real (Date.now())
@@ -194,5 +194,66 @@ describe('queryIssues buckets', () => {
 
     const mine = queryIssues(ctx(), { ...range, bucket: 'mine', stalledDays: 3 })
     expect(mine.map((i) => i.key)).toEqual(['BT-21', 'BT-20', 'BT-22', 'BT-26'])
+  })
+})
+
+describe('searchIssues', () => {
+  let db: Database.Database
+  const ctx = (): Parameters<typeof searchIssues>[0] => ({
+    db,
+    workspaceId: 1,
+    accountId: ME,
+    siteUrl: 'https://x.atlassian.net'
+  })
+
+  beforeEach(() => {
+    db = new Database(':memory:')
+    runMigrations(db)
+    db.prepare(
+      `INSERT INTO workspace (site_url, email, account_id, created_at) VALUES ('https://x.atlassian.net', 'e', ?, 'now')`
+    ).run(ME)
+  })
+
+  it('match por key (case-insensitive, parcial): "bt-7" acha BT-7x', () => {
+    upsertIssue(db, 1, baseIssue('BT-70', { updatedAt: iso('2026-07-16T10:00:00Z') }))
+    upsertIssue(db, 1, baseIssue('BT-71', { updatedAt: iso('2026-07-15T10:00:00Z') }))
+    upsertIssue(db, 1, baseIssue('BT-99', { updatedAt: iso('2026-07-17T10:00:00Z') }))
+    const found = searchIssues(ctx(), 'bt-7', 10)
+    expect(found.map((i) => i.key).sort()).toEqual(['BT-70', 'BT-71'])
+  })
+
+  it('match por palavra do summary (case-insensitive)', () => {
+    upsertIssue(db, 1, baseIssue('BT-1', { summary: 'Corrigir bug de LOGIN no app' }))
+    upsertIssue(db, 1, baseIssue('BT-2', { summary: 'Outra tarefa qualquer' }))
+    const found = searchIssues(ctx(), 'login', 10)
+    expect(found.map((i) => i.key)).toEqual(['BT-1'])
+  })
+
+  it('match por texto da descrição', () => {
+    upsertIssue(db, 1, baseIssue('BT-1', { descriptionText: 'Contexto sobre TIMEOUT de rede' }))
+    upsertIssue(db, 1, baseIssue('BT-2', { descriptionText: 'nada a ver' }))
+    const found = searchIssues(ctx(), 'timeout', 10)
+    expect(found.map((i) => i.key)).toEqual(['BT-1'])
+  })
+
+  it('sem match -> []', () => {
+    upsertIssue(db, 1, baseIssue('BT-1'))
+    expect(searchIssues(ctx(), 'inexistente-xyz', 10)).toEqual([])
+  })
+
+  it('respeita o limit', () => {
+    upsertIssue(db, 1, baseIssue('BT-1', { updatedAt: iso('2026-07-10T10:00:00Z') }))
+    upsertIssue(db, 1, baseIssue('BT-2', { updatedAt: iso('2026-07-11T10:00:00Z') }))
+    upsertIssue(db, 1, baseIssue('BT-3', { updatedAt: iso('2026-07-12T10:00:00Z') }))
+    const found = searchIssues(ctx(), 'bt', 2)
+    expect(found).toHaveLength(2)
+  })
+
+  it('ordena por updated_at DESC', () => {
+    upsertIssue(db, 1, baseIssue('BT-1', { updatedAt: iso('2026-07-10T10:00:00Z') }))
+    upsertIssue(db, 1, baseIssue('BT-2', { updatedAt: iso('2026-07-15T10:00:00Z') }))
+    upsertIssue(db, 1, baseIssue('BT-3', { updatedAt: iso('2026-07-12T10:00:00Z') }))
+    const found = searchIssues(ctx(), 'bt', 10)
+    expect(found.map((i) => i.key)).toEqual(['BT-2', 'BT-3', 'BT-1'])
   })
 })

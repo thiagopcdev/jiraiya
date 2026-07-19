@@ -278,6 +278,12 @@ function ClaudeSection(): React.JSX.Element {
                 options={CLAUDE_MODEL_OPTIONS}
                 onChange={(v) => void update({ modelSplit: v as Prefs['modelSplit'] })}
               />
+              <SelectRow
+                label="Comentário de card (IA)"
+                value={prefs.modelComment}
+                options={CLAUDE_MODEL_OPTIONS}
+                onChange={(v) => void update({ modelComment: v as Prefs['modelComment'] })}
+              />
             </>
           )}
         </div>

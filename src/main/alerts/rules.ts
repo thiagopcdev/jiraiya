@@ -21,6 +21,8 @@ export interface AlertSnapshot {
   lastActivityByIssue: Map<string, string>
   activeSprint: Sprint | null
   stalledDays: number
+  /** accountId do usuário do workspace (regras que dependem de "meu"). */
+  myAccountId: string
   now: Date
 }
 
@@ -134,6 +136,47 @@ export const rules: AlertRule[] = [
           issueKey: null,
           severity: 'critical' as const,
           message: `Sprint ${sprint.name ?? ''} termina em ${dias} dia(s) com ${open.length} issue(s) abertas`
+        }
+      ]
+    }
+  },
+  {
+    id: 'reprovado',
+    severity: 'critical',
+    evaluate: (snap) =>
+      snap.openIssues
+        .filter(
+          (i) =>
+            i.assigneeAccountId === snap.myAccountId &&
+            i.status !== null &&
+            /reprov|rejeit|reject/i.test(i.status)
+        )
+        .map((i) => ({
+          ruleId: 'reprovado',
+          issueKey: i.key,
+          severity: 'critical' as const,
+          message: `${i.key} voltou reprovado: ${short(i.summary)}`
+        }))
+  },
+  {
+    id: 'sprint-risco',
+    severity: 'warning',
+    evaluate: (snap) => {
+      const sprint = snap.activeSprint
+      if (!sprint?.endDate) return []
+      const msLeft = new Date(sprint.endDate).getTime() - snap.now.getTime()
+      if (msLeft < 0 || msLeft > 2 * 86400000) return []
+      const points = snap.openIssues
+        .filter((i) => i.sprintJiraId === sprint.jiraId)
+        .reduce((sum, i) => sum + (i.storyPoints ?? 0), 0)
+      if (points <= 0) return []
+      const dias = Math.ceil(msLeft / 86400000)
+      return [
+        {
+          ruleId: 'sprint-risco',
+          issueKey: null,
+          severity: 'warning' as const,
+          message: `Sprint ${sprint.name ?? ''} termina em ${dias} dia(s) com ${points} SP em aberto`
         }
       ]
     }

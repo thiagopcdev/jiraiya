@@ -4,6 +4,7 @@ import { getWorkspaceRow } from '../../db/repos/workspace'
 import { getPrefs, deleteSummary, listSummaries, saveSummary } from '../../db/repos/misc'
 import { buildPeriodDigest } from '../../summaries/selectors'
 import { templates } from '../../summaries/templates'
+import { buildRetroDigest, renderRetroTemplate } from '../../summaries/retro'
 import { claudeStatus, enhanceWithClaude } from '../../summaries/claude'
 import { resolveWithSprint } from './issues'
 
@@ -21,6 +22,32 @@ export function registerSummaryHandlers(ctx: AppContext): void {
       try {
         const enhanced = await enhanceWithClaude({
           model: prefs.modelSummaries,
+          templateMarkdown: markdown,
+          digestJson: JSON.stringify(digest, null, 2)
+        })
+        return { markdown: enhanced, generatedBy: 'claude' as const }
+      } catch {
+        // fallback silencioso pro template — o renderer avisa via generatedBy
+      }
+    }
+    return { markdown, generatedBy: 'template' as const }
+  })
+
+  handle('summaries:sprintRetro', async ({ sprintJiraId, useClaude }) => {
+    const workspace = getWorkspaceRow(ctx.db)
+    if (!workspace) throw new AppError('NOT_CONNECTED', 'Nenhuma conta Jira conectada')
+
+    const digest = buildRetroDigest(
+      { db: ctx.db, workspaceId: workspace.id, accountId: workspace.account_id },
+      sprintJiraId
+    )
+    if (!digest) throw new AppError('NOT_FOUND', 'Sprint não encontrada')
+
+    const markdown = renderRetroTemplate(digest)
+    if (useClaude) {
+      try {
+        const enhanced = await enhanceWithClaude({
+          model: getPrefs(ctx.db).modelSummaries,
           templateMarkdown: markdown,
           digestJson: JSON.stringify(digest, null, 2)
         })

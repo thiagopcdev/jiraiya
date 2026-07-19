@@ -4,6 +4,7 @@ import { ptBR } from 'date-fns/locale'
 import {
   ArrowRightLeft,
   CheckCircle2,
+  ExternalLink,
   Flag,
   MessageSquare,
   Plus,
@@ -16,6 +17,7 @@ import type { ActivityKind, IssueActivity } from '@shared/domain'
 import { useProjects, useTimeline } from '../../api/hooks'
 import { invoke } from '../../api/client'
 import { EmptyState, Spinner } from '../../components/ui'
+import { useIssueDetail } from '../../components/issueDetail'
 
 const periodOptions: Array<{ key: string; label: string; period: Period }> = [
   { key: 'today', label: 'Hoje', period: { type: 'today' } },
@@ -119,11 +121,12 @@ function ActivityRow({
 }): React.JSX.Element {
   const meta = kindMeta[activity.kind]
   const Icon = meta.icon
+  const { openIssue } = useIssueDetail()
   return (
     <button
-      className="flex w-full items-start gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-zinc-800/60"
-      onClick={() => void invoke('shell:openIssue', { issueKey: activity.issueKey })}
-      title={`Abrir ${activity.issueKey} no Jira`}
+      className="group flex w-full items-start gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-zinc-800/60"
+      onClick={() => openIssue(activity.issueKey)}
+      title={activity.issueKey}
     >
       <Icon size={15} className={`mt-0.5 shrink-0 ${meta.color}`} />
       <div className="min-w-0 flex-1">
@@ -156,6 +159,18 @@ function ActivityRow({
           </div>
         )}
       </div>
+      <span
+        role="button"
+        tabIndex={0}
+        className="shrink-0 rounded p-0.5 text-zinc-600 opacity-0 transition-opacity group-hover:opacity-100 hover:text-zinc-300"
+        title={`Abrir ${activity.issueKey} no Jira`}
+        onClick={(e) => {
+          e.stopPropagation()
+          void invoke('shell:openIssue', { issueKey: activity.issueKey })
+        }}
+      >
+        <ExternalLink size={13} />
+      </span>
       <span className="shrink-0 text-xs text-zinc-600">
         {format(new Date(activity.occurredAt), 'HH:mm')}
       </span>

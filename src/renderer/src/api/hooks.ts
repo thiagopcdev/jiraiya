@@ -94,6 +94,40 @@ export function useIssueTypes(
   })
 }
 
+export function useIssueActivity(
+  key: string | null
+): UseQueryResult<IpcResponse<'issues:activity'>> {
+  return useQuery({
+    queryKey: ['issue-activity', key],
+    queryFn: () => invoke('issues:activity', { key: key! }),
+    enabled: !!key
+  })
+}
+
+export function useIssueSearch(query: string): UseQueryResult<IpcResponse<'issues:search'>> {
+  const trimmed = query.trim()
+  return useQuery({
+    queryKey: ['issue-search', trimmed],
+    queryFn: () => invoke('issues:search', { query: trimmed }),
+    enabled: trimmed.length >= 2,
+    staleTime: 15_000
+  })
+}
+
+export function useSprintList(limit?: number): UseQueryResult<IpcResponse<'sprint:list'>> {
+  return useQuery({
+    queryKey: ['sprint-list', limit],
+    queryFn: () => invoke('sprint:list', limit ? { limit } : {})
+  })
+}
+
+export function useLeadTime(days?: number): UseQueryResult<IpcResponse<'stats:leadTime'>> {
+  return useQuery({
+    queryKey: ['lead-time', days],
+    queryFn: () => invoke('stats:leadTime', days ? { days } : {})
+  })
+}
+
 /** Assina os canais push uma única vez e invalida os caches relevantes. */
 export function usePushInvalidation(): void {
   const queryClient = useQueryClient()

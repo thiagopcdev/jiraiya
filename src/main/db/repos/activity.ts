@@ -118,6 +118,25 @@ export function queryTimeline(
   return rows.map(toDto)
 }
 
+/** Atividades de um card específico, mais recentes primeiro. */
+export function listIssueActivities(
+  db: Database.Database,
+  workspaceId: number,
+  issueKey: string,
+  limit = 100
+): IssueActivity[] {
+  const rows = db
+    .prepare(
+      `SELECT a.*, i.summary, i.status FROM issue_activity a
+       LEFT JOIN issue i ON i.workspace_id = a.workspace_id AND i.key = a.issue_key
+       WHERE a.workspace_id = ? AND a.issue_key = ?
+       ORDER BY a.occurred_at DESC
+       LIMIT ?`
+    )
+    .all(workspaceId, issueKey, limit) as ActivityRow[]
+  return rows.map(toDto)
+}
+
 /** Última activity de cada issue (para regra de "parado há N dias"). */
 export function lastActivityPerIssue(
   db: Database.Database,

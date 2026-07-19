@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, Notification } from 'electron'
+import { app, shell, BrowserWindow, Notification, Tray, Menu, nativeImage } from 'electron'
 import type Database from 'better-sqlite3'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -17,12 +17,52 @@ import { registerCreateHandlers } from './ipc/handlers/create'
 import { registerSplitHandlers } from './ipc/handlers/split'
 import { registerTeamHandlers } from './ipc/handlers/team'
 import { registerMentionHandlers } from './ipc/handlers/mentions'
+import { registerCommentHandlers } from './ipc/handlers/comments'
 import { runAlertEngine } from './alerts/engine'
 import { getWorkspaceRow } from './db/repos/workspace'
 import { getPrefs, listActiveAlerts } from './db/repos/misc'
 import { seedMentionHistory, unreadCount } from './db/repos/mentions'
 
 let ctx: AppContext
+// referência global: sem isso o GC destrói o Tray e o ícone some da barra
+let tray: Tray | null = null
+
+/** Mostra e foca a janela principal; recria se não existir. */
+function showMainWindow(): void {
+  if (ctx.mainWindow) {
+    if (ctx.mainWindow.isMinimized()) ctx.mainWindow.restore()
+    ctx.mainWindow.show()
+    ctx.mainWindow.focus()
+  } else {
+    createWindow()
+  }
+}
+
+/**
+ * Atualiza tooltip, menu e badge do tray com as contagens atuais de menções não
+ * lidas e alertas ativos. Sem workspace conectado → contagens zeradas.
+ */
+function updateTray(db: Database.Database): void {
+  if (!tray) return
+  const workspace = getWorkspaceRow(db)
+  const unread = workspace ? unreadCount(db, workspace.id) : 0
+  const alerts = workspace ? listActiveAlerts(db, workspace.id).length : 0
+
+  tray.setToolTip('Jiraiya')
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: 'Abrir Jiraiya', click: () => showMainWindow() },
+      { type: 'separator' },
+      { label: `${unread} menções não lidas`, enabled: false },
+      { label: `${alerts} alertas ativos`, enabled: false },
+      { type: 'separator' },
+      { label: 'Sincronizar agora', click: () => void ctx.scheduler?.trigger({}) },
+      { type: 'separator' },
+      { label: 'Sair', click: () => app.quit() }
+    ])
+  )
+  tray.setTitle(unread > 0 ? String(unread) : '')
+}
 
 /**
  * Popula o inbox de menções uma única vez a partir do histórico já
@@ -152,6 +192,8 @@ app.whenReady().then(() => {
           n.show()
         }
       }
+
+      updateTray(db)
     }
   })
 
@@ -166,8 +208,13 @@ app.whenReady().then(() => {
   registerSplitHandlers(ctx)
   registerTeamHandlers(ctx)
   registerMentionHandlers(ctx)
+  registerCommentHandlers(ctx)
 
   createWindow()
+
+  tray = new Tray(nativeImage.createFromPath(icon).resize({ width: 18, height: 18 }))
+  updateTray(db)
+
   ctx.scheduler.start()
 
   app.on('activate', function () {

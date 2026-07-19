@@ -3,6 +3,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useAuthStatus } from './api/hooks'
 import { Spinner } from './components/ui'
 import Shell from './components/Shell'
+import { IssueDetailProvider } from './components/IssueDetailProvider'
+import CommandPalette from './components/CommandPalette'
 import Onboarding from './screens/Onboarding/Onboarding'
 import Dashboard from './screens/Dashboard/Dashboard'
 import Create from './screens/Create/Create'
@@ -42,7 +44,10 @@ export default function App(): React.JSX.Element {
           <Route
             element={
               <AuthGate>
-                <Shell />
+                <IssueDetailProvider>
+                  <CommandPalette />
+                  <Shell />
+                </IssueDetailProvider>
               </AuthGate>
             }
           >

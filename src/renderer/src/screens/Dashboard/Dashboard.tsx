@@ -5,7 +5,7 @@ import { AlertTriangle } from 'lucide-react'
 import type { Period } from '@shared/periods'
 import type { Issue } from '@shared/domain'
 import { invoke } from '../../api/client'
-import { useIssues } from '../../api/hooks'
+import { useIssues, useLeadTime } from '../../api/hooks'
 import { computeBurndown } from '../../lib/burndown'
 import { BurndownChart } from '../../components/BurndownChart'
 import { Card, EmptyState, Spinner } from '../../components/ui'
@@ -68,9 +68,56 @@ export default function Dashboard(): React.JSX.Element {
             period={tab.period}
           />
         ))}
+        <LeadTimeCard />
       </div>
     </div>
   )
+}
+
+function LeadTimeCard(): React.JSX.Element | null {
+  const { data: leadTime } = useLeadTime()
+  const statuses = leadTime?.statuses ?? []
+  if (!leadTime || leadTime.cardCount === 0 || statuses.length === 0) return null
+
+  const top = statuses.slice(0, 6)
+  const max = Math.max(...top.map((s) => s.avgDays))
+
+  return (
+    <Card
+      className="xl:col-span-2"
+      title={
+        <div>
+          <div>Onde seu tempo passa</div>
+          <div className="text-xs font-normal text-zinc-500">
+            média por status dos seus últimos {leadTime.cardCount} cards concluídos (
+            {leadTime.windowDays} dias)
+          </div>
+        </div>
+      }
+    >
+      <div className="space-y-2">
+        {top.map((s) => (
+          <div key={s.status} className="flex items-center gap-3">
+            <div className="w-32 shrink-0 truncate text-sm text-zinc-300">{s.status}</div>
+            <div className="h-2 flex-1 overflow-hidden rounded-full bg-zinc-800">
+              <div
+                className="h-full rounded-full bg-indigo-900/60"
+                style={{ width: `${max > 0 ? (s.avgDays / max) * 100 : 0}%` }}
+              />
+            </div>
+            <div className="w-24 shrink-0 text-right text-sm text-zinc-300">
+              {formatDaysPtBr(s.avgDays)} d{' '}
+              <span className="text-zinc-600">({s.samples} cards)</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  )
+}
+
+function formatDaysPtBr(value: number): string {
+  return value.toFixed(1).replace('.', ',')
 }
 
 function BucketCard({

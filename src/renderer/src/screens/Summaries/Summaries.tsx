@@ -1,12 +1,16 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { Check, Copy, Download, Save, Sparkles, Trash2 } from 'lucide-react'
 import type { Period } from '@shared/periods'
 import type { SummaryTemplate } from '@shared/domain'
 import { invoke } from '../../api/client'
+import { useSprintList } from '../../api/hooks'
 import { Button, Card, EmptyState, Spinner } from '../../components/ui'
 import { t } from '../../strings/ptBR'
+
+/** União local: 'sprint_retro' é um pseudo-template só desta tela, não faz parte do domínio compartilhado. */
+type SummaryKind = SummaryTemplate | 'sprint_retro'
 
 const periodOptions: Array<{ key: string; label: string; period: Period }> = [
   { key: 'yesterday', label: 'Ontem', period: { type: 'yesterday' } },
@@ -23,10 +27,16 @@ const templateOptions: Array<{ key: SummaryTemplate; label: string }> = [
   { key: 'monthly', label: 'Mensal' }
 ]
 
+const summaryKindOptions: Array<{ key: SummaryKind; label: string }> = [
+  ...templateOptions,
+  { key: 'sprint_retro', label: 'Retro de sprint' }
+]
+
 export default function Summaries(): React.JSX.Element {
   const queryClient = useQueryClient()
   const [periodKey, setPeriodKey] = useState('7d')
-  const [template, setTemplate] = useState<SummaryTemplate>('standup')
+  const [template, setTemplate] = useState<SummaryKind>('standup')
+  const [sprintJiraId, setSprintJiraId] = useState<number | null>(null)
   const [useClaude, setUseClaude] = useState(true)
   const [content, setContent] = useState('')
   const [generatedBy, setGeneratedBy] = useState<'template' | 'claude' | null>(null)
@@ -35,6 +45,7 @@ export default function Summaries(): React.JSX.Element {
   const [claudeFellBack, setClaudeFellBack] = useState(false)
 
   const period = periodOptions.find((p) => p.key === periodKey)!.period
+  const isSprintRetro = template === 'sprint_retro'
 
   const { data: claudeInfo } = useQuery({
     queryKey: ['claude-status'],
@@ -44,13 +55,31 @@ export default function Summaries(): React.JSX.Element {
     queryKey: ['summaries'],
     queryFn: () => invoke('summaries:list', {})
   })
+  const { data: sprintList } = useSprintList()
+  const sprints = useMemo(() => sprintList?.sprints ?? [], [sprintList])
+
+  // Default: sprint fechada mais recente; senão a ativa.
+  const defaultSprintId = useMemo(() => {
+    const mostRecentClosed = sprints
+      .filter((s) => s.state === 'closed')
+      .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())[0]
+    if (mostRecentClosed) return mostRecentClosed.jiraId
+    return sprints.find((s) => s.state === 'active')?.jiraId ?? null
+  }, [sprints])
+  const effectiveSprintId = sprintJiraId ?? defaultSprintId
 
   const generate = async (): Promise<void> => {
+    if (isSprintRetro && effectiveSprintId == null) return
     setBusy(true)
     setClaudeFellBack(false)
     try {
       const wantClaude = useClaude && (claudeInfo?.available ?? false)
-      const res = await invoke('summaries:generate', { period, template, useClaude: wantClaude })
+      const res = isSprintRetro
+        ? await invoke('summaries:sprintRetro', {
+            sprintJiraId: effectiveSprintId!,
+            useClaude: wantClaude
+          })
+        : await invoke('summaries:generate', { period, template, useClaude: wantClaude })
       setContent(res.markdown)
       setGeneratedBy(res.generatedBy)
       if (wantClaude && res.generatedBy === 'template') setClaudeFellBack(true)
@@ -71,7 +100,8 @@ export default function Summaries(): React.JSX.Element {
   }
 
   const save = async (): Promise<void> => {
-    if (!generatedBy) return
+    // Retro de sprint não tem período nem entra no enum de templates salvos no histórico.
+    if (!generatedBy || isSprintRetro) return
     await invoke('summaries:save', { period, template, contentMd: content, generatedBy })
     void queryClient.invalidateQueries({ queryKey: ['summaries'] })
   }
@@ -87,28 +117,46 @@ export default function Summaries(): React.JSX.Element {
 
       <Card>
         <div className="flex flex-wrap items-end gap-3">
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-zinc-400">Período</span>
-            <select
-              className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
-              value={periodKey}
-              onChange={(e) => setPeriodKey(e.target.value)}
-            >
-              {periodOptions.map((p) => (
-                <option key={p.key} value={p.key}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          {isSprintRetro ? (
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-zinc-400">Sprint</span>
+              <select
+                className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
+                value={effectiveSprintId ?? ''}
+                onChange={(e) => setSprintJiraId(Number(e.target.value))}
+              >
+                {sprints.length === 0 && <option value="">Nenhuma sprint encontrada</option>}
+                {sprints.map((s) => (
+                  <option key={s.jiraId} value={s.jiraId}>
+                    {(s.name ?? `Sprint ${s.jiraId}`) + (s.state === 'active' ? ' (ativa)' : '')}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-zinc-400">Período</span>
+              <select
+                className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
+                value={periodKey}
+                onChange={(e) => setPeriodKey(e.target.value)}
+              >
+                {periodOptions.map((p) => (
+                  <option key={p.key} value={p.key}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="block">
             <span className="mb-1 block text-xs font-medium text-zinc-400">Formato</span>
             <select
               className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
               value={template}
-              onChange={(e) => setTemplate(e.target.value as SummaryTemplate)}
+              onChange={(e) => setTemplate(e.target.value as SummaryKind)}
             >
-              {templateOptions.map((o) => (
+              {summaryKindOptions.map((o) => (
                 <option key={o.key} value={o.key}>
                   {o.label}
                 </option>
@@ -135,7 +183,11 @@ export default function Summaries(): React.JSX.Element {
             <Sparkles size={14} className="text-indigo-400" />
             Aprimorar com Claude
           </label>
-          <Button className="ml-auto" disabled={busy} onClick={() => void generate()}>
+          <Button
+            className="ml-auto"
+            disabled={busy || (isSprintRetro && effectiveSprintId == null)}
+            onClick={() => void generate()}
+          >
             {busy && <Spinner />}
             {busy ? 'Gerando…' : 'Gerar resumo'}
           </Button>
@@ -174,10 +226,12 @@ export default function Summaries(): React.JSX.Element {
               <Download size={14} />
               {t.common.export}
             </Button>
-            <Button variant="secondary" onClick={() => void save()}>
-              <Save size={14} />
-              Salvar no histórico
-            </Button>
+            {!isSprintRetro && (
+              <Button variant="secondary" onClick={() => void save()}>
+                <Save size={14} />
+                Salvar no histórico
+              </Button>
+            )}
           </div>
         </Card>
       )}

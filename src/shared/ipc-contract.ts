@@ -6,9 +6,11 @@ import type {
   CreateIssueType,
   Issue,
   IssueActivity,
+  LeadTimeStat,
   Prefs,
   Project,
   Sprint,
+  SprintListItem,
   Summary,
   SummaryTemplate,
   SyncStatus,
@@ -158,7 +160,8 @@ export const ipcContract = {
       modelSummaries: claudeModelSchema,
       modelTeam: claudeModelSchema,
       modelDraft: claudeModelSchema,
-      modelSplit: claudeModelSchema
+      modelSplit: claudeModelSchema,
+      modelComment: claudeModelSchema
     }),
     res: undefined as unknown as Prefs
   },
@@ -197,6 +200,47 @@ export const ipcContract = {
   'issues:get': {
     req: z.object({ key: z.string().trim().min(1).max(64) }),
     res: undefined as unknown as { issue: Issue | null }
+  },
+  'issues:activity': {
+    req: z.object({ key: z.string().trim().min(1).max(64) }),
+    res: undefined as unknown as { activities: IssueActivity[] }
+  },
+  'issues:search': {
+    req: z.object({
+      query: z.string().trim().min(2).max(100),
+      limit: z.number().int().min(1).max(50).optional()
+    }),
+    res: undefined as unknown as { issues: Issue[] }
+  },
+  'issues:comment': {
+    req: z.object({
+      issueKey: z.string().trim().min(1).max(64),
+      body: z.string().trim().min(1).max(10000)
+    }),
+    res: undefined as unknown as { ok: true }
+  },
+  'issues:commentDraft': {
+    req: z.object({
+      issueKey: z.string().trim().min(1).max(64),
+      notes: z.string().trim().min(1).max(4000)
+    }),
+    res: undefined as unknown as { body: string; generatedBy: 'claude' }
+  },
+  'sprint:list': {
+    req: z.object({ limit: z.number().int().min(1).max(20).optional() }),
+    res: undefined as unknown as { sprints: SprintListItem[] }
+  },
+  'summaries:sprintRetro': {
+    req: z.object({ sprintJiraId: z.number().int(), useClaude: z.boolean() }),
+    res: undefined as unknown as { markdown: string; generatedBy: 'template' | 'claude' }
+  },
+  'stats:leadTime': {
+    req: z.object({ days: z.number().int().min(7).max(365).optional() }),
+    res: undefined as unknown as {
+      statuses: LeadTimeStat[]
+      cardCount: number
+      windowDays: number
+    }
   },
   'issues:splitDraft': {
     req: z.object({

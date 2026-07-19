@@ -1,0 +1,138 @@
+import { useEffect, useRef, useState } from 'react'
+import { invoke } from '../api/client'
+import { useIssueSearch } from '../api/hooks'
+import { Badge, Spinner } from './ui'
+import { statusColor } from './statusColor'
+import { useIssueDetail } from './issueDetail'
+import { t } from '../strings/ptBR'
+
+/** Dono do estado aberto/fechado + listener global do atalho. O conteúdo (busca,
+ * seleção) vive em PaletteModal, montado só enquanto aberto — assim o estado
+ * reseta sozinho a cada abertura, sem precisar sincronizar via efeito. */
+export default function CommandPalette(): React.JSX.Element | null {
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent): void => {
+      const isToggle = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k'
+      if (isToggle) {
+        e.preventDefault()
+        setOpen((v) => !v)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  if (!open) return null
+  return <PaletteModal onClose={() => setOpen(false)} />
+}
+
+function PaletteModal({ onClose }: { onClose: () => void }): React.JSX.Element {
+  const [query, setQuery] = useState('')
+  const [rawActiveIndex, setActiveIndex] = useState(0)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const { openIssue } = useIssueDetail()
+
+  const { data, isFetching } = useIssueSearch(query)
+  const results = data?.issues ?? []
+  const activeIndex = Math.min(rawActiveIndex, Math.max(results.length - 1, 0))
+
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
+  const openResult = (key: string): void => {
+    openIssue(key)
+    onClose()
+  }
+
+  const onInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setActiveIndex((i) => Math.min(i + 1, results.length - 1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setActiveIndex((i) => Math.max(i - 1, 0))
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      const target = results[activeIndex]
+      if (!target) return
+      if (e.metaKey || e.ctrlKey) {
+        void invoke('shell:openIssue', { issueKey: target.key })
+        onClose()
+      } else {
+        openResult(target.key)
+      }
+    }
+  }
+
+  const trimmed = query.trim()
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50" onClick={onClose}>
+      <div
+        className="mx-auto mt-24 w-[640px] max-w-[90vw] overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2 border-b border-zinc-800 px-3 py-2.5">
+          <input
+            ref={inputRef}
+            className="w-full bg-transparent text-sm text-zinc-100 placeholder-zinc-500 outline-none"
+            placeholder={t.palette.placeholder}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={onInputKeyDown}
+          />
+          {isFetching && <Spinner className="shrink-0 text-zinc-500" />}
+        </div>
+
+        <div className="max-h-96 overflow-y-auto py-1">
+          {trimmed.length < 2 ? (
+            <p className="px-3 py-6 text-center text-sm text-zinc-500">{t.palette.minChars}</p>
+          ) : results.length === 0 ? (
+            <p className="px-3 py-6 text-center text-sm text-zinc-500">{t.palette.noResults}</p>
+          ) : (
+            results.map((issue, i) => (
+              <button
+                key={issue.key}
+                className={`flex w-full items-center gap-2 px-3 py-2 text-left ${
+                  i === activeIndex ? 'bg-zinc-800' : 'hover:bg-zinc-800/60'
+                }`}
+                onMouseEnter={() => setActiveIndex(i)}
+                onClick={() => openResult(issue.key)}
+              >
+                <span className="shrink-0 font-mono text-xs text-zinc-500">{issue.key}</span>
+                <span className="min-w-0 flex-1 truncate text-sm text-zinc-200">
+                  {issue.summary}
+                </span>
+                {issue.status && (
+                  <Badge color={statusColor(issue.statusCategory)}>{issue.status}</Badge>
+                )}
+                {issue.assigneeName && (
+                  <span className="shrink-0 max-w-28 truncate text-xs text-zinc-500">
+                    {issue.assigneeName}
+                  </span>
+                )}
+              </button>
+            ))
+          )}
+        </div>
+
+        {results.length > 0 && (
+          <div className="border-t border-zinc-800 px-3 py-1.5 text-xs text-zinc-600">
+            {t.palette.hintOpen}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

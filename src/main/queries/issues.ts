@@ -154,3 +154,25 @@ export function queryIssues(
 
   return rows.map((r) => rowToIssue(r, siteUrl))
 }
+
+/**
+ * Busca textual em key/summary/description dos cards do workspace. LIKE é
+ * case-insensitive para ASCII; COLLATE NOCASE reforça nas comparações.
+ */
+export function searchIssues(ctx: IssueQueryCtx, query: string, limit: number): Issue[] {
+  const { db, workspaceId, siteUrl } = ctx
+  const rows = db
+    .prepare(
+      `SELECT * FROM issue
+       WHERE workspace_id = @workspaceId
+         AND (
+           key LIKE @q COLLATE NOCASE
+           OR summary LIKE @q COLLATE NOCASE
+           OR COALESCE(description_text, '') LIKE @q COLLATE NOCASE
+         )
+       ORDER BY updated_at DESC
+       LIMIT @limit`
+    )
+    .all({ workspaceId, q: '%' + query + '%', limit }) as IssueRow[]
+  return rows.map((r) => rowToIssue(r, siteUrl))
+}

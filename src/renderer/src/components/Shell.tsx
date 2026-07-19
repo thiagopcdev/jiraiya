@@ -100,6 +100,7 @@ export default function Shell(): React.JSX.Element {
           ) : (
             <p className="mt-1 px-2 text-xs leading-tight text-zinc-500">{t.sync.never}</p>
           )}
+          <p className="mt-2 px-2 text-xs leading-tight text-zinc-600">{t.app.paletteHint}</p>
         </div>
       </aside>
       <main className="min-w-0 flex-1 overflow-y-auto">

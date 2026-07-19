@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { format, isToday, isYesterday } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { ExternalLink } from 'lucide-react'
 import type { Mention } from '@shared/domain'
 import { useMentions } from '../../api/hooks'
 import { invoke } from '../../api/client'
 import { EmptyState, Spinner } from '../../components/ui'
+import { useIssueDetail } from '../../components/issueDetail'
 
 export default function Mentions(): React.JSX.Element {
   const { data, isLoading } = useMentions()
@@ -49,14 +51,15 @@ export default function Mentions(): React.JSX.Element {
 
 function MentionRow({ mention }: { mention: Mention }): React.JSX.Element {
   const unread = mention.readAt === null
+  const { openIssue } = useIssueDetail()
 
   return (
     <button
-      className={`flex w-full items-start gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-zinc-800/60 ${
+      className={`group flex w-full items-start gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-zinc-800/60 ${
         unread ? 'bg-zinc-900/60' : ''
       }`}
-      onClick={() => void invoke('shell:openIssue', { issueKey: mention.issueKey })}
-      title={`Abrir ${mention.issueKey} no Jira`}
+      onClick={() => openIssue(mention.issueKey)}
+      title={mention.issueKey}
     >
       <span className="mt-1.5 shrink-0">
         {unread ? (
@@ -80,6 +83,18 @@ function MentionRow({ mention }: { mention: Mention }): React.JSX.Element {
           </div>
         )}
       </div>
+      <span
+        role="button"
+        tabIndex={0}
+        className="shrink-0 rounded p-0.5 text-zinc-600 opacity-0 transition-opacity group-hover:opacity-100 hover:text-zinc-300"
+        title={`Abrir ${mention.issueKey} no Jira`}
+        onClick={(e) => {
+          e.stopPropagation()
+          void invoke('shell:openIssue', { issueKey: mention.issueKey })
+        }}
+      >
+        <ExternalLink size={13} />
+      </span>
       <span className="shrink-0 text-xs text-zinc-600">
         {format(new Date(mention.occurredAt), 'HH:mm')}
       </span>

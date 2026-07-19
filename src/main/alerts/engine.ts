@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3'
 import { rules, type AlertSnapshot } from './rules'
 import { lastActivityPerIssue } from '../db/repos/activity'
 import { getActiveSprint } from '../db/repos/catalog'
+import { getWorkspaceRow } from '../db/repos/workspace'
 import { getPrefs, reconcileAlerts, listActiveAlerts } from '../db/repos/misc'
 
 /** Roda todas as regras sobre o snapshot atual e reconcilia a tabela de alertas. */
@@ -50,6 +51,7 @@ export function runAlertEngine(
     lastActivityByIssue: lastActivityPerIssue(db, workspaceId),
     activeSprint: getActiveSprint(db, workspaceId),
     stalledDays: getPrefs(db).stalledDays,
+    myAccountId: getWorkspaceRow(db)?.account_id ?? '',
     now: new Date()
   }
 
