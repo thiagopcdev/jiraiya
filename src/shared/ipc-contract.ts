@@ -11,6 +11,7 @@ import type {
   Project,
   Sprint,
   SprintListItem,
+  StatusCategory,
   Summary,
   SummaryTemplate,
   SyncStatus,
@@ -225,6 +226,40 @@ export const ipcContract = {
       notes: z.string().trim().min(1).max(4000)
     }),
     res: undefined as unknown as { body: string; generatedBy: 'claude' }
+  },
+  'board:view': {
+    req: z.object({
+      boardJiraId: z.number().int().optional(),
+      sprintJiraId: z.number().int().optional()
+    }),
+    res: undefined as unknown as {
+      board: Board
+      boards: Board[]
+      /** sprint exibida (ativa ou a escolhida no seletor) */
+      sprint: { jiraId: number; name: string } | null
+      /** opções do seletor: ativa + fechadas recentes (só boards scrum) */
+      sprints: SprintListItem[]
+      /** sprint encerrada → drag & drop desabilitado */
+      readOnly: boolean
+      columns: Array<{
+        name: string
+        statusIds: string[]
+        statusNames: string[]
+        issues: Issue[]
+      }>
+      /** cards do escopo cujo status não está em nenhuma coluna */
+      unmapped: Issue[]
+      /** 'fallback' = config do board indisponível, colunas derivadas por categoria */
+      columnsSource: 'jira' | 'fallback'
+    }
+  },
+  'board:move': {
+    req: z.object({
+      issueKey: z.string().trim().min(1).max(64),
+      targetStatusIds: z.array(z.string()).min(1),
+      targetColumnName: z.string().min(1)
+    }),
+    res: undefined as unknown as { newStatus: string; newStatusCategory: StatusCategory }
   },
   'sprint:list': {
     req: z.object({ limit: z.number().int().min(1).max(20).optional() }),

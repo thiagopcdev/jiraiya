@@ -171,3 +171,33 @@ export interface JiraAgileSprint {
   completeDate?: string
   originBoardId?: number
 }
+
+/** GET /rest/agile/1.0/board/{id}/configuration */
+export interface JiraBoardConfiguration {
+  columnConfig?: {
+    columns?: Array<{
+      name?: string
+      statuses?: Array<{ id: string; self?: string }>
+    }>
+  }
+}
+
+/** GET /rest/api/3/status */
+export interface JiraStatus {
+  id: string
+  name?: string
+  statusCategory?: { key?: string }
+}
+
+/** GET /rest/api/3/issue/{key}/transitions */
+export interface JiraTransitionsResponse {
+  transitions?: Array<{
+    id: string
+    name?: string
+    to?: {
+      id?: string
+      name?: string
+      statusCategory?: { key?: string }
+    }
+  }>
+}

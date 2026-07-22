@@ -153,6 +153,20 @@ export function issuesNeedingChangelog(
   return rows.map((r) => r.key)
 }
 
+/** Atualiza status/categoria de um card localmente (após transição no Jira). */
+export function updateIssueStatus(
+  db: Database.Database,
+  workspaceId: number,
+  key: string,
+  status: string,
+  statusCategory: StatusCategory
+): void {
+  db.prepare(
+    `UPDATE issue SET status = ?, status_category = ?, updated_at = ?
+     WHERE workspace_id = ? AND key = ?`
+  ).run(status, statusCategory, new Date().toISOString(), workspaceId, key)
+}
+
 export function markChangelogSynced(db: Database.Database, workspaceId: number, key: string): void {
   db.prepare(
     `UPDATE issue SET changelog_synced_at = updated_at WHERE workspace_id = ? AND key = ?`

@@ -1,8 +1,10 @@
 import { JiraHttp } from './http'
+import type { BoardTransition } from '../queries/board'
 import type {
   JiraAgilePage,
   JiraAgileSprint,
   JiraBoard,
+  JiraBoardConfiguration,
   JiraBulkChangelogResponse,
   JiraChangelogHistory,
   JiraChangelogPageResponse,
@@ -16,8 +18,15 @@ import type {
   JiraMyself,
   JiraProject,
   JiraProjectSearchResponse,
-  JiraSearchResponse
+  JiraSearchResponse,
+  JiraStatus,
+  JiraTransitionsResponse
 } from './types'
+
+/** Normaliza a categoria de status do Jira; valor desconhecido → 'new' (defensivo). */
+function toCategoryKey(key: string | undefined): 'new' | 'indeterminate' | 'done' {
+  return key === 'indeterminate' || key === 'done' ? key : 'new'
+}
 
 const BASE_FIELDS = [
   'summary',
@@ -198,6 +207,53 @@ export class JiraClient {
   async addComment(issueKey: string, body: unknown): Promise<void> {
     await this.http.post<unknown>(`/rest/api/3/issue/${encodeURIComponent(issueKey)}/comment`, {
       body
+    })
+  }
+
+  /** Configuração de colunas do board (nome + ids de status por coluna). */
+  async boardConfiguration(
+    boardId: number
+  ): Promise<{ columns: Array<{ name: string; statusIds: string[] }> }> {
+    const res = await this.http.get<JiraBoardConfiguration>(
+      `/rest/agile/1.0/board/${boardId}/configuration`
+    )
+    const columns = (res.columnConfig?.columns ?? []).map((c) => ({
+      name: c.name ?? '',
+      statusIds: (c.statuses ?? []).map((s) => s.id)
+    }))
+    return { columns }
+  }
+
+  /** Catálogo global de status do site (id → nome + categoria). */
+  async listStatuses(): Promise<
+    Array<{ id: string; name: string; categoryKey: 'new' | 'indeterminate' | 'done' }>
+  > {
+    const res = await this.http.get<JiraStatus[]>('/rest/api/3/status')
+    return (res ?? []).map((s) => ({
+      id: s.id,
+      name: s.name ?? '',
+      categoryKey: toCategoryKey(s.statusCategory?.key)
+    }))
+  }
+
+  /** Transições disponíveis para a issue no estado atual. */
+  async issueTransitions(issueKey: string): Promise<BoardTransition[]> {
+    const res = await this.http.get<JiraTransitionsResponse>(
+      `/rest/api/3/issue/${encodeURIComponent(issueKey)}/transitions`
+    )
+    return (res.transitions ?? []).map((t) => ({
+      id: t.id,
+      name: t.name ?? '',
+      toStatusId: t.to?.id ?? '',
+      toStatusName: t.to?.name ?? '',
+      toCategoryKey: toCategoryKey(t.to?.statusCategory?.key)
+    }))
+  }
+
+  /** Executa uma transição na issue. */
+  async doTransition(issueKey: string, transitionId: string): Promise<void> {
+    await this.http.post<unknown>(`/rest/api/3/issue/${encodeURIComponent(issueKey)}/transitions`, {
+      transition: { id: transitionId }
     })
   }
 }

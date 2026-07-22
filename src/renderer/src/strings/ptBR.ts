@@ -5,6 +5,7 @@ export const t = {
   },
   nav: {
     dashboard: 'Dashboard',
+    board: 'Quadro',
     create: 'Criar task',
     split: 'Dividir task',
     timeline: 'Timeline',
@@ -131,6 +132,24 @@ export const t = {
     commentFailedHint: 'Os cards foram criados, mas o comentário no card original falhou.',
     openParentInJira: 'Abrir card original no Jira',
     splitAnother: 'Dividir outro'
+  },
+  board: {
+    title: 'Quadro',
+    boardLabel: 'Board',
+    boardPlaceholder: 'Selecione um board',
+    sprintLabel: 'Sprint',
+    sprintPlaceholder: 'Selecione uma sprint',
+    sprintFallbackName: (jiraId: number) => `Sprint ${jiraId}`,
+    activeSuffix: ' (ativa)',
+    closedSuffix: ' (encerrada)',
+    readOnlyBadge: 'Sprint encerrada — somente leitura',
+    noActiveSprint: 'Sem sprint ativa',
+    outOfBoard: 'Fora do quadro',
+    noAssignee: 'Sem responsável',
+    all: 'Todos',
+    you: 'você',
+    fallbackBanner: 'Colunas aproximadas (configuração do board indisponível)',
+    empty: 'Nenhum card nesta coluna.'
   },
   detail: {
     openInJira: 'Abrir no Jira',

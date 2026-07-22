@@ -7,6 +7,7 @@ import { IssueDetailProvider } from './components/IssueDetailProvider'
 import CommandPalette from './components/CommandPalette'
 import Onboarding from './screens/Onboarding/Onboarding'
 import Dashboard from './screens/Dashboard/Dashboard'
+import Board from './screens/Board/Board'
 import Create from './screens/Create/Create'
 import Split from './screens/Split/Split'
 import Timeline from './screens/Timeline/Timeline'
@@ -52,6 +53,7 @@ export default function App(): React.JSX.Element {
             }
           >
             <Route path="/" element={<Dashboard />} />
+            <Route path="/quadro" element={<Board />} />
             <Route path="/criar" element={<Create />} />
             <Route path="/dividir" element={<Split />} />
             <Route path="/timeline" element={<Timeline />} />
