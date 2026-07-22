@@ -1,0 +1,40 @@
+name: Release Windows
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # postinstall roda electron-builder install-app-deps, que resolve o
+      # binário nativo do better-sqlite3 para win32-x64
+      - run: npm ci
+
+      - run: npm run build:win
+
+      - name: Publicar instalador na release (push de tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*-setup.exe
+
+      - name: Upload do instalador como artifact (execução manual)
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        uses: actions/upload-artifact@v4
+        with:
+          name: jiraiya-windows-setup
+          path: dist/*-setup.exe

@@ -2,6 +2,7 @@
 /**
  * Pipeline reproduzível do ícone: build/icon-src/icon.svg ->
  *   build/icon.png (1024, alpha real) + resources/icon.png (512) + build/icon.icns
+ *   + build/icon.ico (Windows, full-bleed: sem as margens do layout macOS)
  *
  * IMPORTANTE: NÃO usar qlmanage para SVG->PNG — ele renderiza sobre fundo
  * branco (e o sips ainda reporta hasAlpha:yes, enganando a verificação).
@@ -9,9 +10,10 @@
  * do canto (alpha 0) antes de aceitar o resultado.
  */
 import { execSync } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import pngToIco from 'png-to-ico'
 import sharp from 'sharp'
 
 const SVG = 'build/icon-src/icon.svg'
@@ -49,3 +51,20 @@ for (const size of [16, 32, 128, 256, 512]) {
 execSync(`iconutil -c icns ${iconset} -o build/icon.icns`)
 rmSync(iconset, { recursive: true, force: true })
 console.log('build/icon.icns ok')
+
+// Windows: ícone full-bleed — recorta o squircle (824x824 em 100,100) do canvas
+// macOS, senão o ícone fica ~20% menor que os demais na barra de tarefas.
+const fullBleed = await sharp(SVG, { density: 300 })
+  .resize(1024, 1024)
+  .extract({ left: 100, top: 100, width: 824, height: 824 })
+  .png()
+  .toBuffer()
+const winBase = join(tmpdir(), 'jiraiya-icon-win-256.png')
+await sharp(fullBleed).resize(256, 256).png().toFile(winBase)
+await assertTransparentCorner(winBase)
+const winSizes = await Promise.all(
+  [16, 24, 32, 48, 64, 128, 256].map((size) => sharp(fullBleed).resize(size, size).png().toBuffer())
+)
+writeFileSync('build/icon.ico', await pngToIco(winSizes))
+rmSync(winBase, { force: true })
+console.log('build/icon.ico ok')

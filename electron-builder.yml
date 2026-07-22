@@ -23,5 +23,14 @@ mac:
   notarize: false
 dmg:
   artifactName: ${name}-${version}.${ext}
+win:
+  target:
+    - target: nsis
+      arch: x64
+  icon: build/icon.ico
+nsis:
+  artifactName: ${name}-${version}-setup.${ext}
+  oneClick: false
+  allowToChangeInstallationDirectory: true
 # better-sqlite3 é rebuildado pelo postinstall (install-app-deps)
 npmRebuild: false
