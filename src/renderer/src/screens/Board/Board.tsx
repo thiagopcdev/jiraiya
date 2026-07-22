@@ -41,7 +41,8 @@ function borderAccent(category: Issue['statusCategory']): string {
 export default function Board(): React.JSX.Element {
   const [boardId, setBoardId] = useState<number | undefined>(undefined)
   const [sprintId, setSprintId] = useState<number | undefined>(undefined)
-  const [assigneeFilter, setAssigneeFilter] = useState<Set<string>>(new Set())
+  // null = usuário ainda não mexeu no filtro → default: só os meus cards
+  const [assigneeFilter, setAssigneeFilter] = useState<Set<string> | null>(null)
   const [pendingKeys, setPendingKeys] = useState<Set<string>>(new Set())
   const [moveError, setMoveError] = useState<string | null>(null)
   const [dragOverCol, setDragOverCol] = useState<string | null>(null)
@@ -151,18 +152,23 @@ export default function Board(): React.JSX.Element {
     return { people: sorted, hasUnassigned: unassigned }
   }, [allIssues, myAccountId])
 
+  // default: filtro no usuário logado (se ele tiver cards no quadro); "Todos" limpa
+  const effectiveFilter: Set<string> =
+    assigneeFilter ??
+    (myAccountId && people.some((p) => p.accountId === myAccountId)
+      ? new Set([myAccountId])
+      : new Set<string>())
+
   const filterIssues = (issues: Issue[]): Issue[] =>
-    assigneeFilter.size === 0
+    effectiveFilter.size === 0
       ? issues
-      : issues.filter((i) => assigneeFilter.has(i.assigneeAccountId ?? ''))
+      : issues.filter((i) => effectiveFilter.has(i.assigneeAccountId ?? ''))
 
   const toggleAssignee = (key: string): void => {
-    setAssigneeFilter((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
+    const next = new Set(effectiveFilter)
+    if (next.has(key)) next.delete(key)
+    else next.add(key)
+    setAssigneeFilter(next)
   }
 
   const findOriginColumnName = (issueKey: string): string | null => {
@@ -265,7 +271,7 @@ export default function Board(): React.JSX.Element {
             people={people}
             hasUnassigned={hasUnassigned}
             myAccountId={myAccountId}
-            filter={assigneeFilter}
+            filter={effectiveFilter}
             onToggle={toggleAssignee}
             onClearAll={() => setAssigneeFilter(new Set())}
           />
