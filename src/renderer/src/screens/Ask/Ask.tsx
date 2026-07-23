@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Send, Trash2 } from 'lucide-react'
+import { Send, Sparkles, Trash2 } from 'lucide-react'
 import { invoke, IpcError } from '../../api/client'
 import { Button, EmptyState, Spinner } from '../../components/ui'
 import { MarkdownLite } from '../../components/MarkdownLite'
@@ -66,7 +66,7 @@ export default function Ask(): React.JSX.Element {
 
   if (claudeInfo && !claudeInfo.available) {
     return (
-      <div className="flex h-full flex-col p-6">
+      <div className="mx-auto flex h-full w-full max-w-3xl flex-col p-6">
         <h2 className="text-xl font-semibold text-zinc-100">{t.ask.title}</h2>
         <p className="mt-1 text-sm text-zinc-500">{t.ask.hint}</p>
         <EmptyState message={t.ask.claudeUnavailableHint} />
@@ -75,7 +75,7 @@ export default function Ask(): React.JSX.Element {
   }
 
   return (
-    <div className="flex h-full max-w-3xl flex-col p-6">
+    <div className="mx-auto flex h-full w-full max-w-3xl flex-col p-6">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold text-zinc-100">{t.ask.title}</h2>
@@ -89,14 +89,18 @@ export default function Ask(): React.JSX.Element {
         )}
       </div>
 
-      <div className="flex-1 space-y-3 overflow-y-auto">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
         {messages.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3">
-            <div className="flex max-w-md flex-wrap justify-center gap-2">
+          <div className="flex h-full flex-col items-center justify-center gap-4">
+            <div className="flex size-12 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900">
+              <Sparkles size={20} className="text-indigo-400" />
+            </div>
+            <p className="text-sm text-zinc-500">{t.ask.emptyTitle}</p>
+            <div className="flex max-w-lg flex-col items-center gap-2">
               {t.ask.suggestions.map((suggestion) => (
                 <button
                   key={suggestion}
-                  className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:border-indigo-700 hover:text-indigo-300"
+                  className="rounded-full border border-zinc-800 bg-zinc-900 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-indigo-700 hover:text-indigo-300"
                   onClick={() => void send(suggestion)}
                 >
                   {suggestion}

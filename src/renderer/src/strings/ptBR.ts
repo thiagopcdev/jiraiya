@@ -140,6 +140,7 @@ export const t = {
     title: 'Perguntar ao Jiraiya',
     hint: 'Responde com base nos seus dados locais (janela de backfill)',
     placeholder: 'Pergunte algo sobre seus cards, sprint ou time…',
+    emptyTitle: 'Pergunte qualquer coisa sobre o seu Jira — ou comece por uma sugestão:',
     send: 'Enviar',
     thinking: 'Pensando… (pode levar alguns minutos)',
     clearConversation: 'Limpar conversa',
