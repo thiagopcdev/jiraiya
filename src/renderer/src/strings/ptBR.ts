@@ -161,6 +161,8 @@ export const t = {
     timeInStatus: 'Tempo por status',
     cardTimeline: 'Timeline do card',
     noActivity: 'Nenhuma atividade registrada.',
+    commentsTitle: 'Comentários',
+    noComments: 'Nenhum comentário ainda.',
     commentTitle: 'Comentar',
     commentPlaceholder: 'Escreva um comentário para postar no Jira…',
     commentSubmit: 'Comentar no Jira',

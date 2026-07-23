@@ -4,6 +4,8 @@ import { format } from 'date-fns'
 import {
   ArrowRightLeft,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   ExternalLink,
   Flag,
   MessageSquare,
@@ -78,6 +80,7 @@ function IssueDetailDrawer({
 
   const { data: activityData, isLoading: activityLoading } = useIssueActivity(issueKey)
   const activities = activityData?.activities ?? []
+  const comments = activities.filter((a) => a.kind === 'comment' && a.bodyText)
 
   const { data: claudeInfo } = useQuery({
     queryKey: ['claude-status'],
@@ -96,6 +99,8 @@ function IssueDetailDrawer({
   const [commentSent, setCommentSent] = useState(false)
 
   const [aiOpen, setAiOpen] = useState(false)
+  // timeline em accordion, fechada por padrão
+  const [timelineOpen, setTimelineOpen] = useState(false)
   const [aiNotes, setAiNotes] = useState('')
   const [aiBusy, setAiBusy] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
@@ -234,17 +239,59 @@ function IssueDetailDrawer({
 
               <section>
                 <h3 className="mb-2 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
-                  {t.detail.cardTimeline}
+                  {t.detail.commentsTitle}
+                  {!activityLoading && comments.length > 0 && (
+                    <span className="ml-1.5 text-zinc-600">({comments.length})</span>
+                  )}
                 </h3>
                 {activityLoading ? (
                   <Spinner className="text-zinc-500" />
-                ) : activities.length === 0 ? (
-                  <p className="text-sm text-zinc-500">{t.detail.noActivity}</p>
+                ) : comments.length === 0 ? (
+                  <p className="text-sm text-zinc-500">{t.detail.noComments}</p>
                 ) : (
-                  <div className="space-y-0.5 border-l border-zinc-800 pl-3">
-                    {activities.map((a) => (
-                      <ActivityLine key={a.id} activity={a} />
+                  <div className="space-y-2">
+                    {comments.map((c) => (
+                      <div
+                        key={c.id}
+                        className="rounded-md border border-zinc-800 bg-zinc-900/60 p-2.5"
+                      >
+                        <div className="mb-1 flex items-baseline justify-between gap-2">
+                          <span className="text-sm font-medium text-zinc-300">
+                            {c.actorName ?? 'Alguém'}
+                          </span>
+                          <span className="shrink-0 text-xs text-zinc-600">
+                            {format(new Date(c.occurredAt), 'dd/MM/yyyy HH:mm')}
+                          </span>
+                        </div>
+                        <p className="text-sm whitespace-pre-wrap text-zinc-400">{c.bodyText}</p>
+                      </div>
                     ))}
+                  </div>
+                )}
+              </section>
+
+              <section>
+                <button
+                  className="flex w-full items-center gap-1 text-xs font-semibold tracking-wide text-zinc-500 uppercase hover:text-zinc-300"
+                  onClick={() => setTimelineOpen((v) => !v)}
+                >
+                  {timelineOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  {t.detail.cardTimeline}
+                  {!activityLoading && <span className="text-zinc-600">({activities.length})</span>}
+                </button>
+                {timelineOpen && (
+                  <div className="mt-2">
+                    {activityLoading ? (
+                      <Spinner className="text-zinc-500" />
+                    ) : activities.length === 0 ? (
+                      <p className="text-sm text-zinc-500">{t.detail.noActivity}</p>
+                    ) : (
+                      <div className="space-y-0.5 border-l border-zinc-800 pl-3">
+                        {activities.map((a) => (
+                          <ActivityLine key={a.id} activity={a} />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </section>
