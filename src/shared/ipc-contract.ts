@@ -213,6 +213,18 @@ export const ipcContract = {
     }),
     res: undefined as unknown as { issues: Issue[] }
   },
+  'issues:comments': {
+    req: z.object({ key: z.string().trim().min(1).max(64) }),
+    res: undefined as unknown as {
+      /** body é o documento ADF cru (renderizado com formatação no renderer) */
+      comments: Array<{
+        id: string
+        authorName: string | null
+        createdAt: string
+        body: unknown
+      }>
+    }
+  },
   'issues:comment': {
     req: z.object({
       issueKey: z.string().trim().min(1).max(64),

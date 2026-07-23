@@ -20,6 +20,22 @@ function requireClient(ctx: AppContext): NonNullable<ReturnType<typeof ctx.getCl
 }
 
 export function registerCommentHandlers(ctx: AppContext): void {
+  handle('issues:comments', async ({ key }) => {
+    requireWorkspace(ctx)
+    const client = requireClient(ctx)
+    const raw = await client.issueComments(key.trim().toUpperCase())
+    // mais recente primeiro, com o ADF cru para o renderer formatar
+    const comments = raw
+      .map((c) => ({
+        id: c.id,
+        authorName: c.author?.displayName ?? null,
+        createdAt: c.created,
+        body: (c.body ?? null) as unknown
+      }))
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+    return { comments }
+  })
+
   handle('issues:commentDraft', async ({ issueKey, notes }) => {
     const workspace = requireWorkspace(ctx)
     const issue = getIssueByKey(ctx.db, workspace.id, issueKey.trim().toUpperCase())

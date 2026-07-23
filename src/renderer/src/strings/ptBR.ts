@@ -163,6 +163,7 @@ export const t = {
     noActivity: 'Nenhuma atividade registrada.',
     commentsTitle: 'Comentários',
     noComments: 'Nenhum comentário ainda.',
+    commentsOfflineHint: 'Sem conexão com o Jira — mostrando versão local em texto simples.',
     commentTitle: 'Comentar',
     commentPlaceholder: 'Escreva um comentário para postar no Jira…',
     commentSubmit: 'Comentar no Jira',

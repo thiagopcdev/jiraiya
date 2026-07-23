@@ -20,6 +20,7 @@ import type { ActivityKind, Issue, IssueActivity } from '@shared/domain'
 import { invoke, IpcError } from '../api/client'
 import { useIssueActivity, useSprintList } from '../api/hooks'
 import { Badge, Button, EmptyState, Spinner } from './ui'
+import { AdfView } from './AdfView'
 import { statusColor } from './statusColor'
 import { IssueDetailContext } from './issueDetail'
 import { t } from '../strings/ptBR'
@@ -80,7 +81,19 @@ function IssueDetailDrawer({
 
   const { data: activityData, isLoading: activityLoading } = useIssueActivity(issueKey)
   const activities = activityData?.activities ?? []
-  const comments = activities.filter((a) => a.kind === 'comment' && a.bodyText)
+
+  // comentários vivos do Jira (ADF formatado); offline/erro → fallback pro texto local
+  const {
+    data: liveComments,
+    isLoading: commentsLoading,
+    isError: commentsOffline
+  } = useQuery({
+    queryKey: ['issue-comments', issueKey],
+    queryFn: () => invoke('issues:comments', { key: issueKey }),
+    staleTime: 30_000,
+    retry: 0
+  })
+  const localComments = activities.filter((a) => a.kind === 'comment' && a.bodyText)
 
   const { data: claudeInfo } = useQuery({
     queryKey: ['claude-status'],
@@ -117,6 +130,7 @@ function IssueDetailDrawer({
       setCommentSent(true)
       void invoke('sync:run', { full: false })
       void queryClient.invalidateQueries({ queryKey: ['issue-activity', issueKey] })
+      void queryClient.invalidateQueries({ queryKey: ['issue-comments', issueKey] })
       setTimeout(() => setCommentSent(false), 3000)
     } catch (err) {
       setCommentError(err instanceof IpcError ? err.message : t.common.error)
@@ -240,17 +254,39 @@ function IssueDetailDrawer({
               <section>
                 <h3 className="mb-2 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
                   {t.detail.commentsTitle}
-                  {!activityLoading && comments.length > 0 && (
-                    <span className="ml-1.5 text-zinc-600">({comments.length})</span>
+                  {liveComments && liveComments.comments.length > 0 && (
+                    <span className="ml-1.5 text-zinc-600">({liveComments.comments.length})</span>
                   )}
                 </h3>
-                {activityLoading ? (
+                {commentsLoading ? (
                   <Spinner className="text-zinc-500" />
-                ) : comments.length === 0 ? (
-                  <p className="text-sm text-zinc-500">{t.detail.noComments}</p>
-                ) : (
+                ) : liveComments ? (
+                  liveComments.comments.length === 0 ? (
+                    <p className="text-sm text-zinc-500">{t.detail.noComments}</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {liveComments.comments.map((c) => (
+                        <div
+                          key={c.id}
+                          className="rounded-md border border-zinc-800 bg-zinc-900/60 p-2.5"
+                        >
+                          <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                            <span className="text-sm font-medium text-zinc-300">
+                              {c.authorName ?? 'Alguém'}
+                            </span>
+                            <span className="shrink-0 text-xs text-zinc-600">
+                              {format(new Date(c.createdAt), 'dd/MM/yyyy HH:mm')}
+                            </span>
+                          </div>
+                          <AdfView doc={c.body} />
+                        </div>
+                      ))}
+                    </div>
+                  )
+                ) : commentsOffline && localComments.length > 0 ? (
                   <div className="space-y-2">
-                    {comments.map((c) => (
+                    <p className="text-xs text-zinc-600">{t.detail.commentsOfflineHint}</p>
+                    {localComments.map((c) => (
                       <div
                         key={c.id}
                         className="rounded-md border border-zinc-800 bg-zinc-900/60 p-2.5"
@@ -267,6 +303,8 @@ function IssueDetailDrawer({
                       </div>
                     ))}
                   </div>
+                ) : (
+                  <p className="text-sm text-zinc-500">{t.detail.noComments}</p>
                 )}
               </section>
 
