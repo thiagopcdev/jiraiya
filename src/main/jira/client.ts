@@ -14,6 +14,7 @@ import type {
   JiraCreatedIssue,
   JiraCreateMetaIssueType,
   JiraCreateMetaIssueTypesResponse,
+  JiraEditMetaResponse,
   JiraFieldDef,
   JiraIssue,
   JiraMyself,
@@ -264,6 +265,40 @@ export class JiraClient {
     await this.http.post<unknown>(`/rest/api/3/issue/${encodeURIComponent(issueKey)}/transitions`, {
       transition: { id: transitionId }
     })
+  }
+
+  /** Metadados de edição da issue (campos editáveis + valores permitidos). */
+  issueEditMeta(issueKey: string): Promise<JiraEditMetaResponse> {
+    return this.http.get<JiraEditMetaResponse>(
+      `/rest/api/3/issue/${encodeURIComponent(issueKey)}/editmeta`
+    )
+  }
+
+  /** Edita campos da issue (PUT — o Jira responde 204 sem corpo). */
+  async updateIssue(issueKey: string, fields: Record<string, unknown>): Promise<void> {
+    await this.http.put<unknown>(`/rest/api/3/issue/${encodeURIComponent(issueKey)}`, { fields })
+  }
+
+  /** Registra um worklog na issue. commentAdf em ADF (o chamador converte). */
+  async addWorklog(issueKey: string, timeSpent: string, commentAdf?: unknown): Promise<void> {
+    await this.http.post<unknown>(`/rest/api/3/issue/${encodeURIComponent(issueKey)}/worklog`, {
+      timeSpent,
+      ...(commentAdf !== undefined ? { comment: commentAdf } : {})
+    })
+  }
+
+  /** Tempo gasto / estimativa original da issue (campo timetracking). */
+  async issueTimeTracking(
+    issueKey: string
+  ): Promise<{ timeSpent: string | null; originalEstimate: string | null }> {
+    const res = await this.http.get<{
+      fields?: { timetracking?: { timeSpent?: string; originalEstimate?: string } }
+    }>(`/rest/api/3/issue/${encodeURIComponent(issueKey)}?fields=timetracking`)
+    const tt = res.fields?.timetracking
+    return {
+      timeSpent: tt?.timeSpent ?? null,
+      originalEstimate: tt?.originalEstimate ?? null
+    }
   }
 }
 

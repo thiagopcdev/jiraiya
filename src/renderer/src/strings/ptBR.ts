@@ -172,7 +172,22 @@ export const t = {
     aiNotesPlaceholder: 'Notas rápidas — o Claude estrutura em um comentário.',
     aiGenerate: 'Gerar comentário',
     aiGenerating: 'Gerando…',
-    claudeUnavailableHint: 'Instale o Claude Code para estruturar comentários com IA'
+    claudeUnavailableHint: 'Instale o Claude Code para estruturar comentários com IA',
+    editTitle: 'Editar',
+    save: 'Salvar',
+    saving: 'Salvando…',
+    nothingChanged: 'Nada para salvar',
+    storyPointsLabel: 'Story points',
+    priorityLabel: 'Prioridade',
+    severityPlaceholder: '—',
+    originalEstimateLabel: 'Estimativa original',
+    originalEstimatePlaceholder: '2d 4h',
+    timeSpentRegistered: (value: string | null) => `Registrado: ${value ?? '—'}`,
+    timeSpentEstimated: (value: string) => `estimado: ${value}`,
+    timeSpentPlaceholder: '1h 30m',
+    timeSpentHint: 'Formato: 1w 2d 3h 30m',
+    logWork: 'Registrar',
+    logging: 'Registrando…'
   },
   palette: {
     placeholder: 'Buscar card por key, título ou texto…',

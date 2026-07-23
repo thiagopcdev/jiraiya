@@ -167,6 +167,36 @@ export function updateIssueStatus(
   ).run(status, statusCategory, new Date().toISOString(), workspaceId, key)
 }
 
+/**
+ * Atualiza campos editados de um card localmente (após edição no Jira).
+ * UPDATE dinâmico só das colunas presentes no patch. Patch vazio → no-op.
+ */
+export function updateIssueFields(
+  db: Database.Database,
+  workspaceId: number,
+  key: string,
+  patch: { storyPoints?: number | null; priority?: string }
+): void {
+  const sets: string[] = []
+  const values: Array<number | string | null> = []
+  if (patch.storyPoints !== undefined) {
+    sets.push('story_points = ?')
+    values.push(patch.storyPoints)
+  }
+  if (patch.priority !== undefined) {
+    sets.push('priority = ?')
+    values.push(patch.priority)
+  }
+  if (sets.length === 0) return
+  sets.push('updated_at = ?')
+  values.push(new Date().toISOString())
+  db.prepare(`UPDATE issue SET ${sets.join(', ')} WHERE workspace_id = ? AND key = ?`).run(
+    ...values,
+    workspaceId,
+    key
+  )
+}
+
 export function markChangelogSynced(db: Database.Database, workspaceId: number, key: string): void {
   db.prepare(
     `UPDATE issue SET changelog_synced_at = updated_at WHERE workspace_id = ? AND key = ?`

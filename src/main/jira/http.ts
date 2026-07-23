@@ -96,6 +96,10 @@ export class JiraHttp {
     return this.request<T>('POST', path, body)
   }
 
+  put<T>(path: string, body: unknown): Promise<T> {
+    return this.request<T>('PUT', path, body)
+  }
+
   private request<T>(method: string, path: string, body?: unknown): Promise<T> {
     return this.queue.add(async () => {
       let attempt = 0

@@ -213,6 +213,59 @@ export const ipcContract = {
     }),
     res: undefined as unknown as { issues: Issue[] }
   },
+  'issues:editMeta': {
+    req: z.object({ key: z.string().trim().min(1).max(64) }),
+    res: undefined as unknown as {
+      storyPointsEditable: boolean
+      priority: {
+        editable: boolean
+        current: string | null
+        options: Array<{ id: string; name: string }>
+      }
+      /** campo custom de severidade descoberto por nome no editmeta; null se o card não o tem */
+      severity: {
+        fieldId: string
+        name: string
+        current: string | null
+        options: Array<{ id: string; value: string }>
+      } | null
+      /** tempo total já registrado (formato Jira, ex. '3h 30m') */
+      timeSpent: string | null
+      originalEstimate: string | null
+      /** campo 'Controle de tempo' presente na tela de edição (permite editar a estimativa original) */
+      timeTrackingEditable: boolean
+    }
+  },
+  'issues:update': {
+    req: z.object({
+      key: z.string().trim().min(1).max(64),
+      /** null limpa o campo */
+      storyPoints: z.number().min(0).nullable().optional(),
+      priorityId: z.string().min(1).optional(),
+      /** nome exibido, para atualizar o cache local sem novo fetch */
+      priorityName: z.string().min(1).optional(),
+      severity: z.object({ fieldId: z.string().min(1), optionId: z.string().min(1) }).optional(),
+      /** Estimativa original (formato Jira: 1w 2d 3h 30m) */
+      originalEstimate: z
+        .string()
+        .trim()
+        .regex(/^(\d+[wdhm])(\s+\d+[wdhm])*$/i, 'Formato: 1w 2d 3h 30m')
+        .optional()
+    }),
+    res: undefined as unknown as { ok: true }
+  },
+  'issues:logWork': {
+    req: z.object({
+      key: z.string().trim().min(1).max(64),
+      /** formato Jira: combinações de Nw Nd Nh Nm (ex. '1h 30m') */
+      timeSpent: z
+        .string()
+        .trim()
+        .regex(/^(\d+[wdhm])(\s+\d+[wdhm])*$/i, 'Formato: 1w 2d 3h 30m'),
+      comment: z.string().max(2000).optional()
+    }),
+    res: undefined as unknown as { ok: true; totalTimeSpent: string | null }
+  },
   'issues:description': {
     req: z.object({ key: z.string().trim().min(1).max(64) }),
     res: undefined as unknown as {

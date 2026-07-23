@@ -17,6 +17,7 @@ import {
   Zap
 } from 'lucide-react'
 import type { ActivityKind, Issue, IssueActivity } from '@shared/domain'
+import type { IpcRequest, IpcResponse } from '@shared/ipc-contract'
 import { invoke, IpcError } from '../api/client'
 import { useIssueActivity, useSprintList } from '../api/hooks'
 import { Badge, Button, EmptyState, Spinner } from './ui'
@@ -112,6 +113,14 @@ function IssueDetailDrawer({
     issue?.sprintJiraId != null
       ? (sprintsData?.sprints.find((s) => s.jiraId === issue.sprintJiraId)?.name ?? null)
       : null
+
+  // seção "Editar" em accordion, fechada por padrão — dispara editMeta só ao expandir
+  const [editOpen, setEditOpen] = useState(false)
+  const { data: editMeta, isLoading: editMetaLoading } = useQuery({
+    queryKey: ['issue-editmeta', issueKey],
+    queryFn: () => invoke('issues:editMeta', { key: issueKey }),
+    enabled: editOpen
+  })
 
   const [descExpanded, setDescExpanded] = useState(false)
   const [comment, setComment] = useState('')
@@ -235,6 +244,25 @@ function IssueDetailDrawer({
                   )}
                 </div>
               </div>
+
+              <section>
+                <button
+                  className="flex w-full items-center gap-1 text-xs font-semibold tracking-wide text-zinc-500 uppercase hover:text-zinc-300"
+                  onClick={() => setEditOpen((v) => !v)}
+                >
+                  {editOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  {t.detail.editTitle}
+                </button>
+                {editOpen && (
+                  <div className="mt-2">
+                    {editMetaLoading ? (
+                      <Spinner className="text-zinc-500" />
+                    ) : editMeta ? (
+                      <EditPanel meta={editMeta} issue={issue} issueKey={issueKey} />
+                    ) : null}
+                  </div>
+                )}
+              </section>
 
               {liveDescription?.description ? (
                 <AdfDescription
@@ -410,6 +438,240 @@ function IssueDetailDrawer({
             </div>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Conteúdo da seção "Editar". Só é montado quando o editMeta já resolveu, então os
+ * useState abaixo podem ser inicializados diretamente pelas props — sem useEffect de
+ * sincronização.
+ */
+function EditPanel({
+  meta,
+  issue,
+  issueKey
+}: {
+  meta: IpcResponse<'issues:editMeta'>
+  issue: Issue
+  issueKey: string
+}): React.JSX.Element {
+  const queryClient = useQueryClient()
+
+  const initialStoryPoints = issue.storyPoints !== null ? String(issue.storyPoints) : ''
+  const initialPriorityId = meta.priority.editable
+    ? (meta.priority.options.find((o) => o.name === meta.priority.current)?.id ??
+      meta.priority.options[0]?.id ??
+      '')
+    : ''
+  const initialSeverityId = meta.severity
+    ? (meta.severity.options.find((o) => o.value === meta.severity?.current)?.id ?? '')
+    : ''
+  const initialOriginalEstimate = meta.originalEstimate ?? ''
+
+  const [storyPoints, setStoryPoints] = useState(initialStoryPoints)
+  const [priorityId, setPriorityId] = useState(initialPriorityId)
+  const [severityId, setSeverityId] = useState(initialSeverityId)
+  const [originalEstimate, setOriginalEstimate] = useState(initialOriginalEstimate)
+
+  const [saveBusy, setSaveBusy] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+
+  const [registered, setRegistered] = useState(meta.timeSpent)
+  const [timeSpentInput, setTimeSpentInput] = useState('')
+  const [logBusy, setLogBusy] = useState(false)
+  const [logError, setLogError] = useState<string | null>(null)
+  const [logSaved, setLogSaved] = useState(false)
+
+  const storyPointsDirty = meta.storyPointsEditable && storyPoints !== initialStoryPoints
+  const priorityDirty = meta.priority.editable && priorityId !== initialPriorityId
+  const severityDirty =
+    meta.severity !== null && severityId !== '' && severityId !== initialSeverityId
+  const originalEstimateDirty =
+    meta.timeTrackingEditable &&
+    originalEstimate.trim() !== '' &&
+    originalEstimate !== initialOriginalEstimate
+  const dirty = storyPointsDirty || priorityDirty || severityDirty || originalEstimateDirty
+
+  const invalidateAfterSave = (): void => {
+    void queryClient.invalidateQueries({ queryKey: ['issue', issueKey] })
+    void queryClient.invalidateQueries({ queryKey: ['issue-editmeta', issueKey] })
+    void queryClient.invalidateQueries({ queryKey: ['board'] })
+    void queryClient.invalidateQueries({ queryKey: ['issues'] })
+  }
+
+  const handleSave = async (): Promise<void> => {
+    if (!dirty) return
+    setSaveBusy(true)
+    setSaveError(null)
+    try {
+      const payload: IpcRequest<'issues:update'> = { key: issueKey }
+      if (storyPointsDirty) {
+        payload.storyPoints = storyPoints.trim() === '' ? null : Number(storyPoints)
+      }
+      if (priorityDirty) {
+        const opt = meta.priority.options.find((o) => o.id === priorityId)
+        payload.priorityId = priorityId
+        if (opt) payload.priorityName = opt.name
+      }
+      if (severityDirty && meta.severity) {
+        payload.severity = { fieldId: meta.severity.fieldId, optionId: severityId }
+      }
+      if (originalEstimateDirty) {
+        payload.originalEstimate = originalEstimate.trim()
+      }
+      await invoke('issues:update', payload)
+      setSaved(true)
+      invalidateAfterSave()
+      setTimeout(() => setSaved(false), 3000)
+    } catch (err) {
+      setSaveError(err instanceof IpcError ? err.message : t.common.error)
+    } finally {
+      setSaveBusy(false)
+    }
+  }
+
+  const handleLogWork = async (): Promise<void> => {
+    if (!timeSpentInput.trim()) return
+    setLogBusy(true)
+    setLogError(null)
+    try {
+      const res = await invoke('issues:logWork', {
+        key: issueKey,
+        timeSpent: timeSpentInput.trim()
+      })
+      setRegistered(res.totalTimeSpent)
+      setTimeSpentInput('')
+      setLogSaved(true)
+      void queryClient.invalidateQueries({ queryKey: ['issue-editmeta', issueKey] })
+      setTimeout(() => setLogSaved(false), 3000)
+    } catch (err) {
+      setLogError(err instanceof IpcError ? err.message : t.common.error)
+    } finally {
+      setLogBusy(false)
+    }
+  }
+
+  const hasEditableFields =
+    meta.storyPointsEditable ||
+    meta.priority.editable ||
+    meta.severity !== null ||
+    meta.timeTrackingEditable
+
+  return (
+    <div className="space-y-3 rounded-md border border-zinc-800 bg-zinc-900/40 p-3">
+      {hasEditableFields && (
+        <div className="space-y-2">
+          {meta.storyPointsEditable && (
+            <div className="grid grid-cols-[130px_1fr] items-center gap-2">
+              <span className="text-xs text-zinc-500">{t.detail.storyPointsLabel}</span>
+              <input
+                type="number"
+                min={0}
+                step={0.5}
+                value={storyPoints}
+                onChange={(e) => setStoryPoints(e.target.value)}
+                className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+              />
+            </div>
+          )}
+          {meta.priority.editable && (
+            <div className="grid grid-cols-[130px_1fr] items-center gap-2">
+              <span className="text-xs text-zinc-500">{t.detail.priorityLabel}</span>
+              <select
+                value={priorityId}
+                onChange={(e) => setPriorityId(e.target.value)}
+                className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+              >
+                {meta.priority.options.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {meta.severity && (
+            <div className="grid grid-cols-[130px_1fr] items-center gap-2">
+              <span className="text-xs text-zinc-500">{meta.severity.name}</span>
+              <select
+                value={severityId}
+                onChange={(e) => setSeverityId(e.target.value)}
+                className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+              >
+                {severityId === '' && (
+                  <option value="" disabled>
+                    {t.detail.severityPlaceholder}
+                  </option>
+                )}
+                {meta.severity.options.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.value}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {meta.timeTrackingEditable && (
+            <div className="grid grid-cols-[130px_1fr] items-center gap-2">
+              <span className="text-xs text-zinc-500">{t.detail.originalEstimateLabel}</span>
+              <input
+                type="text"
+                placeholder={t.detail.originalEstimatePlaceholder}
+                value={originalEstimate}
+                onChange={(e) => setOriginalEstimate(e.target.value)}
+                className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+              />
+            </div>
+          )}
+          <div className="flex items-center gap-2 pt-1">
+            <Button
+              disabled={!dirty || saveBusy}
+              title={!dirty ? t.detail.nothingChanged : undefined}
+              onClick={() => void handleSave()}
+            >
+              {saveBusy ? (
+                <Spinner />
+              ) : saved ? (
+                <CheckCircle2 size={14} className="text-green-400" />
+              ) : null}
+              {saveBusy ? t.detail.saving : t.detail.save}
+            </Button>
+          </div>
+          {saveError && <p className="text-sm text-amber-400">{saveError}</p>}
+        </div>
+      )}
+
+      <div className={`space-y-2 ${hasEditableFields ? 'border-t border-zinc-800 pt-3' : ''}`}>
+        <p className="text-xs text-zinc-500">
+          {t.detail.timeSpentRegistered(registered)}
+          {meta.originalEstimate && ` · ${t.detail.timeSpentEstimated(meta.originalEstimate)}`}
+        </p>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            placeholder={t.detail.timeSpentPlaceholder}
+            value={timeSpentInput}
+            onChange={(e) => setTimeSpentInput(e.target.value)}
+            className="flex-1 rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+          />
+          <Button
+            variant="secondary"
+            disabled={!timeSpentInput.trim() || logBusy}
+            onClick={() => void handleLogWork()}
+          >
+            {logBusy ? (
+              <Spinner />
+            ) : logSaved ? (
+              <CheckCircle2 size={14} className="text-green-400" />
+            ) : null}
+            {logBusy ? t.detail.logging : t.detail.logWork}
+          </Button>
+        </div>
+        <p className="text-xs text-zinc-600">{t.detail.timeSpentHint}</p>
+        {logError && <p className="text-sm text-amber-400">{logError}</p>}
       </div>
     </div>
   )

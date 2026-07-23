@@ -19,6 +19,7 @@ import { registerTeamHandlers } from './ipc/handlers/team'
 import { registerMentionHandlers } from './ipc/handlers/mentions'
 import { registerCommentHandlers } from './ipc/handlers/comments'
 import { registerBoardHandlers } from './ipc/handlers/board'
+import { registerEditHandlers } from './ipc/handlers/edit'
 import { runAlertEngine } from './alerts/engine'
 import { getWorkspaceRow } from './db/repos/workspace'
 import { getPrefs, listActiveAlerts } from './db/repos/misc'
@@ -212,6 +213,7 @@ app.whenReady().then(() => {
   registerMentionHandlers(ctx)
   registerCommentHandlers(ctx)
   registerBoardHandlers(ctx)
+  registerEditHandlers(ctx)
 
   createWindow()
 

@@ -189,6 +189,17 @@ export interface JiraStatus {
   statusCategory?: { key?: string }
 }
 
+/** GET /rest/api/3/issue/{key}/editmeta */
+export interface JiraEditMetaResponse {
+  fields?: Record<
+    string,
+    {
+      name?: string
+      allowedValues?: Array<{ id?: string; name?: string; value?: string }>
+    }
+  >
+}
+
 /** GET /rest/api/3/issue/{key}/transitions */
 export interface JiraTransitionsResponse {
   transitions?: Array<{
