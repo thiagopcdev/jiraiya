@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, ExternalLink, Sparkles, Trash2 } from 'lucide-react'
+import { CheckCircle2, ExternalLink, PanelRight, Sparkles, Trash2 } from 'lucide-react'
 import { invoke, IpcError } from '../../api/client'
 import { useIssueTypes, useIssues } from '../../api/hooks'
 import { Badge, Button, Card, Input, Spinner } from '../../components/ui'
 import { statusColor } from '../../components/statusColor'
 import { t } from '../../strings/ptBR'
 import type { Issue } from '@shared/domain'
+import { useIssueDetail } from '../../components/issueDetail'
 
 interface EditableItem {
   id: string
@@ -22,6 +23,7 @@ function truncateSummary(summary: string, max = 60): string {
 
 export default function Split(): React.JSX.Element {
   const queryClient = useQueryClient()
+  const { openIssue } = useIssueDetail()
 
   // Card escolhido
   const { data: myIssuesData, isLoading: myIssuesLoading } = useIssues({ type: 'today' }, 'mine')
@@ -216,27 +218,36 @@ export default function Split(): React.JSX.Element {
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {createdKeys.map((key) => (
-                  <Button
-                    key={key}
-                    variant="secondary"
-                    onClick={() => void invoke('shell:openIssue', { issueKey: key })}
-                  >
-                    <ExternalLink size={14} />
-                    {key}
-                  </Button>
+                  <div key={key} className="flex items-stretch">
+                    <Button variant="secondary" onClick={() => openIssue(key)}>
+                      <PanelRight size={14} />
+                      {key}
+                    </Button>
+                    <button
+                      className="ml-1 shrink-0 rounded p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+                      onClick={() => void invoke('shell:openIssue', { issueKey: key })}
+                      title={`Abrir ${key} no Jira`}
+                    >
+                      <ExternalLink size={13} />
+                    </button>
+                  </div>
                 ))}
               </div>
               {!commentPosted && (
                 <p className="mt-3 text-sm text-amber-400">{t.split.commentFailedHint}</p>
               )}
-              <div className="mt-3 flex gap-2">
-                <Button
-                  variant="secondary"
-                  onClick={() => parent && void invoke('shell:openIssue', { issueKey: parent.key })}
-                >
-                  <ExternalLink size={14} />
+              <div className="mt-3 flex items-stretch gap-2">
+                <Button variant="secondary" onClick={() => parent && openIssue(parent.key)}>
+                  <PanelRight size={14} />
                   {t.split.openParentInJira}
                 </Button>
+                <button
+                  className="shrink-0 rounded p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+                  onClick={() => parent && void invoke('shell:openIssue', { issueKey: parent.key })}
+                  title={parent ? `Abrir ${parent.key} no Jira` : undefined}
+                >
+                  <ExternalLink size={13} />
+                </button>
                 <Button variant="ghost" onClick={resetAll}>
                   {t.split.splitAnother}
                 </Button>

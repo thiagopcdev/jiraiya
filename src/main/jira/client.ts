@@ -1,8 +1,12 @@
 import { JiraHttp } from './http'
+import type { BoardTransition } from '../queries/board'
 import type {
+  AdfNode,
   JiraAgilePage,
   JiraAgileSprint,
+  JiraAttachment,
   JiraBoard,
+  JiraBoardConfiguration,
   JiraBulkChangelogResponse,
   JiraChangelogHistory,
   JiraChangelogPageResponse,
@@ -11,13 +15,22 @@ import type {
   JiraCreatedIssue,
   JiraCreateMetaIssueType,
   JiraCreateMetaIssueTypesResponse,
+  JiraEditMetaResponse,
   JiraFieldDef,
   JiraIssue,
+  JiraIssueLink,
   JiraMyself,
   JiraProject,
   JiraProjectSearchResponse,
-  JiraSearchResponse
+  JiraSearchResponse,
+  JiraStatus,
+  JiraTransitionsResponse
 } from './types'
+
+/** Normaliza a categoria de status do Jira; valor desconhecido → 'new' (defensivo). */
+function toCategoryKey(key: string | undefined): 'new' | 'indeterminate' | 'done' {
+  return key === 'indeterminate' || key === 'done' ? key : 'new'
+}
 
 const BASE_FIELDS = [
   'summary',
@@ -113,6 +126,14 @@ export class JiraClient {
     }
   }
 
+  /** Descrição da issue como ADF cru (null se vazia). */
+  async issueDescription(issueKey: string): Promise<AdfNode | null> {
+    const res = await this.http.get<{ fields?: { description?: AdfNode | null } }>(
+      `/rest/api/3/issue/${encodeURIComponent(issueKey)}?fields=description`
+    )
+    return res.fields?.description ?? null
+  }
+
   async issueComments(issueKey: string): Promise<JiraComment[]> {
     const all: JiraComment[] = []
     let startAt = 0
@@ -124,6 +145,50 @@ export class JiraClient {
       startAt += res.maxResults
       if (startAt >= res.total) return all
     }
+  }
+
+  /** Anexos da issue (GET com fields=attachment). */
+  async issueAttachments(
+    issueKey: string
+  ): Promise<Array<{ id: string; filename: string; mimeType: string | null; size: number }>> {
+    const res = await this.http.get<{ fields?: { attachment?: JiraAttachment[] } }>(
+      `/rest/api/3/issue/${encodeURIComponent(issueKey)}?fields=attachment`
+    )
+    return (res.fields?.attachment ?? []).map((a) => ({
+      id: a.id,
+      filename: a.filename,
+      mimeType: a.mimeType ?? null,
+      size: a.size
+    }))
+  }
+
+  /** Bytes da miniatura do anexo (redireciona p/ CDN assinada). */
+  attachmentThumbnail(attachmentId: string): Promise<{ data: Buffer; mimeType: string | null }> {
+    return this.http.getBytes(
+      `/rest/api/3/attachment/thumbnail/${encodeURIComponent(attachmentId)}?redirect=true`
+    )
+  }
+
+  /** Bytes do arquivo do anexo (redireciona p/ CDN assinada). */
+  attachmentContent(attachmentId: string): Promise<{ data: Buffer; mimeType: string | null }> {
+    return this.http.getBytes(
+      `/rest/api/3/attachment/content/${encodeURIComponent(attachmentId)}?redirect=true`
+    )
+  }
+
+  /** Edita um comentário existente. body em ADF (o chamador converte com textToAdf). */
+  async updateComment(issueKey: string, commentId: string, body: unknown): Promise<void> {
+    await this.http.put<unknown>(
+      `/rest/api/3/issue/${encodeURIComponent(issueKey)}/comment/${encodeURIComponent(commentId)}`,
+      { body }
+    )
+  }
+
+  /** Exclui um comentário (o Jira responde 204 sem corpo). */
+  async deleteComment(issueKey: string, commentId: string): Promise<void> {
+    await this.http.delete(
+      `/rest/api/3/issue/${encodeURIComponent(issueKey)}/comment/${encodeURIComponent(commentId)}`
+    )
   }
 
   async listProjects(): Promise<JiraProject[]> {
@@ -199,6 +264,107 @@ export class JiraClient {
     await this.http.post<unknown>(`/rest/api/3/issue/${encodeURIComponent(issueKey)}/comment`, {
       body
     })
+  }
+
+  /** Configuração de colunas do board (nome + ids de status por coluna). */
+  async boardConfiguration(
+    boardId: number
+  ): Promise<{ columns: Array<{ name: string; statusIds: string[] }> }> {
+    const res = await this.http.get<JiraBoardConfiguration>(
+      `/rest/agile/1.0/board/${boardId}/configuration`
+    )
+    const columns = (res.columnConfig?.columns ?? []).map((c) => ({
+      name: c.name ?? '',
+      statusIds: (c.statuses ?? []).map((s) => s.id)
+    }))
+    return { columns }
+  }
+
+  /** Catálogo global de status do site (id → nome + categoria). */
+  async listStatuses(): Promise<
+    Array<{ id: string; name: string; categoryKey: 'new' | 'indeterminate' | 'done' }>
+  > {
+    const res = await this.http.get<JiraStatus[]>('/rest/api/3/status')
+    return (res ?? []).map((s) => ({
+      id: s.id,
+      name: s.name ?? '',
+      categoryKey: toCategoryKey(s.statusCategory?.key)
+    }))
+  }
+
+  /** Transições disponíveis para a issue no estado atual. */
+  async issueTransitions(issueKey: string): Promise<BoardTransition[]> {
+    const res = await this.http.get<JiraTransitionsResponse>(
+      `/rest/api/3/issue/${encodeURIComponent(issueKey)}/transitions`
+    )
+    return (res.transitions ?? []).map((t) => ({
+      id: t.id,
+      name: t.name ?? '',
+      toStatusId: t.to?.id ?? '',
+      toStatusName: t.to?.name ?? '',
+      toCategoryKey: toCategoryKey(t.to?.statusCategory?.key)
+    }))
+  }
+
+  /** Usuários atribuíveis à issue (filtra inativos, mapeia accountId/displayName). */
+  async assignableUsers(
+    issueKey: string
+  ): Promise<Array<{ accountId: string; displayName: string }>> {
+    const res = await this.http.get<
+      Array<{ accountId: string; displayName?: string; active?: boolean }>
+    >(`/rest/api/3/user/assignable/search?issueKey=${encodeURIComponent(issueKey)}&maxResults=50`)
+    return (res ?? [])
+      .filter((u) => u.active !== false)
+      .map((u) => ({ accountId: u.accountId, displayName: u.displayName ?? u.accountId }))
+  }
+
+  /** Links de issue crus (fields.issuelinks). */
+  async issueLinks(issueKey: string): Promise<JiraIssueLink[]> {
+    const res = await this.http.get<{ fields?: { issuelinks?: JiraIssueLink[] } }>(
+      `/rest/api/3/issue/${encodeURIComponent(issueKey)}?fields=issuelinks`
+    )
+    return res.fields?.issuelinks ?? []
+  }
+
+  /** Executa uma transição na issue. */
+  async doTransition(issueKey: string, transitionId: string): Promise<void> {
+    await this.http.post<unknown>(`/rest/api/3/issue/${encodeURIComponent(issueKey)}/transitions`, {
+      transition: { id: transitionId }
+    })
+  }
+
+  /** Metadados de edição da issue (campos editáveis + valores permitidos). */
+  issueEditMeta(issueKey: string): Promise<JiraEditMetaResponse> {
+    return this.http.get<JiraEditMetaResponse>(
+      `/rest/api/3/issue/${encodeURIComponent(issueKey)}/editmeta`
+    )
+  }
+
+  /** Edita campos da issue (PUT — o Jira responde 204 sem corpo). */
+  async updateIssue(issueKey: string, fields: Record<string, unknown>): Promise<void> {
+    await this.http.put<unknown>(`/rest/api/3/issue/${encodeURIComponent(issueKey)}`, { fields })
+  }
+
+  /** Registra um worklog na issue. commentAdf em ADF (o chamador converte). */
+  async addWorklog(issueKey: string, timeSpent: string, commentAdf?: unknown): Promise<void> {
+    await this.http.post<unknown>(`/rest/api/3/issue/${encodeURIComponent(issueKey)}/worklog`, {
+      timeSpent,
+      ...(commentAdf !== undefined ? { comment: commentAdf } : {})
+    })
+  }
+
+  /** Tempo gasto / estimativa original da issue (campo timetracking). */
+  async issueTimeTracking(
+    issueKey: string
+  ): Promise<{ timeSpent: string | null; originalEstimate: string | null }> {
+    const res = await this.http.get<{
+      fields?: { timetracking?: { timeSpent?: string; originalEstimate?: string } }
+    }>(`/rest/api/3/issue/${encodeURIComponent(issueKey)}?fields=timetracking`)
+    const tt = res.fields?.timetracking
+    return {
+      timeSpent: tt?.timeSpent ?? null,
+      originalEstimate: tt?.originalEstimate ?? null
+    }
   }
 }
 

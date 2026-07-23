@@ -121,6 +121,17 @@ export function useSprintList(limit?: number): UseQueryResult<IpcResponse<'sprin
   })
 }
 
+export function useBoard(
+  boardJiraId?: number,
+  sprintJiraId?: number
+): UseQueryResult<IpcResponse<'board:view'>> {
+  return useQuery({
+    queryKey: ['board', boardJiraId ?? null, sprintJiraId ?? null],
+    queryFn: () => invoke('board:view', { boardJiraId, sprintJiraId }),
+    staleTime: 15_000
+  })
+}
+
 export function useLeadTime(days?: number): UseQueryResult<IpcResponse<'stats:leadTime'>> {
   return useQuery({
     queryKey: ['lead-time', days],

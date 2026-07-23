@@ -5,9 +5,11 @@ import { invoke, IpcError } from '../../api/client'
 import { useIssueTypes, useProjects } from '../../api/hooks'
 import { Button, Card, EmptyState, Input, Spinner } from '../../components/ui'
 import { t } from '../../strings/ptBR'
+import { useIssueDetail } from '../../components/issueDetail'
 
 export default function Create(): React.JSX.Element {
   const queryClient = useQueryClient()
+  const { openIssue } = useIssueDetail()
 
   const { data: projectsData } = useProjects()
   const projects = projectsData?.projects ?? []
@@ -99,7 +101,7 @@ export default function Create(): React.JSX.Element {
         storyPoints: storyPoints.trim() && points > 0 ? points : undefined
       })
       setCreatedKey(res.key)
-      void invoke('shell:openIssue', { issueKey: res.key })
+      openIssue(res.key)
       void invoke('sync:run', { full: false })
       void queryClient.invalidateQueries()
     } catch (err) {
@@ -127,6 +129,9 @@ export default function Create(): React.JSX.Element {
               </p>
               <p className="mt-1 text-sm text-zinc-400">{t.create.createdHint}</p>
               <div className="mt-3 flex gap-2">
+                <Button variant="secondary" onClick={() => openIssue(createdKey)}>
+                  Ver card
+                </Button>
                 <Button
                   variant="secondary"
                   onClick={() => void invoke('shell:openIssue', { issueKey: createdKey })}

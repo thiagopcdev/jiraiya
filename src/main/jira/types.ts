@@ -133,6 +133,16 @@ export interface JiraCommentsResponse {
   total: number
 }
 
+/** Um item de fields.attachment. */
+export interface JiraAttachment {
+  id: string
+  filename: string
+  mimeType?: string | null
+  size: number
+  thumbnail?: string
+  content?: string
+}
+
 export interface JiraProject {
   id: string
   key: string
@@ -170,4 +180,61 @@ export interface JiraAgileSprint {
   endDate?: string
   completeDate?: string
   originBoardId?: number
+}
+
+/** GET /rest/agile/1.0/board/{id}/configuration */
+export interface JiraBoardConfiguration {
+  columnConfig?: {
+    columns?: Array<{
+      name?: string
+      statuses?: Array<{ id: string; self?: string }>
+    }>
+  }
+}
+
+/** GET /rest/api/3/status */
+export interface JiraStatus {
+  id: string
+  name?: string
+  statusCategory?: { key?: string }
+}
+
+/** GET /rest/api/3/issue/{key}/editmeta */
+export interface JiraEditMetaResponse {
+  fields?: Record<
+    string,
+    {
+      name?: string
+      allowedValues?: Array<{ id?: string; name?: string; value?: string }>
+    }
+  >
+}
+
+/** Issue vinculada (lado inward/outward de um issuelink). */
+export interface JiraLinkedIssue {
+  key?: string
+  fields?: {
+    summary?: string
+    status?: { name?: string; statusCategory?: { key?: string } }
+  }
+}
+
+/** Um item de fields.issuelinks. */
+export interface JiraIssueLink {
+  type?: { name?: string; inward?: string; outward?: string }
+  outwardIssue?: JiraLinkedIssue
+  inwardIssue?: JiraLinkedIssue
+}
+
+/** GET /rest/api/3/issue/{key}/transitions */
+export interface JiraTransitionsResponse {
+  transitions?: Array<{
+    id: string
+    name?: string
+    to?: {
+      id?: string
+      name?: string
+      statusCategory?: { key?: string }
+    }
+  }>
 }

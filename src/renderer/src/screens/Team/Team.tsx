@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { AlertTriangle, Info, Sparkles } from 'lucide-react'
+import { AlertTriangle, ExternalLink, Info, Sparkles } from 'lucide-react'
 import type { Period } from '@shared/periods'
 import type { Issue, TeamMemberSummary } from '@shared/domain'
 import { invoke } from '../../api/client'
@@ -8,6 +8,7 @@ import { Badge, Button, Card, EmptyState, Spinner } from '../../components/ui'
 import { statusColor } from '../../components/statusColor'
 import { IssuesByStatus } from '../../components/IssuesByStatus'
 import { VelocityChart } from '../../components/VelocityChart'
+import { useIssueDetail } from '../../components/issueDetail'
 
 const periodOptions: Array<{ key: string; label: string; period: Period }> = [
   { key: 'today', label: 'Hoje', period: { type: 'today' } },
@@ -232,15 +233,29 @@ function MiniIssue({
   summary: string
   trailing: React.ReactNode
 }): React.JSX.Element {
+  const { openIssue } = useIssueDetail()
+
   return (
     <button
-      className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left hover:bg-zinc-800/70"
-      onClick={() => void invoke('shell:openIssue', { issueKey })}
-      title={`Abrir ${issueKey} no Jira`}
+      className="group flex w-full items-center gap-2 rounded px-1.5 py-1 text-left hover:bg-zinc-800/70"
+      onClick={() => openIssue(issueKey)}
+      title={`Abrir ${issueKey}`}
     >
       <span className="shrink-0 font-mono text-xs text-zinc-500">{issueKey}</span>
       <span className="min-w-0 flex-1 truncate text-sm text-zinc-300">{summary}</span>
       {trailing}
+      <span
+        role="button"
+        tabIndex={0}
+        className="shrink-0 rounded p-0.5 text-zinc-600 opacity-0 transition-opacity group-hover:opacity-100 hover:text-zinc-300"
+        title={`Abrir ${issueKey} no Jira`}
+        onClick={(e) => {
+          e.stopPropagation()
+          void invoke('shell:openIssue', { issueKey })
+        }}
+      >
+        <ExternalLink size={12} />
+      </span>
     </button>
   )
 }

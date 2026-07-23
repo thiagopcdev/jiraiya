@@ -36,6 +36,10 @@ export function BurndownChart({
   const last = actual[actual.length - 1]
   const lastX = x(actual.length - 1)
   const lastY = y(last.remaining)
+  // perto da borda direita o rótulo não cabe — espelha para a esquerda do ponto
+  const labelFlips = lastX > W - padR - 56
+  // rótulo acima do topo do plot também corta — empurra para baixo do ponto
+  const labelY = lastY - 6 < padT + 10 ? lastY + 16 : lastY - 6
 
   return (
     <svg
@@ -59,7 +63,13 @@ export function BurndownChart({
 
       <path d={actualPath} fill="none" stroke="#818cf8" strokeWidth="2.5" strokeLinejoin="round" />
       <circle cx={lastX} cy={lastY} r="4" fill="#818cf8" />
-      <text x={lastX + 8} y={lastY - 6} fontSize="11" fill="#a5b4fc">
+      <text
+        x={labelFlips ? lastX - 8 : lastX + 8}
+        y={labelY}
+        fontSize="11"
+        fill="#a5b4fc"
+        textAnchor={labelFlips ? 'end' : 'start'}
+      >
         {last.remaining} pts
       </text>
 

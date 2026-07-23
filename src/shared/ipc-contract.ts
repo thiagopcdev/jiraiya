@@ -11,6 +11,7 @@ import type {
   Project,
   Sprint,
   SprintListItem,
+  StatusCategory,
   Summary,
   SummaryTemplate,
   SyncStatus,
@@ -212,6 +213,178 @@ export const ipcContract = {
     }),
     res: undefined as unknown as { issues: Issue[] }
   },
+  'issues:attachments': {
+    req: z.object({ key: z.string().trim().min(1).max(64) }),
+    res: undefined as unknown as {
+      attachments: Array<{
+        id: string
+        filename: string
+        mimeType: string | null
+        size: number
+        isImage: boolean
+      }>
+    }
+  },
+  'issues:attachmentData': {
+    req: z.object({
+      attachmentId: z.string().min(1),
+      variant: z.enum(['thumbnail', 'full'])
+    }),
+    res: undefined as unknown as {
+      /** data URI base64; null quando tooLarge (usar salvar/abrir) */
+      dataUri: string | null
+      mimeType: string | null
+      tooLarge: boolean
+    }
+  },
+  'issues:attachmentSave': {
+    req: z.object({ attachmentId: z.string().min(1), filename: z.string().min(1) }),
+    res: undefined as unknown as { saved: boolean; path: string | null }
+  },
+  'issues:attachmentOpen': {
+    req: z.object({ attachmentId: z.string().min(1), filename: z.string().min(1) }),
+    res: undefined as unknown as { ok: true }
+  },
+  'app:tempFiles': {
+    req: z.object({}),
+    res: undefined as unknown as { bytes: number }
+  },
+  'app:tempClear': {
+    req: z.object({}),
+    res: undefined as unknown as { ok: true; freedBytes: number }
+  },
+  'issues:commentUpdate': {
+    req: z.object({
+      issueKey: z.string().trim().min(1).max(64),
+      commentId: z.string().min(1),
+      body: z.string().trim().min(1).max(10000)
+    }),
+    res: undefined as unknown as { ok: true }
+  },
+  'issues:commentDelete': {
+    req: z.object({
+      issueKey: z.string().trim().min(1).max(64),
+      commentId: z.string().min(1)
+    }),
+    res: undefined as unknown as { ok: true }
+  },
+  'issues:transitions': {
+    req: z.object({ key: z.string().trim().min(1).max(64) }),
+    res: undefined as unknown as {
+      transitions: Array<{
+        id: string
+        name: string
+        toStatusName: string
+        toCategoryKey: StatusCategory
+      }>
+    }
+  },
+  'issues:transition': {
+    req: z.object({
+      key: z.string().trim().min(1).max(64),
+      transitionId: z.string().min(1)
+    }),
+    res: undefined as unknown as { newStatus: string; newStatusCategory: StatusCategory }
+  },
+  'issues:assignable': {
+    req: z.object({ key: z.string().trim().min(1).max(64) }),
+    res: undefined as unknown as { users: Array<{ accountId: string; displayName: string }> }
+  },
+  'issues:children': {
+    req: z.object({ key: z.string().trim().min(1).max(64) }),
+    res: undefined as unknown as { issues: Issue[] }
+  },
+  'issues:links': {
+    req: z.object({ key: z.string().trim().min(1).max(64) }),
+    res: undefined as unknown as {
+      links: Array<{
+        label: string
+        key: string
+        summary: string | null
+        status: string | null
+        statusCategory: StatusCategory | null
+      }>
+    }
+  },
+  'issues:editMeta': {
+    req: z.object({ key: z.string().trim().min(1).max(64) }),
+    res: undefined as unknown as {
+      storyPointsEditable: boolean
+      priority: {
+        editable: boolean
+        current: string | null
+        options: Array<{ id: string; name: string }>
+      }
+      /** campo custom de severidade descoberto por nome no editmeta; null se o card não o tem */
+      severity: {
+        fieldId: string
+        name: string
+        current: string | null
+        options: Array<{ id: string; value: string }>
+      } | null
+      /** tempo total já registrado (formato Jira, ex. '3h 30m') */
+      timeSpent: string | null
+      originalEstimate: string | null
+      /** campo 'Controle de tempo' presente na tela de edição (permite editar a estimativa original) */
+      timeTrackingEditable: boolean
+    }
+  },
+  'issues:update': {
+    req: z.object({
+      key: z.string().trim().min(1).max(64),
+      /** null limpa o campo */
+      storyPoints: z.number().min(0).nullable().optional(),
+      priorityId: z.string().min(1).optional(),
+      /** nome exibido, para atualizar o cache local sem novo fetch */
+      priorityName: z.string().min(1).optional(),
+      severity: z.object({ fieldId: z.string().min(1), optionId: z.string().min(1) }).optional(),
+      /** Estimativa original (formato Jira: 1w 2d 3h 30m) */
+      originalEstimate: z
+        .string()
+        .trim()
+        .regex(/^(\d+[wdhm])(\s+\d+[wdhm])*$/i, 'Formato: 1w 2d 3h 30m')
+        .optional(),
+      /** null = remover responsável */
+      assigneeAccountId: z.string().min(1).nullable().optional(),
+      /** nome exibido, para atualizar o cache local sem novo fetch */
+      assigneeName: z.string().min(1).nullable().optional()
+    }),
+    res: undefined as unknown as { ok: true }
+  },
+  'issues:logWork': {
+    req: z.object({
+      key: z.string().trim().min(1).max(64),
+      /** formato Jira: combinações de Nw Nd Nh Nm (ex. '1h 30m') */
+      timeSpent: z
+        .string()
+        .trim()
+        .regex(/^(\d+[wdhm])(\s+\d+[wdhm])*$/i, 'Formato: 1w 2d 3h 30m'),
+      comment: z.string().max(2000).optional()
+    }),
+    res: undefined as unknown as { ok: true; totalTimeSpent: string | null }
+  },
+  'issues:description': {
+    req: z.object({ key: z.string().trim().min(1).max(64) }),
+    res: undefined as unknown as {
+      /** documento ADF cru da descrição (null se vazia) */
+      description: unknown | null
+    }
+  },
+  'issues:comments': {
+    req: z.object({ key: z.string().trim().min(1).max(64) }),
+    res: undefined as unknown as {
+      /** body é o documento ADF cru (renderizado com formatação no renderer) */
+      comments: Array<{
+        id: string
+        authorAccountId: string | null
+        authorName: string | null
+        createdAt: string
+        body: unknown
+        /** texto plano do body (para o editor de comentário próprio) */
+        bodyText: string
+      }>
+    }
+  },
   'issues:comment': {
     req: z.object({
       issueKey: z.string().trim().min(1).max(64),
@@ -225,6 +398,40 @@ export const ipcContract = {
       notes: z.string().trim().min(1).max(4000)
     }),
     res: undefined as unknown as { body: string; generatedBy: 'claude' }
+  },
+  'board:view': {
+    req: z.object({
+      boardJiraId: z.number().int().optional(),
+      sprintJiraId: z.number().int().optional()
+    }),
+    res: undefined as unknown as {
+      board: Board
+      boards: Board[]
+      /** sprint exibida (ativa ou a escolhida no seletor) */
+      sprint: { jiraId: number; name: string } | null
+      /** opções do seletor: ativa + fechadas recentes (só boards scrum) */
+      sprints: SprintListItem[]
+      /** sprint encerrada → drag & drop desabilitado */
+      readOnly: boolean
+      columns: Array<{
+        name: string
+        statusIds: string[]
+        statusNames: string[]
+        issues: Issue[]
+      }>
+      /** cards do escopo cujo status não está em nenhuma coluna */
+      unmapped: Issue[]
+      /** 'fallback' = config do board indisponível, colunas derivadas por categoria */
+      columnsSource: 'jira' | 'fallback'
+    }
+  },
+  'board:move': {
+    req: z.object({
+      issueKey: z.string().trim().min(1).max(64),
+      targetStatusIds: z.array(z.string()).min(1),
+      targetColumnName: z.string().min(1)
+    }),
+    res: undefined as unknown as { newStatus: string; newStatusCategory: StatusCategory }
   },
   'sprint:list': {
     req: z.object({ limit: z.number().int().min(1).max(20).optional() }),
@@ -280,7 +487,9 @@ export const ipcContract = {
       description: z.string(),
       assignToMe: z.boolean().optional(),
       addToActiveSprint: z.boolean().optional(),
-      storyPoints: z.number().positive().optional()
+      storyPoints: z.number().positive().optional(),
+      /** cria como subtarefa deste card (issueTypeId deve ser um tipo subtask) */
+      parentKey: z.string().trim().min(1).max(64).optional()
     }),
     res: undefined as unknown as { key: string }
   },
