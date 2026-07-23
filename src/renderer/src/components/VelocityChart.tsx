@@ -90,9 +90,6 @@ export function VelocityChart({
           // resto neutro em cima da sua fatia, com gap de 2px entre segmentos
           const restH = Math.max(0, mineTop - totalTop - (mine > 0 && rest > 0 ? 2 : 0))
 
-          // rótulo da sua fatia só quando o segmento é alto o bastante
-          const mineLabelFits = mine > 0 && mineH >= 14
-
           const title = `${s.name ?? sprintLabel(s, prefix)}${isActive ? ' (ativa)' : ''}\nVocê: ${s.myPoints} SP · ${s.myCount} cards\nTime: ${s.teamPoints} SP · ${s.teamCount} cards`
           return (
             <g key={s.sprintJiraId}>
@@ -102,20 +99,13 @@ export function VelocityChart({
               )}
               {mine > 0 && <rect x={x0} y={mineTop} width={barW} height={mineH} fill="#818cf8" />}
               {total > 0 && (
-                <text x={cx(i)} y={totalTop - 5} fontSize="10" fill="#a1a1aa" textAnchor="middle">
-                  {total}
-                </text>
-              )}
-              {mineLabelFits && (
-                <text
-                  x={cx(i)}
-                  y={mineTop + mineH / 2 + 3.5}
-                  fontSize="9"
-                  fill="#1e1b4b"
-                  fontWeight="600"
-                  textAnchor="middle"
-                >
-                  {s.myPoints}
+                // sempre visível: seus pontos / total da sprint
+                <text x={cx(i)} y={totalTop - 5} fontSize="10" textAnchor="middle">
+                  <tspan fill="#a5b4fc" fontWeight="600">
+                    {s.myPoints}
+                  </tspan>
+                  <tspan fill="#71717a">/</tspan>
+                  <tspan fill="#a1a1aa">{total}</tspan>
                 </text>
               )}
               <text
@@ -133,7 +123,8 @@ export function VelocityChart({
         })}
       </svg>
       <p className="mt-1 text-xs text-zinc-600">
-        Cada barra é o total da sprint; a base índigo é a sua parte. • = sprint ativa.
+        Rótulo: <span className="font-semibold text-indigo-300">seus SP</span>
+        <span> / total da sprint</span> — a base índigo da barra é a sua parte. • = sprint ativa.
       </p>
     </div>
   )
