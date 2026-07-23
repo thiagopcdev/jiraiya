@@ -29,6 +29,57 @@ export interface PeriodDigest {
   sprintAtual: { nome: string; fim: string | null; abertas: number } | null
 }
 
+export interface CommentDigestItem {
+  key: string
+  summary: string
+  autor: string
+  quando: string
+  texto: string
+}
+
+/**
+ * Comentários do período relevantes para o resumo: os que EU escrevi + os que
+ * escreveram em cards atribuídos a mim. Só entra no digest quando o resumo vai
+ * para o Claude (contexto real de decisões/bloqueios/feedback); o template
+ * determinístico não os usa. Limitado e truncado para não inflar o prompt.
+ */
+export function collectPeriodComments(
+  db: Database.Database,
+  workspace: { id: number; account_id: string },
+  range: { start: string; end: string },
+  opts: { limit?: number; maxChars?: number } = {}
+): CommentDigestItem[] {
+  const limit = opts.limit ?? 30
+  const maxChars = opts.maxChars ?? 400
+  const rows = db
+    .prepare(
+      `SELECT a.issue_key AS key, COALESCE(i.summary, a.issue_key) AS summary,
+              COALESCE(a.actor_name, 'Alguém') AS autor, a.occurred_at AS quando,
+              COALESCE(a.body_text, '') AS texto
+       FROM issue_activity a
+       LEFT JOIN issue i ON i.workspace_id = a.workspace_id AND i.key = a.issue_key
+       WHERE a.workspace_id = ? AND a.kind = 'comment'
+         AND a.occurred_at >= ? AND a.occurred_at < ?
+         AND (a.actor_account_id = ? OR i.assignee_account_id = ?)
+       ORDER BY a.occurred_at DESC
+       LIMIT ?`
+    )
+    .all(
+      workspace.id,
+      range.start,
+      range.end,
+      workspace.account_id,
+      workspace.account_id,
+      limit
+    ) as CommentDigestItem[]
+  return rows
+    .filter((r) => r.texto.trim().length > 0)
+    .map((r) => ({
+      ...r,
+      texto: r.texto.length > maxChars ? `${r.texto.slice(0, maxChars)}…` : r.texto
+    }))
+}
+
 export function buildPeriodDigest(
   db: Database.Database,
   workspace: { id: number; account_id: string; site_url: string },

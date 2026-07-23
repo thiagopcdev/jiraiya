@@ -2,7 +2,7 @@ import { AppError, handle } from '../registry'
 import type { AppContext } from '../../appContext'
 import { getWorkspaceRow } from '../../db/repos/workspace'
 import { getPrefs, deleteSummary, listSummaries, saveSummary } from '../../db/repos/misc'
-import { buildPeriodDigest } from '../../summaries/selectors'
+import { buildPeriodDigest, collectPeriodComments } from '../../summaries/selectors'
 import { templates } from '../../summaries/templates'
 import { buildRetroDigest, renderRetroTemplate } from '../../summaries/retro'
 import { claudeStatus, enhanceWithClaude } from '../../summaries/claude'
@@ -20,10 +20,13 @@ export function registerSummaryHandlers(ctx: AppContext): void {
 
     if (useClaude) {
       try {
+        // comentários do período só entram no caminho do Claude (contexto real
+        // de decisões/bloqueios/feedback); o template determinístico não muda
+        const comentariosDoPeriodo = collectPeriodComments(ctx.db, workspace, range)
         const enhanced = await enhanceWithClaude({
           model: prefs.modelSummaries,
           templateMarkdown: markdown,
-          digestJson: JSON.stringify(digest, null, 2)
+          digestJson: JSON.stringify({ ...digest, comentariosDoPeriodo }, null, 2)
         })
         return { markdown: enhanced, generatedBy: 'claude' as const }
       } catch {
@@ -46,10 +49,14 @@ export function registerSummaryHandlers(ctx: AppContext): void {
     const markdown = renderRetroTemplate(digest)
     if (useClaude) {
       try {
+        const comentariosDoPeriodo = collectPeriodComments(ctx.db, workspace, {
+          start: digest.sprint.startDate,
+          end: digest.sprint.endDate
+        })
         const enhanced = await enhanceWithClaude({
           model: getPrefs(ctx.db).modelSummaries,
           templateMarkdown: markdown,
-          digestJson: JSON.stringify(digest, null, 2)
+          digestJson: JSON.stringify({ ...digest, comentariosDoPeriodo }, null, 2)
         })
         return { markdown: enhanced, generatedBy: 'claude' as const }
       } catch {

@@ -125,6 +125,7 @@ export function enhanceWithClaude(input: {
     'Você recebe um resumo de trabalho gerado automaticamente a partir de dados do Jira, mais o JSON com os fatos brutos.',
     'Reescreva o resumo em português do Brasil, com tom profissional e conciso, bom para colar numa daily/weekly.',
     'Regras: não invente fatos; mantenha as chaves dos tickets (ex.: BT-123) exatamente como estão; mantenha a estrutura de seções em markdown; agrupe itens relacionados quando fizer sentido; corte redundância.',
+    'Se o JSON tiver "comentariosDoPeriodo", use-os para enriquecer os itens com contexto real (decisões tomadas, bloqueios, feedback de QA/PO, próximos passos) — resuma com suas palavras, sem transcrever comentários longos nem citar autores desnecessariamente.',
     'Responda SOMENTE com o markdown final, sem preâmbulo.',
     '',
     '=== RESUMO (template) ===',
