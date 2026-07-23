@@ -20,6 +20,8 @@ import { registerMentionHandlers } from './ipc/handlers/mentions'
 import { registerCommentHandlers } from './ipc/handlers/comments'
 import { registerBoardHandlers } from './ipc/handlers/board'
 import { registerEditHandlers } from './ipc/handlers/edit'
+import { registerAttachmentHandlers } from './ipc/handlers/attachments'
+import { clearTempDir } from './attachments/store'
 import { runAlertEngine } from './alerts/engine'
 import { getWorkspaceRow } from './db/repos/workspace'
 import { getPrefs, listActiveAlerts } from './db/repos/misc'
@@ -214,6 +216,7 @@ app.whenReady().then(() => {
   registerCommentHandlers(ctx)
   registerBoardHandlers(ctx)
   registerEditHandlers(ctx)
+  registerAttachmentHandlers(ctx)
 
   createWindow()
 
@@ -231,4 +234,9 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+// limpa os anexos gravados em disco ao encerrar o app
+app.on('will-quit', () => {
+  clearTempDir()
 })

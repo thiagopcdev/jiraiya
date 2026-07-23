@@ -14,17 +14,36 @@ interface AdfNode {
   marks?: Array<{ type: string; attrs?: Record<string, unknown> }>
 }
 
-export function AdfView({ doc }: { doc: unknown }): React.JSX.Element | null {
+/** Resolver opcional pra nós de mídia (mediaSingle/mediaGroup) — ver `useMediaResolver` em attachments.tsx. */
+type MediaResolver = (node: AdfNode) => ReactNode
+
+export function AdfView({
+  doc,
+  mediaResolver
+}: {
+  doc: unknown
+  mediaResolver?: MediaResolver
+}): React.JSX.Element | null {
   const node = doc as AdfNode | null | undefined
   if (!node || typeof node !== 'object' || !Array.isArray(node.content)) return null
-  return <div className="space-y-2 text-sm text-zinc-300">{renderChildren(node)}</div>
+  return (
+    <div className="space-y-2 text-sm text-zinc-300">{renderChildren(node, mediaResolver)}</div>
+  )
 }
 
-function renderChildren(node: AdfNode): ReactNode {
-  return (node.content ?? []).map((child, i) => <AdfBlock key={i} node={child} />)
+function renderChildren(node: AdfNode, mediaResolver?: MediaResolver): ReactNode {
+  return (node.content ?? []).map((child, i) => (
+    <AdfBlock key={i} node={child} mediaResolver={mediaResolver} />
+  ))
 }
 
-function AdfBlock({ node }: { node: AdfNode }): React.JSX.Element | null {
+function AdfBlock({
+  node,
+  mediaResolver
+}: {
+  node: AdfNode
+  mediaResolver?: MediaResolver
+}): React.JSX.Element | null {
   switch (node.type) {
     case 'paragraph':
       return <p className="min-h-4 leading-relaxed">{renderInline(node)}</p>
@@ -41,13 +60,13 @@ function AdfBlock({ node }: { node: AdfNode }): React.JSX.Element | null {
       return <p className={`${sizes[level] ?? sizes[3]} text-zinc-100`}>{renderInline(node)}</p>
     }
     case 'bulletList':
-      return <ul className="list-disc space-y-1 pl-5">{renderChildren(node)}</ul>
+      return <ul className="list-disc space-y-1 pl-5">{renderChildren(node, mediaResolver)}</ul>
     case 'orderedList':
-      return <ol className="list-decimal space-y-1 pl-5">{renderChildren(node)}</ol>
+      return <ol className="list-decimal space-y-1 pl-5">{renderChildren(node, mediaResolver)}</ol>
     case 'listItem':
-      return <li>{renderChildren(node)}</li>
+      return <li>{renderChildren(node, mediaResolver)}</li>
     case 'taskList':
-      return <div className="space-y-1">{renderChildren(node)}</div>
+      return <div className="space-y-1">{renderChildren(node, mediaResolver)}</div>
     case 'taskItem': {
       const done = node.attrs?.state === 'DONE'
       return (
@@ -60,7 +79,7 @@ function AdfBlock({ node }: { node: AdfNode }): React.JSX.Element | null {
     case 'blockquote':
       return (
         <blockquote className="border-l-2 border-zinc-700 pl-3 text-zinc-400">
-          {renderChildren(node)}
+          {renderChildren(node, mediaResolver)}
         </blockquote>
       )
     case 'codeBlock':
@@ -72,35 +91,42 @@ function AdfBlock({ node }: { node: AdfNode }): React.JSX.Element | null {
     case 'rule':
       return <hr className="border-zinc-800" />
     case 'mediaSingle':
-    case 'mediaGroup':
+    case 'mediaGroup': {
+      const rendered = mediaResolver?.(node)
+      if (rendered != null) return <>{rendered}</>
       return <p className="text-xs text-zinc-600 italic">[anexo/imagem — ver no Jira]</p>
+    }
     case 'table':
       return (
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-xs">
-            <tbody>{renderChildren(node)}</tbody>
+            <tbody>{renderChildren(node, mediaResolver)}</tbody>
           </table>
         </div>
       )
     case 'tableRow':
-      return <tr className="border-b border-zinc-800">{renderChildren(node)}</tr>
+      return <tr className="border-b border-zinc-800">{renderChildren(node, mediaResolver)}</tr>
     case 'tableHeader':
       return (
         <th className="border border-zinc-800 bg-zinc-900 px-2 py-1 text-left font-semibold">
-          {renderChildren(node)}
+          {renderChildren(node, mediaResolver)}
         </th>
       )
     case 'tableCell':
-      return <td className="border border-zinc-800 px-2 py-1 align-top">{renderChildren(node)}</td>
+      return (
+        <td className="border border-zinc-800 px-2 py-1 align-top">
+          {renderChildren(node, mediaResolver)}
+        </td>
+      )
     case 'panel':
       return (
         <div className="rounded-md border border-zinc-700 bg-zinc-900/70 p-2.5">
-          {renderChildren(node)}
+          {renderChildren(node, mediaResolver)}
         </div>
       )
     default:
       // desconhecido: degrada para o conteúdo interno (ou inline, se for folha)
-      if (node.content?.length) return <div>{renderChildren(node)}</div>
+      if (node.content?.length) return <div>{renderChildren(node, mediaResolver)}</div>
       return <>{renderInline({ type: 'paragraph', content: [node] })}</>
   }
 }

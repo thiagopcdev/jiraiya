@@ -213,6 +213,61 @@ export const ipcContract = {
     }),
     res: undefined as unknown as { issues: Issue[] }
   },
+  'issues:attachments': {
+    req: z.object({ key: z.string().trim().min(1).max(64) }),
+    res: undefined as unknown as {
+      attachments: Array<{
+        id: string
+        filename: string
+        mimeType: string | null
+        size: number
+        isImage: boolean
+      }>
+    }
+  },
+  'issues:attachmentData': {
+    req: z.object({
+      attachmentId: z.string().min(1),
+      variant: z.enum(['thumbnail', 'full'])
+    }),
+    res: undefined as unknown as {
+      /** data URI base64; null quando tooLarge (usar salvar/abrir) */
+      dataUri: string | null
+      mimeType: string | null
+      tooLarge: boolean
+    }
+  },
+  'issues:attachmentSave': {
+    req: z.object({ attachmentId: z.string().min(1), filename: z.string().min(1) }),
+    res: undefined as unknown as { saved: boolean; path: string | null }
+  },
+  'issues:attachmentOpen': {
+    req: z.object({ attachmentId: z.string().min(1), filename: z.string().min(1) }),
+    res: undefined as unknown as { ok: true }
+  },
+  'app:tempFiles': {
+    req: z.object({}),
+    res: undefined as unknown as { bytes: number }
+  },
+  'app:tempClear': {
+    req: z.object({}),
+    res: undefined as unknown as { ok: true; freedBytes: number }
+  },
+  'issues:commentUpdate': {
+    req: z.object({
+      issueKey: z.string().trim().min(1).max(64),
+      commentId: z.string().min(1),
+      body: z.string().trim().min(1).max(10000)
+    }),
+    res: undefined as unknown as { ok: true }
+  },
+  'issues:commentDelete': {
+    req: z.object({
+      issueKey: z.string().trim().min(1).max(64),
+      commentId: z.string().min(1)
+    }),
+    res: undefined as unknown as { ok: true }
+  },
   'issues:transitions': {
     req: z.object({ key: z.string().trim().min(1).max(64) }),
     res: undefined as unknown as {
@@ -321,9 +376,12 @@ export const ipcContract = {
       /** body é o documento ADF cru (renderizado com formatação no renderer) */
       comments: Array<{
         id: string
+        authorAccountId: string | null
         authorName: string | null
         createdAt: string
         body: unknown
+        /** texto plano do body (para o editor de comentário próprio) */
+        bodyText: string
       }>
     }
   },
@@ -429,7 +487,9 @@ export const ipcContract = {
       description: z.string(),
       assignToMe: z.boolean().optional(),
       addToActiveSprint: z.boolean().optional(),
-      storyPoints: z.number().positive().optional()
+      storyPoints: z.number().positive().optional(),
+      /** cria como subtarefa deste card (issueTypeId deve ser um tipo subtask) */
+      parentKey: z.string().trim().min(1).max(64).optional()
     }),
     res: undefined as unknown as { key: string }
   },

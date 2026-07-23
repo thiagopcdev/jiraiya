@@ -133,6 +133,16 @@ export interface JiraCommentsResponse {
   total: number
 }
 
+/** Um item de fields.attachment. */
+export interface JiraAttachment {
+  id: string
+  filename: string
+  mimeType?: string | null
+  size: number
+  thumbnail?: string
+  content?: string
+}
+
 export interface JiraProject {
   id: string
   key: string

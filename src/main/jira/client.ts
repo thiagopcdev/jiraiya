@@ -4,6 +4,7 @@ import type {
   AdfNode,
   JiraAgilePage,
   JiraAgileSprint,
+  JiraAttachment,
   JiraBoard,
   JiraBoardConfiguration,
   JiraBulkChangelogResponse,
@@ -144,6 +145,50 @@ export class JiraClient {
       startAt += res.maxResults
       if (startAt >= res.total) return all
     }
+  }
+
+  /** Anexos da issue (GET com fields=attachment). */
+  async issueAttachments(
+    issueKey: string
+  ): Promise<Array<{ id: string; filename: string; mimeType: string | null; size: number }>> {
+    const res = await this.http.get<{ fields?: { attachment?: JiraAttachment[] } }>(
+      `/rest/api/3/issue/${encodeURIComponent(issueKey)}?fields=attachment`
+    )
+    return (res.fields?.attachment ?? []).map((a) => ({
+      id: a.id,
+      filename: a.filename,
+      mimeType: a.mimeType ?? null,
+      size: a.size
+    }))
+  }
+
+  /** Bytes da miniatura do anexo (redireciona p/ CDN assinada). */
+  attachmentThumbnail(attachmentId: string): Promise<{ data: Buffer; mimeType: string | null }> {
+    return this.http.getBytes(
+      `/rest/api/3/attachment/thumbnail/${encodeURIComponent(attachmentId)}?redirect=true`
+    )
+  }
+
+  /** Bytes do arquivo do anexo (redireciona p/ CDN assinada). */
+  attachmentContent(attachmentId: string): Promise<{ data: Buffer; mimeType: string | null }> {
+    return this.http.getBytes(
+      `/rest/api/3/attachment/content/${encodeURIComponent(attachmentId)}?redirect=true`
+    )
+  }
+
+  /** Edita um comentário existente. body em ADF (o chamador converte com textToAdf). */
+  async updateComment(issueKey: string, commentId: string, body: unknown): Promise<void> {
+    await this.http.put<unknown>(
+      `/rest/api/3/issue/${encodeURIComponent(issueKey)}/comment/${encodeURIComponent(commentId)}`,
+      { body }
+    )
+  }
+
+  /** Exclui um comentário (o Jira responde 204 sem corpo). */
+  async deleteComment(issueKey: string, commentId: string): Promise<void> {
+    await this.http.delete(
+      `/rest/api/3/issue/${encodeURIComponent(issueKey)}/comment/${encodeURIComponent(commentId)}`
+    )
   }
 
   async listProjects(): Promise<JiraProject[]> {

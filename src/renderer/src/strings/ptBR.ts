@@ -199,7 +199,18 @@ export const t = {
     linksOffline: 'Sem conexão com o Jira para listar vínculos.',
     assigneeLabel: 'Responsável',
     unassigned: 'Sem responsável',
-    meSuffix: ' (eu)'
+    meSuffix: ' (eu)',
+    attachmentsTitle: 'Anexos',
+    addSubtask: '+ Subtarefa',
+    subtaskTitlePlaceholder: 'Título da subtarefa…',
+    subtaskCreate: 'Criar',
+    subtaskCreating: 'Criando…',
+    editComment: 'Editar comentário',
+    deleteComment: 'Excluir comentário',
+    deleteConfirm: 'Excluir?',
+    yes: 'Sim',
+    no: 'Não',
+    commentEditHint: 'salvar substitui a formatação original pela do editor (###, **, listas)'
   },
   palette: {
     placeholder: 'Buscar card por key, título ou texto…',

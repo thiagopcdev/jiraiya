@@ -3,9 +3,11 @@ import type { AppContext } from '../../appContext'
 import { getWorkspaceRow } from '../../db/repos/workspace'
 import { getPrefs } from '../../db/repos/misc'
 import { getIssueByKey } from '../../db/repos/issue'
-import { textToAdf } from '../../jira/adf'
+import { adfToText, textToAdf } from '../../jira/adf'
+import { JiraHttpError } from '../../jira/http'
 import { claudeStatus, ClaudeUnavailableError } from '../../summaries/claude'
 import { draftCommentWithClaude } from '../../issues/commentDraft'
+import { parseCreateError } from './create'
 
 function requireWorkspace(ctx: AppContext): NonNullable<ReturnType<typeof getWorkspaceRow>> {
   const workspace = getWorkspaceRow(ctx.db)
@@ -35,9 +37,11 @@ export function registerCommentHandlers(ctx: AppContext): void {
     const comments = raw
       .map((c) => ({
         id: c.id,
+        authorAccountId: c.author?.accountId ?? null,
         authorName: c.author?.displayName ?? null,
         createdAt: c.created,
-        body: (c.body ?? null) as unknown
+        body: (c.body ?? null) as unknown,
+        bodyText: adfToText(c.body ?? null)
       }))
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
     return { comments }
@@ -86,6 +90,48 @@ export function registerCommentHandlers(ctx: AppContext): void {
       )
     }
     await client.addComment(issue.key, textToAdf(body))
+    return { ok: true as const }
+  })
+
+  handle('issues:commentUpdate', async ({ issueKey, commentId, body }) => {
+    const workspace = requireWorkspace(ctx)
+    const client = requireClient(ctx)
+    const issue = getIssueByKey(ctx.db, workspace.id, issueKey.trim().toUpperCase())
+    if (!issue) {
+      throw new AppError(
+        'NOT_FOUND',
+        'Card não encontrado localmente — sincronize ou confira a key'
+      )
+    }
+    try {
+      await client.updateComment(issue.key, commentId, textToAdf(body))
+    } catch (err) {
+      if (err instanceof JiraHttpError) {
+        throw new AppError('COMMENT_FAILED', 'O Jira recusou a edição: ' + parseCreateError(err))
+      }
+      throw err
+    }
+    return { ok: true as const }
+  })
+
+  handle('issues:commentDelete', async ({ issueKey, commentId }) => {
+    const workspace = requireWorkspace(ctx)
+    const client = requireClient(ctx)
+    const issue = getIssueByKey(ctx.db, workspace.id, issueKey.trim().toUpperCase())
+    if (!issue) {
+      throw new AppError(
+        'NOT_FOUND',
+        'Card não encontrado localmente — sincronize ou confira a key'
+      )
+    }
+    try {
+      await client.deleteComment(issue.key, commentId)
+    } catch (err) {
+      if (err instanceof JiraHttpError) {
+        throw new AppError('COMMENT_FAILED', 'O Jira recusou a exclusão: ' + parseCreateError(err))
+      }
+      throw err
+    }
     return { ok: true as const }
   })
 }

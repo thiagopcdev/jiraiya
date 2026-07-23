@@ -10,19 +10,22 @@ import {
   ExternalLink,
   Flag,
   MessageSquare,
+  Pencil,
   Plus,
   Ruler,
   Sparkles,
+  Trash2,
   UserRound,
   X,
   Zap
 } from 'lucide-react'
-import type { ActivityKind, Issue, IssueActivity } from '@shared/domain'
+import type { ActivityKind, CreateIssueType, Issue, IssueActivity } from '@shared/domain'
 import type { IpcRequest, IpcResponse } from '@shared/ipc-contract'
 import { invoke, IpcError } from '../api/client'
-import { useAuthStatus, useIssueActivity, useSprintList } from '../api/hooks'
-import { Badge, Button, EmptyState, Spinner } from './ui'
+import { useAuthStatus, useIssueActivity, useIssueTypes, useSprintList } from '../api/hooks'
+import { Badge, Button, EmptyState, Input, Spinner } from './ui'
 import { AdfView } from './AdfView'
+import { AttachmentsSection, useMediaResolver } from './attachments'
 import { statusColor } from './statusColor'
 import { IssueDetailContext, useIssueDetail } from './issueDetail'
 import { t } from '../strings/ptBR'
@@ -250,8 +253,20 @@ function IssueDetailDrawer({
   })
   const links = linksData?.links ?? []
 
+  // tipo de subtarefa do projeto do card (primeiro com subtask=true) — controla se o
+  // botão "+ Subtarefa" aparece
+  const { data: issueTypesData } = useIssueTypes(issue?.projectKey ?? null, true)
+  const subtaskType = issueTypesData?.issueTypes.find((it) => it.subtask) ?? null
+  const [subtaskFormOpen, setSubtaskFormOpen] = useState(false)
+
   const showRelatedSection =
-    !!issue?.parentKey || children.length > 0 || links.length > 0 || linksError
+    !!issue?.parentKey || children.length > 0 || links.length > 0 || linksError || !!subtaskType
+
+  // resolve nós media do ADF (descrição e comentários) para thumbs de anexo já carregados
+  const mediaResolver = useMediaResolver(issueKey)
+
+  const { data: authStatus } = useAuthStatus()
+  const myAccountId = authStatus?.workspace?.accountId ?? null
 
   // seção "Editar" em accordion, fechada por padrão — dispara editMeta só ao expandir
   const [editOpen, setEditOpen] = useState(false)
@@ -458,6 +473,7 @@ function IssueDetailDrawer({
               {liveDescription?.description ? (
                 <AdfDescription
                   doc={liveDescription.description}
+                  mediaResolver={mediaResolver}
                   expanded={descExpanded}
                   onExpand={() => setDescExpanded(true)}
                 />
@@ -498,29 +514,55 @@ function IssueDetailDrawer({
                         {t.detail.parentLabel}: {issue.parentKey}
                       </button>
                     )}
-                    {children.length > 0 && (
+                    {(children.length > 0 || subtaskType) && (
                       <div>
-                        <p className="mb-1 text-xs text-zinc-500">
-                          {t.detail.subtasksTitle(children.length)}
-                        </p>
-                        <div className="space-y-1">
-                          {children.map((child) => (
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <p className="text-xs text-zinc-500">
+                            {t.detail.subtasksTitle(children.length)}
+                          </p>
+                          {subtaskType && !subtaskFormOpen && (
                             <button
-                              key={child.key}
-                              className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left text-sm text-zinc-300 hover:bg-zinc-900"
-                              onClick={() => openIssue(child.key)}
+                              className="text-xs text-indigo-400 hover:underline"
+                              onClick={() => setSubtaskFormOpen(true)}
                             >
-                              <span className="min-w-0 flex-1 truncate">
-                                {child.key} — {child.summary}
-                              </span>
-                              {child.statusCategory && (
-                                <Badge color={statusColor(child.statusCategory)}>
-                                  {child.status}
-                                </Badge>
-                              )}
+                              {t.detail.addSubtask}
                             </button>
-                          ))}
+                          )}
                         </div>
+                        {children.length > 0 && (
+                          <div className="space-y-1">
+                            {children.map((child) => (
+                              <button
+                                key={child.key}
+                                className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left text-sm text-zinc-300 hover:bg-zinc-900"
+                                onClick={() => openIssue(child.key)}
+                              >
+                                <span className="min-w-0 flex-1 truncate">
+                                  {child.key} — {child.summary}
+                                </span>
+                                {child.statusCategory && (
+                                  <Badge color={statusColor(child.statusCategory)}>
+                                    {child.status}
+                                  </Badge>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {subtaskFormOpen && subtaskType && (
+                          <div className="mt-2">
+                            <SubtaskCreateForm
+                              issue={issue}
+                              issueKey={issueKey}
+                              subtaskType={subtaskType}
+                              onCreated={(key) => {
+                                setSubtaskFormOpen(false)
+                                openIssue(key)
+                              }}
+                              onCancel={() => setSubtaskFormOpen(false)}
+                            />
+                          </div>
+                        )}
                       </div>
                     )}
                     {(links.length > 0 || linksError) && (
@@ -554,6 +596,8 @@ function IssueDetailDrawer({
                 </section>
               )}
 
+              <AttachmentsSection issueKey={issueKey} />
+
               <section>
                 <h3 className="mb-2 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
                   {t.detail.commentsTitle}
@@ -569,20 +613,13 @@ function IssueDetailDrawer({
                   ) : (
                     <div className="space-y-2">
                       {liveComments.comments.map((c) => (
-                        <div
+                        <CommentItem
                           key={c.id}
-                          className="rounded-md border border-zinc-800 bg-zinc-900/60 p-2.5"
-                        >
-                          <div className="mb-1.5 flex items-baseline justify-between gap-2">
-                            <span className="text-sm font-medium text-zinc-300">
-                              {c.authorName ?? 'Alguém'}
-                            </span>
-                            <span className="shrink-0 text-xs text-zinc-600">
-                              {format(new Date(c.createdAt), 'dd/MM/yyyy HH:mm')}
-                            </span>
-                          </div>
-                          <AdfView doc={c.body} />
-                        </div>
+                          comment={c}
+                          issueKey={issueKey}
+                          myAccountId={myAccountId}
+                          mediaResolver={mediaResolver}
+                        />
                       ))}
                     </div>
                   )
@@ -976,13 +1013,237 @@ function EditPanel({
   )
 }
 
+/** Mini-form inline para criar uma subtarefa a partir do card aberto. */
+function SubtaskCreateForm({
+  issue,
+  issueKey,
+  subtaskType,
+  onCreated,
+  onCancel
+}: {
+  issue: Issue
+  issueKey: string
+  subtaskType: CreateIssueType
+  onCreated: (key: string) => void
+  onCancel: () => void
+}): React.JSX.Element {
+  const queryClient = useQueryClient()
+  const [title, setTitle] = useState('')
+  const [assignToMe, setAssignToMe] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSubmit = async (): Promise<void> => {
+    if (!title.trim()) return
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await invoke('issues:create', {
+        projectKey: issue.projectKey,
+        issueTypeId: subtaskType.id,
+        summary: title.trim(),
+        description: '',
+        assignToMe,
+        parentKey: issue.key
+      })
+      setTitle('')
+      void queryClient.invalidateQueries({ queryKey: ['issue-children', issueKey] })
+      void queryClient.invalidateQueries({ queryKey: ['issues'] })
+      void invoke('sync:run', { full: false })
+      onCreated(res.key)
+    } catch (err) {
+      setError(err instanceof IpcError ? err.message : t.common.error)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="space-y-2 rounded-md border border-zinc-800 bg-zinc-900/60 p-2.5">
+      <Input
+        placeholder={t.detail.subtaskTitlePlaceholder}
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        autoFocus
+      />
+      <label className="flex items-center gap-1.5 text-xs text-zinc-400">
+        <input
+          type="checkbox"
+          checked={assignToMe}
+          onChange={(e) => setAssignToMe(e.target.checked)}
+          className="accent-indigo-600"
+        />
+        {t.create.assignToMe}
+      </label>
+      <div className="flex items-center gap-2">
+        <Button disabled={busy || !title.trim()} onClick={() => void handleSubmit()}>
+          {busy ? <Spinner /> : null}
+          {busy ? t.detail.subtaskCreating : t.detail.subtaskCreate}
+        </Button>
+        <Button variant="ghost" disabled={busy} onClick={onCancel}>
+          {t.common.cancel}
+        </Button>
+      </div>
+      {error && <p className="text-sm text-amber-400">{error}</p>}
+    </div>
+  )
+}
+
+/**
+ * Um comentário ao vivo. Se for do usuário atual, mostra ações discretas de
+ * editar/excluir no header; edição troca o corpo por um textarea prefilled com o
+ * texto plano; exclusão pede confirmação inline (sem window.confirm), que expira
+ * sozinha em 5s.
+ */
+function CommentItem({
+  comment,
+  issueKey,
+  myAccountId,
+  mediaResolver
+}: {
+  comment: IpcResponse<'issues:comments'>['comments'][number]
+  issueKey: string
+  myAccountId: string | null
+  mediaResolver: ReturnType<typeof useMediaResolver>
+}): React.JSX.Element {
+  const queryClient = useQueryClient()
+  const isMine = myAccountId !== null && comment.authorAccountId === myAccountId
+
+  const [mode, setMode] = useState<'view' | 'edit' | 'confirmDelete'>('view')
+  const [body, setBody] = useState(comment.bodyText)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (mode !== 'confirmDelete') return
+    const timer = setTimeout(() => setMode('view'), 5000)
+    return () => clearTimeout(timer)
+  }, [mode])
+
+  const invalidate = (): void => {
+    void queryClient.invalidateQueries({ queryKey: ['issue-comments', issueKey] })
+  }
+
+  const handleSave = async (): Promise<void> => {
+    if (!body.trim()) return
+    setBusy(true)
+    setError(null)
+    try {
+      await invoke('issues:commentUpdate', {
+        issueKey,
+        commentId: comment.id,
+        body: body.trim()
+      })
+      invalidate()
+      setMode('view')
+    } catch (err) {
+      setError(err instanceof IpcError ? err.message : t.common.error)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleDelete = async (): Promise<void> => {
+    setBusy(true)
+    setError(null)
+    try {
+      await invoke('issues:commentDelete', { issueKey, commentId: comment.id })
+      invalidate()
+    } catch (err) {
+      setError(err instanceof IpcError ? err.message : t.common.error)
+      setMode('view')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="rounded-md border border-zinc-800 bg-zinc-900/60 p-2.5">
+      <div className="mb-1.5 flex items-baseline justify-between gap-2">
+        <span className="text-sm font-medium text-zinc-300">{comment.authorName ?? 'Alguém'}</span>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="text-xs text-zinc-600">
+            {format(new Date(comment.createdAt), 'dd/MM/yyyy HH:mm')}
+          </span>
+          {isMine && mode === 'view' && (
+            <div className="flex items-center gap-1">
+              <button
+                className="rounded p-0.5 text-zinc-600 hover:text-zinc-300"
+                title={t.detail.editComment}
+                aria-label={t.detail.editComment}
+                onClick={() => {
+                  setBody(comment.bodyText)
+                  setMode('edit')
+                }}
+              >
+                <Pencil size={12} />
+              </button>
+              <button
+                className="rounded p-0.5 text-zinc-600 hover:text-zinc-300"
+                title={t.detail.deleteComment}
+                aria-label={t.detail.deleteComment}
+                onClick={() => setMode('confirmDelete')}
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+          )}
+          {isMine && mode === 'confirmDelete' && (
+            <div className="flex items-center gap-1.5 text-xs">
+              <span className="text-zinc-500">{t.detail.deleteConfirm}</span>
+              <button
+                className="font-medium text-red-400 hover:underline disabled:opacity-50"
+                disabled={busy}
+                onClick={() => void handleDelete()}
+              >
+                {busy ? <Spinner className="text-red-400" /> : t.detail.yes}
+              </button>
+              <button
+                className="text-zinc-500 hover:underline disabled:opacity-50"
+                disabled={busy}
+                onClick={() => setMode('view')}
+              >
+                {t.detail.no}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+      {mode === 'edit' ? (
+        <div className="space-y-1.5">
+          <textarea
+            className="h-20 w-full resize-y rounded-md border border-zinc-700 bg-zinc-950 p-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+          />
+          <p className="text-xs text-zinc-600">{t.detail.commentEditHint}</p>
+          <div className="flex items-center gap-2">
+            <Button disabled={busy || !body.trim()} onClick={() => void handleSave()}>
+              {busy ? <Spinner /> : null}
+              {busy ? t.detail.saving : t.common.save}
+            </Button>
+            <Button variant="ghost" disabled={busy} onClick={() => setMode('view')}>
+              {t.common.cancel}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <AdfView doc={comment.body} mediaResolver={mediaResolver} />
+      )}
+      {error && <p className="mt-1 text-sm text-amber-400">{error}</p>}
+    </div>
+  )
+}
+
 /** Descrição em ADF formatado; colapsa (com fade) apenas quando o conteúdo é longo. */
 function AdfDescription({
   doc,
+  mediaResolver,
   expanded,
   onExpand
 }: {
   doc: unknown
+  mediaResolver: ReturnType<typeof useMediaResolver>
   expanded: boolean
   onExpand: () => void
 }): React.JSX.Element {
@@ -992,7 +1253,7 @@ function AdfDescription({
   return (
     <section>
       <div className={collapsed ? 'relative max-h-96 overflow-hidden' : undefined}>
-        <AdfView doc={doc} />
+        <AdfView doc={doc} mediaResolver={mediaResolver} />
         {collapsed && (
           <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-zinc-950 to-transparent" />
         )}

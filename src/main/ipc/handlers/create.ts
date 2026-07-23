@@ -67,7 +67,8 @@ export function registerCreateHandlers(ctx: AppContext): void {
       description,
       assignToMe,
       addToActiveSprint,
-      storyPoints
+      storyPoints,
+      parentKey
     }) => {
       const workspace = requireWorkspace(ctx)
       const client = requireClient(ctx)
@@ -77,6 +78,7 @@ export function registerCreateHandlers(ctx: AppContext): void {
         issuetype: { id: issueTypeId },
         summary
       }
+      if (parentKey) fields.parent = { key: parentKey.trim().toUpperCase() }
       if (description.trim()) fields.description = textToAdf(description)
       if (assignToMe !== false) fields.assignee = { id: workspace.account_id }
       if (addToActiveSprint && workspace.sprint_field_id && workspace.sprint_field_id !== 'none') {

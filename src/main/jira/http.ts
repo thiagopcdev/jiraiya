@@ -100,7 +100,37 @@ export class JiraHttp {
     return this.request<T>('PUT', path, body)
   }
 
-  private request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  /** DELETE (o Jira responde 204 sem corpo). */
+  async delete(path: string): Promise<void> {
+    await this.fetchOk('DELETE', path, { accept: 'application/json' })
+  }
+
+  /**
+   * Baixa bytes crus (anexos). Mesma fila/retry/auth do resto do client;
+   * segue redirects (o content/thumbnail do Jira redireciona p/ CDN assinada).
+   */
+  async getBytes(path: string): Promise<{ data: Buffer; mimeType: string | null }> {
+    const res = await this.fetchOk('GET', path, { accept: '*/*' })
+    const data = Buffer.from(await res.arrayBuffer())
+    return { data, mimeType: res.headers.get('content-type') }
+  }
+
+  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+    const res = await this.fetchOk(method, path, { accept: 'application/json', body })
+    if (res.status === 204) return undefined as T
+    return (await res.json()) as T
+  }
+
+  /**
+   * Executa a requisição pela fila com retry/backoff e erros tipados,
+   * devolvendo a Response já validada (2xx). Base comum de request/getBytes/delete.
+   */
+  private fetchOk(
+    method: string,
+    path: string,
+    opts: { accept: string; body?: unknown }
+  ): Promise<Response> {
+    const { accept, body } = opts
     return this.queue.add(async () => {
       let attempt = 0
       for (;;) {
@@ -109,9 +139,10 @@ export class JiraHttp {
         try {
           res = await fetch(this.baseUrl + path, {
             method,
+            redirect: 'follow',
             headers: {
               Authorization: this.authHeader,
-              Accept: 'application/json',
+              Accept: accept,
               ...(body !== undefined ? { 'Content-Type': 'application/json' } : {})
             },
             body: body !== undefined ? JSON.stringify(body) : undefined
@@ -148,8 +179,7 @@ export class JiraHttp {
           throw new JiraHttpError(res.status, `Jira respondeu ${res.status}`, await safeText(res))
         }
 
-        if (res.status === 204) return undefined as T
-        return (await res.json()) as T
+        return res
       }
     })
   }

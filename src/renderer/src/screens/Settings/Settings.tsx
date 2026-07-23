@@ -15,6 +15,7 @@ export default function Settings(): React.JSX.Element {
       <ProjectsSection />
       <SyncSection />
       <ClaudeSection />
+      <StorageSection />
       <AboutSection />
     </div>
   )
@@ -298,6 +299,51 @@ function ClaudeSection(): React.JSX.Element {
           </p>
         </div>
       )}
+    </Card>
+  )
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+function StorageSection(): React.JSX.Element {
+  const queryClient = useQueryClient()
+  const { data } = useQuery({
+    queryKey: ['temp-files'],
+    queryFn: () => invoke('app:tempFiles', {})
+  })
+  const [busy, setBusy] = useState(false)
+  const [freedMsg, setFreedMsg] = useState<string | null>(null)
+
+  const clear = async (): Promise<void> => {
+    setBusy(true)
+    try {
+      const res = await invoke('app:tempClear', {})
+      await queryClient.invalidateQueries({ queryKey: ['temp-files'] })
+      setFreedMsg(`Liberado ${formatBytes(res.freedBytes)}`)
+      setTimeout(() => setFreedMsg(null), 3000)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Card title="Armazenamento">
+      <div className="flex items-center justify-between gap-4 text-sm">
+        <div>
+          <div className="text-zinc-200">
+            Arquivos temporários de anexos: {data ? formatBytes(data.bytes) : '—'}
+          </div>
+          {freedMsg && <div className="mt-1 text-xs text-green-400">{freedMsg}</div>}
+        </div>
+        <Button variant="secondary" disabled={busy} onClick={() => void clear()}>
+          {busy && <Spinner />}
+          Limpar
+        </Button>
+      </div>
     </Card>
   )
 }
