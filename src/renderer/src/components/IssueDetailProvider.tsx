@@ -321,23 +321,44 @@ function IssueDetailDrawer({
           visible ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
-        <div className="flex items-center gap-2 border-b border-zinc-800 px-4 py-3">
-          {onBack && (
+        <div className="border-b border-zinc-800 px-4 py-3">
+          <div className="flex items-center gap-2">
+            {onBack && (
+              <button
+                className="shrink-0 rounded-md p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+                onClick={onBack}
+                aria-label={t.detail.backLabel}
+              >
+                <ChevronLeft size={16} />
+              </button>
+            )}
+            <span className="shrink-0 font-mono text-sm whitespace-nowrap text-zinc-400">
+              {issueKey}
+            </span>
+            <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+              {issue?.statusCategory && (
+                <Badge color={statusColor(issue.statusCategory)}>{issue.status}</Badge>
+              )}
+              {issue?.issueType && <Badge color="zinc">{issue.issueType}</Badge>}
+            </div>
             <button
-              className="rounded-md p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
-              onClick={onBack}
-              aria-label={t.detail.backLabel}
+              className="shrink-0 rounded-md p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+              onClick={openInJira}
+              title={t.detail.openInJira}
+              aria-label={t.detail.openInJira}
             >
-              <ChevronLeft size={16} />
+              <ExternalLink size={15} />
             </button>
-          )}
-          <span className="font-mono text-sm text-zinc-400">{issueKey}</span>
-          {issue?.statusCategory && (
-            <Badge color={statusColor(issue.statusCategory)}>{issue.status}</Badge>
-          )}
-          {issue?.issueType && <Badge color="zinc">{issue.issueType}</Badge>}
+            <button
+              className="shrink-0 rounded-md p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+              onClick={onClose}
+              aria-label={t.detail.close}
+            >
+              <X size={16} />
+            </button>
+          </div>
           {transitionsData && transitionsData.transitions.length > 0 && (
-            <div className="flex items-center gap-1.5">
+            <div className="mt-2 flex items-center gap-1.5">
               <select
                 value={selectedTransitionId}
                 disabled={moveBusy}
@@ -346,7 +367,7 @@ function IssueDetailDrawer({
                   setSelectedTransitionId(e.target.value)
                   void handleTransitionChange(e.target.value)
                 }}
-                className="rounded-md border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-xs text-zinc-300 outline-none focus:border-indigo-500 disabled:opacity-50"
+                className="max-w-72 rounded-md border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-xs text-zinc-300 outline-none focus:border-indigo-500 disabled:opacity-50"
               >
                 <option value="" disabled>
                   {t.detail.moveTo}
@@ -365,18 +386,6 @@ function IssueDetailDrawer({
               )}
             </div>
           )}
-          <div className="flex-1" />
-          <Button variant="secondary" onClick={openInJira}>
-            <ExternalLink size={14} />
-            {t.detail.openInJira}
-          </Button>
-          <button
-            className="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
-            onClick={onClose}
-            aria-label={t.detail.close}
-          >
-            <X size={16} />
-          </button>
         </div>
         {moveError && (
           <div className="border-b border-zinc-800 bg-zinc-950 px-4 py-2">
