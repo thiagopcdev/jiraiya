@@ -5,6 +5,7 @@ import {
   ArrowRightLeft,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   ExternalLink,
   Flag,
@@ -19,11 +20,11 @@ import {
 import type { ActivityKind, Issue, IssueActivity } from '@shared/domain'
 import type { IpcRequest, IpcResponse } from '@shared/ipc-contract'
 import { invoke, IpcError } from '../api/client'
-import { useIssueActivity, useSprintList } from '../api/hooks'
+import { useAuthStatus, useIssueActivity, useSprintList } from '../api/hooks'
 import { Badge, Button, EmptyState, Spinner } from './ui'
 import { AdfView } from './AdfView'
 import { statusColor } from './statusColor'
-import { IssueDetailContext } from './issueDetail'
+import { IssueDetailContext, useIssueDetail } from './issueDetail'
 import { t } from '../strings/ptBR'
 
 const kindMeta: Record<ActivityKind, { icon: typeof Zap; label: string; color: string }> = {
@@ -39,33 +40,114 @@ const kindMeta: Record<ActivityKind, { icon: typeof Zap; label: string; color: s
 
 const DESCRIPTION_LINE_LIMIT = 50
 
+/** valor sentinela do select de Responsável — selecioná-lo remove o assignee */
+const UNASSIGNED_ASSIGNEE = '__unassigned__'
+
+interface AssigneeOption {
+  id: string
+  label: string
+  /** nome a enviar no update (null = remover); distinto do label, que pode ter o sufixo " (eu)" */
+  displayName: string | null
+}
+
+/**
+ * Monta as opções do select de Responsável: o valor atual sempre primeiro, depois
+ * "eu" (rotulado), os demais em ordem alfabética e por fim "Sem responsável" — sem
+ * duplicar quem já apareceu antes. Se a lista de assignable falhar, degrada para
+ * só "eu" (rotulada "Atribuir a mim") + "Sem responsável" além do valor atual.
+ */
+function buildAssigneeOptions(
+  issue: Issue,
+  users: Array<{ accountId: string; displayName: string }>,
+  myAccountId: string | null,
+  myDisplayName: string | null,
+  assignableFailed: boolean
+): AssigneeOption[] {
+  const options: AssigneeOption[] = []
+  const seen = new Set<string>()
+  const push = (id: string, label: string, displayName: string | null): void => {
+    if (seen.has(id)) return
+    seen.add(id)
+    options.push({ id, label, displayName })
+  }
+
+  push(
+    issue.assigneeAccountId ?? UNASSIGNED_ASSIGNEE,
+    issue.assigneeName ?? t.detail.unassigned,
+    issue.assigneeName
+  )
+
+  if (myAccountId) {
+    const me = users.find((u) => u.accountId === myAccountId)
+    if (me) {
+      push(me.accountId, `${me.displayName}${t.detail.meSuffix}`, me.displayName)
+    } else if (assignableFailed) {
+      push(myAccountId, t.create.assignToMe, myDisplayName)
+    }
+  }
+
+  users
+    .filter((u) => u.accountId !== myAccountId)
+    .sort((a, b) => a.displayName.localeCompare(b.displayName, 'pt-BR'))
+    .forEach((u) => push(u.accountId, u.displayName, u.displayName))
+
+  push(UNASSIGNED_ASSIGNEE, t.detail.unassigned, null)
+
+  return options
+}
+
 export function IssueDetailProvider({ children }: { children: ReactNode }): React.JSX.Element {
-  const [openKey, setOpenKey] = useState<string | null>(null)
+  // pilha de navegação interna do drawer: abrir um pai/subtarefa/vínculo empilha por
+  // cima do card atual; "voltar" desempilha; fechar limpa tudo de uma vez.
+  const [stack, setStack] = useState<string[]>([])
+
+  const openIssue = (key: string): void => {
+    setStack((prev) => {
+      if (prev.length === 0) return [key]
+      if (prev[prev.length - 1] === key) return prev
+      return [...prev, key]
+    })
+  }
+  const close = (): void => setStack([])
+  const back = (): void => setStack((prev) => prev.slice(0, -1))
 
   useEffect(() => {
-    if (!openKey) return
+    if (stack.length === 0) return
     const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') setOpenKey(null)
+      if (e.key !== 'Escape') return
+      setStack((prev) => (prev.length > 1 ? prev.slice(0, -1) : []))
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [openKey])
+  }, [stack.length])
+
+  const topKey = stack[stack.length - 1] ?? null
 
   return (
-    <IssueDetailContext.Provider value={{ openIssue: setOpenKey, close: () => setOpenKey(null) }}>
+    <IssueDetailContext.Provider value={{ openIssue, close }}>
       {children}
-      {openKey && <IssueDetailDrawer issueKey={openKey} onClose={() => setOpenKey(null)} />}
+      {topKey && (
+        <IssueDetailDrawer
+          key={topKey}
+          issueKey={topKey}
+          onClose={close}
+          onBack={stack.length > 1 ? back : null}
+        />
+      )}
     </IssueDetailContext.Provider>
   )
 }
 
 function IssueDetailDrawer({
   issueKey,
-  onClose
+  onClose,
+  onBack
 }: {
   issueKey: string
   onClose: () => void
+  onBack: (() => void) | null
 }): React.JSX.Element {
+  const { openIssue } = useIssueDetail()
   const queryClient = useQueryClient()
 
   const [visible, setVisible] = useState(false)
@@ -113,6 +195,63 @@ function IssueDetailDrawer({
     issue?.sprintJiraId != null
       ? (sprintsData?.sprints.find((s) => s.jiraId === issue.sprintJiraId)?.name ?? null)
       : null
+
+  // transições disponíveis pro select "Mover para…" no header
+  const { data: transitionsData } = useQuery({
+    queryKey: ['issue-transitions', issueKey],
+    queryFn: () => invoke('issues:transitions', { key: issueKey }),
+    enabled: !!issue
+  })
+  const [selectedTransitionId, setSelectedTransitionId] = useState('')
+  const [moveBusy, setMoveBusy] = useState(false)
+  const [moveError, setMoveError] = useState<string | null>(null)
+  const [moveSuccess, setMoveSuccess] = useState(false)
+
+  const invalidateAfterTransition = (): void => {
+    void queryClient.invalidateQueries({ queryKey: ['issue', issueKey] })
+    void queryClient.invalidateQueries({ queryKey: ['issue-transitions', issueKey] })
+    void queryClient.invalidateQueries({ queryKey: ['issue-activity', issueKey] })
+    void queryClient.invalidateQueries({ queryKey: ['board'] })
+    void queryClient.invalidateQueries({ queryKey: ['issues'] })
+  }
+
+  const handleTransitionChange = async (transitionId: string): Promise<void> => {
+    if (!transitionId) return
+    setMoveBusy(true)
+    setMoveError(null)
+    try {
+      await invoke('issues:transition', { key: issueKey, transitionId })
+      invalidateAfterTransition()
+      setMoveSuccess(true)
+      setTimeout(() => setMoveSuccess(false), 3000)
+    } catch (err) {
+      const message = err instanceof IpcError ? err.message : t.common.error
+      setMoveError(message)
+      setTimeout(() => setMoveError(null), 6000)
+    } finally {
+      setMoveBusy(false)
+      setSelectedTransitionId('')
+    }
+  }
+
+  // subtarefas locais, vínculos ao vivo (podem falhar offline) e navegação para o pai
+  const { data: childrenData } = useQuery({
+    queryKey: ['issue-children', issueKey],
+    queryFn: () => invoke('issues:children', { key: issueKey }),
+    enabled: !!issue
+  })
+  const children = childrenData?.issues ?? []
+
+  const { data: linksData, isError: linksError } = useQuery({
+    queryKey: ['issue-links', issueKey],
+    queryFn: () => invoke('issues:links', { key: issueKey }),
+    enabled: !!issue,
+    retry: 0
+  })
+  const links = linksData?.links ?? []
+
+  const showRelatedSection =
+    !!issue?.parentKey || children.length > 0 || links.length > 0 || linksError
 
   // seção "Editar" em accordion, fechada por padrão — dispara editMeta só ao expandir
   const [editOpen, setEditOpen] = useState(false)
@@ -183,11 +322,49 @@ function IssueDetailDrawer({
         }`}
       >
         <div className="flex items-center gap-2 border-b border-zinc-800 px-4 py-3">
+          {onBack && (
+            <button
+              className="rounded-md p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+              onClick={onBack}
+              aria-label={t.detail.backLabel}
+            >
+              <ChevronLeft size={16} />
+            </button>
+          )}
           <span className="font-mono text-sm text-zinc-400">{issueKey}</span>
           {issue?.statusCategory && (
             <Badge color={statusColor(issue.statusCategory)}>{issue.status}</Badge>
           )}
           {issue?.issueType && <Badge color="zinc">{issue.issueType}</Badge>}
+          {transitionsData && transitionsData.transitions.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <select
+                value={selectedTransitionId}
+                disabled={moveBusy}
+                title={moveBusy ? t.detail.moving : t.detail.moveTo}
+                onChange={(e) => {
+                  setSelectedTransitionId(e.target.value)
+                  void handleTransitionChange(e.target.value)
+                }}
+                className="rounded-md border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-xs text-zinc-300 outline-none focus:border-indigo-500 disabled:opacity-50"
+              >
+                <option value="" disabled>
+                  {t.detail.moveTo}
+                </option>
+                {transitionsData.transitions.map((tr) => (
+                  <option key={tr.id} value={tr.id}>
+                    {tr.name} → {tr.toStatusName}
+                  </option>
+                ))}
+              </select>
+              {moveBusy && <Spinner className="text-zinc-500" />}
+              {!moveBusy && moveSuccess && (
+                <span title={t.detail.moved}>
+                  <CheckCircle2 size={14} className="text-green-400" />
+                </span>
+              )}
+            </div>
+          )}
           <div className="flex-1" />
           <Button variant="secondary" onClick={openInJira}>
             <ExternalLink size={14} />
@@ -201,6 +378,11 @@ function IssueDetailDrawer({
             <X size={16} />
           </button>
         </div>
+        {moveError && (
+          <div className="border-b border-zinc-800 bg-zinc-950 px-4 py-2">
+            <p className="text-sm text-amber-400">{moveError}</p>
+          </div>
+        )}
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           {issueLoading ? (
@@ -289,6 +471,76 @@ function IssueDetailDrawer({
                         {seg.status} · {formatDays(seg.durationMs)}
                       </Badge>
                     ))}
+                  </div>
+                </section>
+              )}
+
+              {showRelatedSection && (
+                <section>
+                  <h3 className="mb-2 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+                    {t.detail.relatedTitle}
+                  </h3>
+                  <div className="space-y-3">
+                    {issue.parentKey && (
+                      <button
+                        className="block text-left text-sm text-indigo-400 hover:underline"
+                        onClick={() => openIssue(issue.parentKey!)}
+                      >
+                        {t.detail.parentLabel}: {issue.parentKey}
+                      </button>
+                    )}
+                    {children.length > 0 && (
+                      <div>
+                        <p className="mb-1 text-xs text-zinc-500">
+                          {t.detail.subtasksTitle(children.length)}
+                        </p>
+                        <div className="space-y-1">
+                          {children.map((child) => (
+                            <button
+                              key={child.key}
+                              className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left text-sm text-zinc-300 hover:bg-zinc-900"
+                              onClick={() => openIssue(child.key)}
+                            >
+                              <span className="min-w-0 flex-1 truncate">
+                                {child.key} — {child.summary}
+                              </span>
+                              {child.statusCategory && (
+                                <Badge color={statusColor(child.statusCategory)}>
+                                  {child.status}
+                                </Badge>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {(links.length > 0 || linksError) && (
+                      <div>
+                        <p className="mb-1 text-xs text-zinc-500">{t.detail.linksTitle}</p>
+                        {links.length > 0 ? (
+                          <div className="space-y-1">
+                            {links.map((link) => (
+                              <button
+                                key={`${link.label}-${link.key}`}
+                                className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left text-sm text-zinc-300 hover:bg-zinc-900"
+                                onClick={() => openIssue(link.key)}
+                              >
+                                <span className="min-w-0 flex-1 truncate">
+                                  {link.label}: {link.key} — {link.summary ?? ''}
+                                </span>
+                                {link.statusCategory && (
+                                  <Badge color={statusColor(link.statusCategory)}>
+                                    {link.status}
+                                  </Badge>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-zinc-600">{t.detail.linksOffline}</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </section>
               )}
@@ -459,6 +711,23 @@ function EditPanel({
 }): React.JSX.Element {
   const queryClient = useQueryClient()
 
+  const { data: authStatus } = useAuthStatus()
+  const myAccountId = authStatus?.workspace?.accountId ?? null
+  const myDisplayName = authStatus?.workspace?.displayName ?? null
+
+  const { data: assignableData, isError: assignableFailed } = useQuery({
+    queryKey: ['issue-assignable', issueKey],
+    queryFn: () => invoke('issues:assignable', { key: issueKey }),
+    retry: 0
+  })
+  const assigneeOptions = buildAssigneeOptions(
+    issue,
+    assignableFailed ? [] : (assignableData?.users ?? []),
+    myAccountId,
+    myDisplayName,
+    assignableFailed
+  )
+
   const initialStoryPoints = issue.storyPoints !== null ? String(issue.storyPoints) : ''
   const initialPriorityId = meta.priority.editable
     ? (meta.priority.options.find((o) => o.name === meta.priority.current)?.id ??
@@ -470,10 +739,13 @@ function EditPanel({
     : ''
   const initialOriginalEstimate = meta.originalEstimate ?? ''
 
+  const initialAssigneeId = issue.assigneeAccountId ?? UNASSIGNED_ASSIGNEE
+
   const [storyPoints, setStoryPoints] = useState(initialStoryPoints)
   const [priorityId, setPriorityId] = useState(initialPriorityId)
   const [severityId, setSeverityId] = useState(initialSeverityId)
   const [originalEstimate, setOriginalEstimate] = useState(initialOriginalEstimate)
+  const [assigneeId, setAssigneeId] = useState(initialAssigneeId)
 
   const [saveBusy, setSaveBusy] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -493,7 +765,9 @@ function EditPanel({
     meta.timeTrackingEditable &&
     originalEstimate.trim() !== '' &&
     originalEstimate !== initialOriginalEstimate
-  const dirty = storyPointsDirty || priorityDirty || severityDirty || originalEstimateDirty
+  const assigneeDirty = assigneeId !== initialAssigneeId
+  const dirty =
+    storyPointsDirty || priorityDirty || severityDirty || originalEstimateDirty || assigneeDirty
 
   const invalidateAfterSave = (): void => {
     void queryClient.invalidateQueries({ queryKey: ['issue', issueKey] })
@@ -521,6 +795,16 @@ function EditPanel({
       }
       if (originalEstimateDirty) {
         payload.originalEstimate = originalEstimate.trim()
+      }
+      if (assigneeDirty) {
+        if (assigneeId === UNASSIGNED_ASSIGNEE) {
+          payload.assigneeAccountId = null
+          payload.assigneeName = null
+        } else {
+          payload.assigneeAccountId = assigneeId
+          payload.assigneeName =
+            assigneeOptions.find((o) => o.id === assigneeId)?.displayName ?? null
+        }
       }
       await invoke('issues:update', payload)
       setSaved(true)
@@ -554,97 +838,103 @@ function EditPanel({
     }
   }
 
-  const hasEditableFields =
-    meta.storyPointsEditable ||
-    meta.priority.editable ||
-    meta.severity !== null ||
-    meta.timeTrackingEditable
-
   return (
     <div className="space-y-3 rounded-md border border-zinc-800 bg-zinc-900/40 p-3">
-      {hasEditableFields && (
-        <div className="space-y-2">
-          {meta.storyPointsEditable && (
-            <div className="grid grid-cols-[130px_1fr] items-center gap-2">
-              <span className="text-xs text-zinc-500">{t.detail.storyPointsLabel}</span>
-              <input
-                type="number"
-                min={0}
-                step={0.5}
-                value={storyPoints}
-                onChange={(e) => setStoryPoints(e.target.value)}
-                className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
-              />
-            </div>
-          )}
-          {meta.priority.editable && (
-            <div className="grid grid-cols-[130px_1fr] items-center gap-2">
-              <span className="text-xs text-zinc-500">{t.detail.priorityLabel}</span>
-              <select
-                value={priorityId}
-                onChange={(e) => setPriorityId(e.target.value)}
-                className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
-              >
-                {meta.priority.options.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-          {meta.severity && (
-            <div className="grid grid-cols-[130px_1fr] items-center gap-2">
-              <span className="text-xs text-zinc-500">{meta.severity.name}</span>
-              <select
-                value={severityId}
-                onChange={(e) => setSeverityId(e.target.value)}
-                className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
-              >
-                {severityId === '' && (
-                  <option value="" disabled>
-                    {t.detail.severityPlaceholder}
-                  </option>
-                )}
-                {meta.severity.options.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.value}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-          {meta.timeTrackingEditable && (
-            <div className="grid grid-cols-[130px_1fr] items-center gap-2">
-              <span className="text-xs text-zinc-500">{t.detail.originalEstimateLabel}</span>
-              <input
-                type="text"
-                placeholder={t.detail.originalEstimatePlaceholder}
-                value={originalEstimate}
-                onChange={(e) => setOriginalEstimate(e.target.value)}
-                className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
-              />
-            </div>
-          )}
-          <div className="flex items-center gap-2 pt-1">
-            <Button
-              disabled={!dirty || saveBusy}
-              title={!dirty ? t.detail.nothingChanged : undefined}
-              onClick={() => void handleSave()}
-            >
-              {saveBusy ? (
-                <Spinner />
-              ) : saved ? (
-                <CheckCircle2 size={14} className="text-green-400" />
-              ) : null}
-              {saveBusy ? t.detail.saving : t.detail.save}
-            </Button>
-          </div>
-          {saveError && <p className="text-sm text-amber-400">{saveError}</p>}
+      <div className="space-y-2">
+        <div className="grid grid-cols-[130px_1fr] items-center gap-2">
+          <span className="text-xs text-zinc-500">{t.detail.assigneeLabel}</span>
+          <select
+            value={assigneeId}
+            onChange={(e) => setAssigneeId(e.target.value)}
+            className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+          >
+            {assigneeOptions.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}
+              </option>
+            ))}
+          </select>
         </div>
-      )}
+        {meta.storyPointsEditable && (
+          <div className="grid grid-cols-[130px_1fr] items-center gap-2">
+            <span className="text-xs text-zinc-500">{t.detail.storyPointsLabel}</span>
+            <input
+              type="number"
+              min={0}
+              step={0.5}
+              value={storyPoints}
+              onChange={(e) => setStoryPoints(e.target.value)}
+              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+            />
+          </div>
+        )}
+        {meta.priority.editable && (
+          <div className="grid grid-cols-[130px_1fr] items-center gap-2">
+            <span className="text-xs text-zinc-500">{t.detail.priorityLabel}</span>
+            <select
+              value={priorityId}
+              onChange={(e) => setPriorityId(e.target.value)}
+              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+            >
+              {meta.priority.options.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        {meta.severity && (
+          <div className="grid grid-cols-[130px_1fr] items-center gap-2">
+            <span className="text-xs text-zinc-500">{meta.severity.name}</span>
+            <select
+              value={severityId}
+              onChange={(e) => setSeverityId(e.target.value)}
+              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+            >
+              {severityId === '' && (
+                <option value="" disabled>
+                  {t.detail.severityPlaceholder}
+                </option>
+              )}
+              {meta.severity.options.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.value}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        {meta.timeTrackingEditable && (
+          <div className="grid grid-cols-[130px_1fr] items-center gap-2">
+            <span className="text-xs text-zinc-500">{t.detail.originalEstimateLabel}</span>
+            <input
+              type="text"
+              placeholder={t.detail.originalEstimatePlaceholder}
+              value={originalEstimate}
+              onChange={(e) => setOriginalEstimate(e.target.value)}
+              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+            />
+          </div>
+        )}
+        <div className="flex items-center gap-2 pt-1">
+          <Button
+            disabled={!dirty || saveBusy}
+            title={!dirty ? t.detail.nothingChanged : undefined}
+            onClick={() => void handleSave()}
+          >
+            {saveBusy ? (
+              <Spinner />
+            ) : saved ? (
+              <CheckCircle2 size={14} className="text-green-400" />
+            ) : null}
+            {saveBusy ? t.detail.saving : t.detail.save}
+          </Button>
+        </div>
+        {saveError && <p className="text-sm text-amber-400">{saveError}</p>}
+      </div>
 
-      <div className={`space-y-2 ${hasEditableFields ? 'border-t border-zinc-800 pt-3' : ''}`}>
+      <div className="space-y-2 border-t border-zinc-800 pt-3">
         <p className="text-xs text-zinc-500">
           {t.detail.timeSpentRegistered(registered)}
           {meta.originalEstimate && ` · ${t.detail.timeSpentEstimated(meta.originalEstimate)}`}

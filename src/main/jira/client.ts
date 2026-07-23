@@ -17,6 +17,7 @@ import type {
   JiraEditMetaResponse,
   JiraFieldDef,
   JiraIssue,
+  JiraIssueLink,
   JiraMyself,
   JiraProject,
   JiraProjectSearchResponse,
@@ -258,6 +259,26 @@ export class JiraClient {
       toStatusName: t.to?.name ?? '',
       toCategoryKey: toCategoryKey(t.to?.statusCategory?.key)
     }))
+  }
+
+  /** Usuários atribuíveis à issue (filtra inativos, mapeia accountId/displayName). */
+  async assignableUsers(
+    issueKey: string
+  ): Promise<Array<{ accountId: string; displayName: string }>> {
+    const res = await this.http.get<
+      Array<{ accountId: string; displayName?: string; active?: boolean }>
+    >(`/rest/api/3/user/assignable/search?issueKey=${encodeURIComponent(issueKey)}&maxResults=50`)
+    return (res ?? [])
+      .filter((u) => u.active !== false)
+      .map((u) => ({ accountId: u.accountId, displayName: u.displayName ?? u.accountId }))
+  }
+
+  /** Links de issue crus (fields.issuelinks). */
+  async issueLinks(issueKey: string): Promise<JiraIssueLink[]> {
+    const res = await this.http.get<{ fields?: { issuelinks?: JiraIssueLink[] } }>(
+      `/rest/api/3/issue/${encodeURIComponent(issueKey)}?fields=issuelinks`
+    )
+    return res.fields?.issuelinks ?? []
   }
 
   /** Executa uma transição na issue. */

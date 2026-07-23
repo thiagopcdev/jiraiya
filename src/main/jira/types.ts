@@ -200,6 +200,22 @@ export interface JiraEditMetaResponse {
   >
 }
 
+/** Issue vinculada (lado inward/outward de um issuelink). */
+export interface JiraLinkedIssue {
+  key?: string
+  fields?: {
+    summary?: string
+    status?: { name?: string; statusCategory?: { key?: string } }
+  }
+}
+
+/** Um item de fields.issuelinks. */
+export interface JiraIssueLink {
+  type?: { name?: string; inward?: string; outward?: string }
+  outwardIssue?: JiraLinkedIssue
+  inwardIssue?: JiraLinkedIssue
+}
+
 /** GET /rest/api/3/issue/{key}/transitions */
 export interface JiraTransitionsResponse {
   transitions?: Array<{

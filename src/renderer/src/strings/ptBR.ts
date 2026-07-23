@@ -130,7 +130,7 @@ export const t = {
     createdTitle: (n: number, parentKey: string) =>
       `${n} card${n === 1 ? '' : 's'} criado${n === 1 ? '' : 's'} a partir de ${parentKey}`,
     commentFailedHint: 'Os cards foram criados, mas o comentário no card original falhou.',
-    openParentInJira: 'Abrir card original no Jira',
+    openParentInJira: 'Ver card original',
     splitAnother: 'Dividir outro'
   },
   board: {
@@ -187,7 +187,19 @@ export const t = {
     timeSpentPlaceholder: '1h 30m',
     timeSpentHint: 'Formato: 1w 2d 3h 30m',
     logWork: 'Registrar',
-    logging: 'Registrando…'
+    logging: 'Registrando…',
+    backLabel: 'Voltar',
+    moveTo: 'Mover para…',
+    moving: 'Movendo…',
+    moved: 'Movido!',
+    relatedTitle: 'Relacionados',
+    parentLabel: 'Pai',
+    subtasksTitle: (n: number) => `Subtarefas (${n})`,
+    linksTitle: 'Vinculados',
+    linksOffline: 'Sem conexão com o Jira para listar vínculos.',
+    assigneeLabel: 'Responsável',
+    unassigned: 'Sem responsável',
+    meSuffix: ' (eu)'
   },
   palette: {
     placeholder: 'Buscar card por key, título ou texto…',

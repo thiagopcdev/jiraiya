@@ -135,6 +135,19 @@ export function getIssueByKey(
   )
 }
 
+/** Subtarefas/filhos de um card (issues cujo parent_key aponta para ele). */
+export function listChildIssues(
+  db: Database.Database,
+  workspaceId: number,
+  parentKey: string,
+  siteUrl: string
+): Issue[] {
+  const rows = db
+    .prepare('SELECT * FROM issue WHERE workspace_id = ? AND parent_key = ? ORDER BY key')
+    .all(workspaceId, parentKey) as IssueRow[]
+  return rows.map((r) => rowToIssue(r, siteUrl))
+}
+
 /** Issues cujo changelog está desatualizado em relação ao updated do Jira. */
 export function issuesNeedingChangelog(
   db: Database.Database,
@@ -175,7 +188,12 @@ export function updateIssueFields(
   db: Database.Database,
   workspaceId: number,
   key: string,
-  patch: { storyPoints?: number | null; priority?: string }
+  patch: {
+    storyPoints?: number | null
+    priority?: string
+    assigneeAccountId?: string | null
+    assigneeName?: string | null
+  }
 ): void {
   const sets: string[] = []
   const values: Array<number | string | null> = []
@@ -186,6 +204,14 @@ export function updateIssueFields(
   if (patch.priority !== undefined) {
     sets.push('priority = ?')
     values.push(patch.priority)
+  }
+  if (patch.assigneeAccountId !== undefined) {
+    sets.push('assignee_account_id = ?')
+    values.push(patch.assigneeAccountId)
+  }
+  if (patch.assigneeName !== undefined) {
+    sets.push('assignee_name = ?')
+    values.push(patch.assigneeName)
   }
   if (sets.length === 0) return
   sets.push('updated_at = ?')

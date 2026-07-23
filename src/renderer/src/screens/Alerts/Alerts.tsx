@@ -1,12 +1,13 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { AlertOctagon, AlertTriangle, Info, X } from 'lucide-react'
+import { AlertOctagon, AlertTriangle, ExternalLink, Info, X } from 'lucide-react'
 import type { Alert, AlertSeverity } from '@shared/domain'
 import { invoke } from '../../api/client'
 import { useAlerts } from '../../api/hooks'
 import { EmptyState, Spinner } from '../../components/ui'
 import { t } from '../../strings/ptBR'
+import { useIssueDetail } from '../../components/issueDetail'
 
 const severityMeta: Record<AlertSeverity, { label: string; icon: typeof Info; color: string }> = {
   critical: { label: 'Críticos', icon: AlertOctagon, color: 'text-red-400' },
@@ -47,6 +48,7 @@ function AlertGroup({
   const meta = severityMeta[severity]
   const Icon = meta.icon
   const queryClient = useQueryClient()
+  const { openIssue } = useIssueDetail()
 
   const dismiss = async (id: number): Promise<void> => {
     await invoke('alerts:dismiss', { id })
@@ -69,10 +71,8 @@ function AlertGroup({
             <button
               className="min-w-0 flex-1 text-left"
               disabled={!alert.issueKey}
-              onClick={() =>
-                alert.issueKey && void invoke('shell:openIssue', { issueKey: alert.issueKey })
-              }
-              title={alert.issueKey ? `Abrir ${alert.issueKey} no Jira` : undefined}
+              onClick={() => alert.issueKey && openIssue(alert.issueKey)}
+              title={alert.issueKey ? `Abrir ${alert.issueKey}` : undefined}
             >
               <div className="truncate text-sm text-zinc-200">{alert.message}</div>
               <div className="text-xs text-zinc-500">
@@ -83,6 +83,17 @@ function AlertGroup({
                 })}
               </div>
             </button>
+            {alert.issueKey && (
+              <button
+                className="shrink-0 rounded p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+                onClick={() =>
+                  alert.issueKey && void invoke('shell:openIssue', { issueKey: alert.issueKey })
+                }
+                title={`Abrir ${alert.issueKey} no Jira`}
+              >
+                <ExternalLink size={14} />
+              </button>
+            )}
             <button
               className="shrink-0 rounded p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
               onClick={() => void dismiss(alert.id)}

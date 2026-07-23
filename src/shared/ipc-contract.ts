@@ -213,6 +213,44 @@ export const ipcContract = {
     }),
     res: undefined as unknown as { issues: Issue[] }
   },
+  'issues:transitions': {
+    req: z.object({ key: z.string().trim().min(1).max(64) }),
+    res: undefined as unknown as {
+      transitions: Array<{
+        id: string
+        name: string
+        toStatusName: string
+        toCategoryKey: StatusCategory
+      }>
+    }
+  },
+  'issues:transition': {
+    req: z.object({
+      key: z.string().trim().min(1).max(64),
+      transitionId: z.string().min(1)
+    }),
+    res: undefined as unknown as { newStatus: string; newStatusCategory: StatusCategory }
+  },
+  'issues:assignable': {
+    req: z.object({ key: z.string().trim().min(1).max(64) }),
+    res: undefined as unknown as { users: Array<{ accountId: string; displayName: string }> }
+  },
+  'issues:children': {
+    req: z.object({ key: z.string().trim().min(1).max(64) }),
+    res: undefined as unknown as { issues: Issue[] }
+  },
+  'issues:links': {
+    req: z.object({ key: z.string().trim().min(1).max(64) }),
+    res: undefined as unknown as {
+      links: Array<{
+        label: string
+        key: string
+        summary: string | null
+        status: string | null
+        statusCategory: StatusCategory | null
+      }>
+    }
+  },
   'issues:editMeta': {
     req: z.object({ key: z.string().trim().min(1).max(64) }),
     res: undefined as unknown as {
@@ -250,7 +288,11 @@ export const ipcContract = {
         .string()
         .trim()
         .regex(/^(\d+[wdhm])(\s+\d+[wdhm])*$/i, 'Formato: 1w 2d 3h 30m')
-        .optional()
+        .optional(),
+      /** null = remover responsável */
+      assigneeAccountId: z.string().min(1).nullable().optional(),
+      /** nome exibido, para atualizar o cache local sem novo fetch */
+      assigneeName: z.string().min(1).nullable().optional()
     }),
     res: undefined as unknown as { ok: true }
   },

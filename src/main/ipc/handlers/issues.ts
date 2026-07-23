@@ -6,7 +6,8 @@ import { getPrefs } from '../../db/repos/misc'
 import { queryTimeline, listIssueActivities } from '../../db/repos/activity'
 import { queryIssues, searchIssues } from '../../queries/issues'
 import { buildLeadTime } from '../../queries/leadTime'
-import { getIssueByKey, rowToIssue } from '../../db/repos/issue'
+import { getIssueByKey, listChildIssues, rowToIssue } from '../../db/repos/issue'
+import { mapIssueLinks } from '../../issues/links'
 import { resolvePeriod, type Period } from '@shared/periods'
 import type { SprintListItem } from '@shared/domain'
 
@@ -14,6 +15,12 @@ function requireWorkspace(ctx: AppContext): NonNullable<ReturnType<typeof getWor
   const workspace = getWorkspaceRow(ctx.db)
   if (!workspace) throw new AppError('NOT_CONNECTED', 'Nenhuma conta Jira conectada')
   return workspace
+}
+
+function requireClient(ctx: AppContext): NonNullable<ReturnType<typeof ctx.getClient>> {
+  const client = ctx.getClient()
+  if (!client) throw new AppError('NOT_CONNECTED', 'Nenhuma conta Jira conectada')
+  return client
 }
 
 export function resolveWithSprint(
@@ -51,6 +58,24 @@ export function registerIssueHandlers(ctx: AppContext): void {
     const workspace = requireWorkspace(ctx)
     const row = getIssueByKey(ctx.db, workspace.id, key.trim().toUpperCase())
     return { issue: row ? rowToIssue(row, workspace.site_url) : null }
+  })
+
+  handle('issues:children', ({ key }) => {
+    const workspace = requireWorkspace(ctx)
+    const issues = listChildIssues(
+      ctx.db,
+      workspace.id,
+      key.trim().toUpperCase(),
+      workspace.site_url
+    )
+    return { issues }
+  })
+
+  handle('issues:links', async ({ key }) => {
+    requireWorkspace(ctx)
+    const client = requireClient(ctx)
+    const links = mapIssueLinks(await client.issueLinks(key.trim().toUpperCase()))
+    return { links }
   })
 
   handle('sprint:active', () => {
