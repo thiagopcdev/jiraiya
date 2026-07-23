@@ -20,6 +20,13 @@ function requireClient(ctx: AppContext): NonNullable<ReturnType<typeof ctx.getCl
 }
 
 export function registerCommentHandlers(ctx: AppContext): void {
+  handle('issues:description', async ({ key }) => {
+    requireWorkspace(ctx)
+    const client = requireClient(ctx)
+    const description = (await client.issueDescription(key.trim().toUpperCase())) as unknown
+    return { description }
+  })
+
   handle('issues:comments', async ({ key }) => {
     requireWorkspace(ctx)
     const client = requireClient(ctx)

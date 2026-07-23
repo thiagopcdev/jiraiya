@@ -1,6 +1,7 @@
 import { JiraHttp } from './http'
 import type { BoardTransition } from '../queries/board'
 import type {
+  AdfNode,
   JiraAgilePage,
   JiraAgileSprint,
   JiraBoard,
@@ -120,6 +121,14 @@ export class JiraClient {
       startAt += res.maxResults
       if (startAt >= res.total) return all
     }
+  }
+
+  /** Descrição da issue como ADF cru (null se vazia). */
+  async issueDescription(issueKey: string): Promise<AdfNode | null> {
+    const res = await this.http.get<{ fields?: { description?: AdfNode | null } }>(
+      `/rest/api/3/issue/${encodeURIComponent(issueKey)}?fields=description`
+    )
+    return res.fields?.description ?? null
   }
 
   async issueComments(issueKey: string): Promise<JiraComment[]> {

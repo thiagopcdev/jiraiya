@@ -95,6 +95,14 @@ function IssueDetailDrawer({
   })
   const localComments = activities.filter((a) => a.kind === 'comment' && a.bodyText)
 
+  // descrição ao vivo (ADF formatado); erro/carregando → fallback pro texto local
+  const { data: liveDescription } = useQuery({
+    queryKey: ['issue-description', issueKey],
+    queryFn: () => invoke('issues:description', { key: issueKey }),
+    staleTime: 30_000,
+    retry: 0
+  })
+
   const { data: claudeInfo } = useQuery({
     queryKey: ['claude-status'],
     queryFn: () => invoke('claude:status', {})
@@ -228,13 +236,19 @@ function IssueDetailDrawer({
                 </div>
               </div>
 
-              {issue.descriptionText && (
+              {liveDescription?.description ? (
+                <AdfDescription
+                  doc={liveDescription.description}
+                  expanded={descExpanded}
+                  onExpand={() => setDescExpanded(true)}
+                />
+              ) : issue.descriptionText ? (
                 <DescriptionBlock
                   text={issue.descriptionText}
                   expanded={descExpanded}
                   onExpand={() => setDescExpanded(true)}
                 />
-              )}
+              ) : null}
 
               {statusSegments.length > 0 && (
                 <section>
@@ -398,6 +412,36 @@ function IssueDetailDrawer({
         </div>
       </div>
     </div>
+  )
+}
+
+/** Descrição em ADF formatado; colapsa (com fade) apenas quando o conteúdo é longo. */
+function AdfDescription({
+  doc,
+  expanded,
+  onExpand
+}: {
+  doc: unknown
+  expanded: boolean
+  onExpand: () => void
+}): React.JSX.Element {
+  // heurística barata de "descrição longa" sem medir o DOM
+  const isLong = JSON.stringify(doc).length > 2500
+  const collapsed = isLong && !expanded
+  return (
+    <section>
+      <div className={collapsed ? 'relative max-h-96 overflow-hidden' : undefined}>
+        <AdfView doc={doc} />
+        {collapsed && (
+          <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-zinc-950 to-transparent" />
+        )}
+      </div>
+      {collapsed && (
+        <button className="mt-1 text-xs text-indigo-400 hover:underline" onClick={onExpand}>
+          {t.detail.showAll}
+        </button>
+      )}
+    </section>
   )
 }
 
