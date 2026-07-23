@@ -24,9 +24,11 @@ function sprintLabel(sprint: VelocitySprint, prefix: string): string {
 }
 
 /**
- * Entregas por sprint (velocity) em SVG leve, no estilo do BurndownChart:
- * barras = pontos do time, linha+marcadores = pontos do usuário, mesma
- * escala Y (baseada no maior teamPoints entre as sprints exibidas).
+ * Entregas por sprint (velocity): barra EMPILHADA por sprint — sua fatia
+ * (índigo, na base) + o restante do time (neutro) somam o total da sprint.
+ * Uma escala só (SP), total rotulado no topo de cada barra, sua fatia
+ * rotulada quando cabe. Paleta validada p/ CVD/contraste no tema escuro
+ * (#818cf8 você · #71717a resto neutro), gap de 2px entre segmentos.
  */
 export function VelocityChart({
   velocity
@@ -37,10 +39,10 @@ export function VelocityChart({
   if (sprints.length === 0) return null
 
   const W = 600
-  const H = 160
+  const H = 170
   const padL = 28
   const padR = 12
-  const padT = 22
+  const padT = 24
   const padB = 24
   const plotW = W - padL - padR
   const plotH = H - padT - padB
@@ -55,75 +57,84 @@ export function VelocityChart({
   const names = sprints.map((s) => s.name).filter((name): name is string => !!name)
   const prefix = commonPrefix(names)
 
-  const barW = slotW * 0.6
-
-  const linePoints = sprints
-    .map((s, i) => `${cx(i).toFixed(1)},${y(s.myPoints).toFixed(1)}`)
-    .join(' ')
+  const barW = Math.min(44, slotW * 0.6)
 
   return (
     <div>
       <div className="mb-1 flex items-center gap-3 text-xs text-zinc-500">
         <span className="inline-flex items-center gap-1">
-          <span className="inline-block size-2 rounded-sm bg-zinc-600" /> Time
+          <span className="inline-block size-2 rounded-sm bg-indigo-400" /> Você
         </span>
         <span className="inline-flex items-center gap-1">
-          <span className="inline-block h-0.5 w-3 rounded bg-indigo-400" /> Você
+          <span className="inline-block size-2 rounded-sm bg-zinc-500" /> Restante do time
         </span>
       </div>
       <svg
         viewBox={`0 0 ${W} ${H}`}
         className="w-full"
         role="img"
-        aria-label="Entregas por sprint: pontos do time e pontos concluídos por você"
+        aria-label="Entregas por sprint: sua fatia e o total do time em story points"
       >
         <line x1={padL} y1={y(0)} x2={W - padR} y2={y(0)} stroke="#3f3f46" strokeWidth="1" />
-        <line x1={padL} y1={padT} x2={padL} y2={y(0)} stroke="#3f3f46" strokeWidth="1" />
-
-        <text x={padL - 6} y={padT + 4} fontSize="10" fill="#71717a" textAnchor="end">
-          {maxTeam}
-        </text>
-        <text x={padL - 6} y={y(0) + 4} fontSize="10" fill="#71717a" textAnchor="end">
-          0
-        </text>
 
         {sprints.map((s, i) => {
           const x0 = cx(i) - barW / 2
-          const barTop = y(s.teamPoints)
-          const barH = y(0) - barTop
           const isActive = s.state === 'active'
-          const title = `${s.name ?? sprintLabel(s, prefix)}\nTime: ${s.teamPoints} SP · ${s.teamCount} cards\nVocê: ${s.myPoints} SP · ${s.myCount} cards`
+          const total = s.teamPoints
+          const mine = Math.min(s.myPoints, total)
+          const rest = total - mine
+
+          const totalTop = y(total)
+          const mineTop = y(mine)
+          const mineH = Math.max(0, y(0) - mineTop)
+          // resto neutro em cima da sua fatia, com gap de 2px entre segmentos
+          const restH = Math.max(0, mineTop - totalTop - (mine > 0 && rest > 0 ? 2 : 0))
+
+          // rótulo da sua fatia só quando o segmento é alto o bastante
+          const mineLabelFits = mine > 0 && mineH >= 14
+
+          const title = `${s.name ?? sprintLabel(s, prefix)}${isActive ? ' (ativa)' : ''}\nVocê: ${s.myPoints} SP · ${s.myCount} cards\nTime: ${s.teamPoints} SP · ${s.teamCount} cards`
           return (
             <g key={s.sprintJiraId}>
               <title>{title}</title>
-              <rect
-                x={x0}
-                y={barTop}
-                width={barW}
-                height={Math.max(0, barH)}
-                fill={isActive ? '#6366f1' : '#52525b'}
-              />
+              {rest > 0 && (
+                <rect x={x0} y={totalTop} width={barW} height={restH} rx="4" fill="#71717a" />
+              )}
+              {mine > 0 && <rect x={x0} y={mineTop} width={barW} height={mineH} fill="#818cf8" />}
+              {total > 0 && (
+                <text x={cx(i)} y={totalTop - 5} fontSize="10" fill="#a1a1aa" textAnchor="middle">
+                  {total}
+                </text>
+              )}
+              {mineLabelFits && (
+                <text
+                  x={cx(i)}
+                  y={mineTop + mineH / 2 + 3.5}
+                  fontSize="9"
+                  fill="#1e1b4b"
+                  fontWeight="600"
+                  textAnchor="middle"
+                >
+                  {s.myPoints}
+                </text>
+              )}
               <text
                 x={cx(i)}
                 y={H - 6}
                 fontSize="10"
-                fill={isActive ? '#a5b4fc' : '#71717a'}
+                fill={isActive ? '#e4e4e7' : '#71717a'}
                 textAnchor="middle"
               >
                 {sprintLabel(s, prefix)}
+                {isActive ? ' •' : ''}
               </text>
             </g>
           )
         })}
-
-        <polyline points={linePoints} fill="none" stroke="#818cf8" strokeWidth="1.5" />
-        {sprints.map((s, i) => (
-          <g key={`marker-${s.sprintJiraId}`}>
-            <title>{`${s.name ?? sprintLabel(s, prefix)}\nVocê: ${s.myPoints} SP · ${s.myCount} cards`}</title>
-            <circle cx={cx(i)} cy={y(s.myPoints)} r="3" fill="#818cf8" />
-          </g>
-        ))}
       </svg>
+      <p className="mt-1 text-xs text-zinc-600">
+        Cada barra é o total da sprint; a base índigo é a sua parte. • = sprint ativa.
+      </p>
     </div>
   )
 }
