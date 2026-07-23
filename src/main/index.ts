@@ -21,15 +21,35 @@ import { registerCommentHandlers } from './ipc/handlers/comments'
 import { registerBoardHandlers } from './ipc/handlers/board'
 import { registerEditHandlers } from './ipc/handlers/edit'
 import { registerAttachmentHandlers } from './ipc/handlers/attachments'
+import { registerAskHandlers } from './ipc/handlers/ask'
+import { registerFilterHandlers } from './ipc/handlers/filters'
+import { registerRiskHandlers } from './ipc/handlers/risk'
+import { registerUpdateHandlers } from './ipc/handlers/update'
 import { clearTempDir } from './attachments/store'
 import { runAlertEngine } from './alerts/engine'
 import { getWorkspaceRow } from './db/repos/workspace'
 import { getPrefs, listActiveAlerts } from './db/repos/misc'
 import { seedMentionHistory, unreadCount } from './db/repos/mentions'
+import { runMorningBriefing } from './briefing'
+import { checkForUpdate } from './update'
+import { claudeStatus } from './summaries/claude'
+
+const UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000
 
 let ctx: AppContext
 // referência global: sem isso o GC destrói o Tray e o ícone some da barra
 let tray: Tray | null = null
+// referência global do timer de verificação de atualização (evita GC/duplicidade)
+let updateTimer: NodeJS.Timeout | null = null
+
+/** Dispara a geração do briefing matinal (idempotente pela data local). */
+function triggerMorningBriefing(db: Database.Database): void {
+  void runMorningBriefing(
+    db,
+    { push: (s) => ctx.push('push:briefing-ready', s) },
+    { claudeAvailable: claudeStatus().available, showWindow: () => showMainWindow() }
+  )
+}
 
 /** Mostra e foca a janela principal; recria se não existir. */
 function showMainWindow(): void {
@@ -199,6 +219,9 @@ app.whenReady().then(() => {
       }
 
       updateTray(db)
+
+      // gera a daily de ontem após o sync (idempotente pela data local)
+      triggerMorningBriefing(db)
     }
   })
 
@@ -217,6 +240,10 @@ app.whenReady().then(() => {
   registerBoardHandlers(ctx)
   registerEditHandlers(ctx)
   registerAttachmentHandlers(ctx)
+  registerAskHandlers(ctx)
+  registerFilterHandlers(ctx)
+  registerRiskHandlers(ctx)
+  registerUpdateHandlers(ctx)
 
   createWindow()
 
@@ -224,6 +251,28 @@ app.whenReady().then(() => {
   updateTray(db)
 
   ctx.scheduler.start()
+
+  // briefing matinal: deixa o primeiro sync andar antes de gerar a daily de ontem
+  setTimeout(() => triggerMorningBriefing(db), 15_000)
+
+  // verificação de atualização: no boot (se habilitada) e a cada 6h (checa a pref no disparo)
+  if (getPrefs(db).updateCheck) {
+    setTimeout(
+      () =>
+        void checkForUpdate(db, {
+          notify: true,
+          push: (v) => ctx.push('push:update-available', v)
+        }),
+      30_000
+    )
+  }
+  updateTimer = setInterval(() => {
+    if (!getPrefs(db).updateCheck) return
+    void checkForUpdate(db, {
+      notify: true,
+      push: (v) => ctx.push('push:update-available', v)
+    })
+  }, UPDATE_INTERVAL_MS)
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -238,5 +287,9 @@ app.on('window-all-closed', () => {
 
 // limpa os anexos gravados em disco ao encerrar o app
 app.on('will-quit', () => {
+  if (updateTimer) {
+    clearInterval(updateTimer)
+    updateTimer = null
+  }
   clearTempDir()
 })

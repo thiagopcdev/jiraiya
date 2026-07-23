@@ -162,9 +162,83 @@ export const ipcContract = {
       modelTeam: claudeModelSchema,
       modelDraft: claudeModelSchema,
       modelSplit: claudeModelSchema,
-      modelComment: claudeModelSchema
+      modelComment: claudeModelSchema,
+      modelAsk: claudeModelSchema,
+      morningBriefing: z.boolean().optional(),
+      updateCheck: z.boolean().optional()
     }),
     res: undefined as unknown as Prefs
+  },
+  'ask:question': {
+    req: z.object({
+      question: z.string().trim().min(1).max(2000),
+      /** trocas anteriores para follow-ups (mais antiga primeiro) */
+      history: z
+        .array(
+          z.object({
+            role: z.enum(['user', 'assistant']),
+            content: z.string().max(8000)
+          })
+        )
+        .max(12)
+        .optional()
+    }),
+    res: undefined as unknown as { answer: string; generatedBy: 'claude' }
+  },
+  'filters:list': {
+    req: z.object({}),
+    res: undefined as unknown as {
+      filters: Array<{ id: number; name: string; jql: string; position: number }>
+    }
+  },
+  'filters:save': {
+    req: z.object({
+      id: z.number().int().optional(),
+      name: z.string().trim().min(1).max(80),
+      jql: z.string().trim().min(1).max(2000)
+    }),
+    res: undefined as unknown as { id: number }
+  },
+  'filters:delete': {
+    req: z.object({ id: z.number().int() }),
+    res: undefined as unknown as { ok: true }
+  },
+  'filters:run': {
+    req: z.object({
+      jql: z.string().trim().min(1).max(2000),
+      limit: z.number().int().min(1).max(100).optional()
+    }),
+    res: undefined as unknown as { issues: Issue[]; truncated: boolean }
+  },
+  'sprint:risk': {
+    req: z.object({}),
+    res: undefined as unknown as {
+      sprint: { jiraId: number; name: string } | null
+      items: Array<{ issue: Issue; signals: string[]; score: number }>
+    }
+  },
+  'sprint:riskExplain': {
+    req: z.object({}),
+    res: undefined as unknown as { markdown: string; generatedBy: 'claude' }
+  },
+  'update:check': {
+    req: z.object({ force: z.boolean().optional() }),
+    res: undefined as unknown as {
+      current: string
+      latest: string | null
+      url: string | null
+      available: boolean
+      tokenConfigured: boolean
+      error: string | null
+    }
+  },
+  'update:setToken': {
+    req: z.object({ token: z.string().trim().min(1).nullable() }),
+    res: undefined as unknown as { ok: true }
+  },
+  'briefing:today': {
+    req: z.object({}),
+    res: undefined as unknown as { summaryId: number | null }
   },
   'shell:openIssue': {
     req: z.object({ issueKey: z.string() }),
@@ -519,6 +593,8 @@ export interface PushEvents {
   'push:alerts-updated': { count: number }
   'push:mentions-updated': { unreadCount: number }
   'push:auth-invalid': Record<string, never>
+  'push:update-available': { version: string; url: string }
+  'push:briefing-ready': { summaryId: number }
 }
 export type PushChannel = keyof PushEvents
 
@@ -527,7 +603,9 @@ export const PUSH_CHANNELS: PushChannel[] = [
   'push:sync-complete',
   'push:alerts-updated',
   'push:mentions-updated',
-  'push:auth-invalid'
+  'push:auth-invalid',
+  'push:update-available',
+  'push:briefing-ready'
 ]
 
 /** Superfície exposta no preload como window.api */

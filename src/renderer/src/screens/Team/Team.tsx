@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, ExternalLink, Info, Sparkles } from 'lucide-react'
 import type { Period } from '@shared/periods'
 import type { Issue, TeamMemberSummary } from '@shared/domain'
@@ -28,6 +29,7 @@ export default function Team(): React.JSX.Element {
 
   const [narrative, setNarrative] = useState<string | null>(null)
   const [narrativeBusy, setNarrativeBusy] = useState(false)
+  const [standup, setStandup] = useState(false)
 
   const generateNarrative = async (): Promise<void> => {
     setNarrativeBusy(true)
@@ -71,6 +73,17 @@ export default function Team(): React.JSX.Element {
             </button>
           ))}
         </div>
+        <button
+          className={`rounded-md border px-2.5 py-1 text-sm font-medium transition-colors ${
+            standup
+              ? 'border-indigo-600 bg-indigo-950/60 text-indigo-200'
+              : 'border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'
+          }`}
+          onClick={() => setStandup((s) => !s)}
+          title="Visão compacta pra acompanhar a daily (dados de ontem)"
+        >
+          Standup
+        </button>
       </div>
 
       {data?.syncMode === 'personal' && (
@@ -111,6 +124,8 @@ export default function Team(): React.JSX.Element {
         </Card>
       )}
 
+      <RiskRadar />
+
       {narrative && (
         <Card
           title={
@@ -124,17 +139,186 @@ export default function Team(): React.JSX.Element {
         </Card>
       )}
 
-      {isLoading && <Spinner className="text-zinc-500" />}
-      {!isLoading && members.length === 0 && (
-        <EmptyState message="Ninguém com atividade no período. Sincronize ou amplie o período." />
-      )}
+      {standup ? (
+        <StandupView />
+      ) : (
+        <>
+          {isLoading && <Spinner className="text-zinc-500" />}
+          {!isLoading && members.length === 0 && (
+            <EmptyState message="Ninguém com atividade no período. Sincronize ou amplie o período." />
+          )}
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        {members.map((m) => (
-          <MemberCard key={m.accountId} member={m} />
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            {members.map((m) => (
+              <MemberCard key={m.accountId} member={m} />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function RiskRadar(): React.JSX.Element | null {
+  const { data } = useQuery({
+    queryKey: ['sprint-risk'],
+    queryFn: () => invoke('sprint:risk', {})
+  })
+  const [explain, setExplain] = useState<string | null>(null)
+  const [explainBusy, setExplainBusy] = useState(false)
+  const { openIssue } = useIssueDetail()
+
+  const items = data?.items ?? []
+  if (!data?.sprint || items.length === 0) return null
+
+  const explainRisk = async (): Promise<void> => {
+    setExplainBusy(true)
+    try {
+      const res = await invoke('sprint:riskExplain', {})
+      setExplain(res.markdown)
+    } finally {
+      setExplainBusy(false)
+    }
+  }
+
+  return (
+    <Card
+      title={
+        <span className="flex items-center gap-2">
+          <AlertTriangle size={13} className="text-amber-400" /> Radar de risco
+          <span className="font-normal text-zinc-500">{data.sprint.name}</span>
+        </span>
+      }
+      className="mb-4"
+    >
+      <div className="space-y-1">
+        {items.map(({ issue, signals, score }) => (
+          <button
+            key={issue.key}
+            className={`group flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-zinc-800/70 ${
+              score >= 2 ? 'border-l-2 border-amber-500 pl-1.5' : ''
+            }`}
+            onClick={() => openIssue(issue.key)}
+            title={`Abrir ${issue.key}`}
+          >
+            <span className="shrink-0 font-mono text-xs text-zinc-500">{issue.key}</span>
+            <span className="min-w-0 flex-1 truncate text-sm text-zinc-300">{issue.summary}</span>
+            <div className="flex shrink-0 flex-wrap justify-end gap-1">
+              {signals.map((s) => (
+                <span
+                  key={s}
+                  className="rounded-full bg-amber-950/60 px-2 text-xs whitespace-nowrap text-amber-300"
+                >
+                  {s}
+                </span>
+              ))}
+            </div>
+          </button>
         ))}
       </div>
+
+      <div className="mt-3">
+        <Button variant="secondary" disabled={explainBusy} onClick={() => void explainRisk()}>
+          {explainBusy ? <Spinner /> : <Sparkles size={14} className="text-indigo-400" />}
+          {explainBusy ? 'Analisando…' : 'Explicar com Claude'}
+        </Button>
+      </div>
+
+      {explain && (
+        <pre className="mt-3 border-t border-zinc-800 pt-3 whitespace-pre-wrap font-sans text-sm text-zinc-300">
+          {explain}
+        </pre>
+      )}
+    </Card>
+  )
+}
+
+function StandupView(): React.JSX.Element {
+  const { data, isLoading } = useQuery({
+    queryKey: ['team-standup'],
+    queryFn: () => invoke('team:summary', { period: { type: 'yesterday' } })
+  })
+
+  const members = useMemo(() => {
+    const list = data?.members ?? []
+    return [...list].sort((a, b) => Number(b.isMe) - Number(a.isMe))
+  }, [data])
+
+  if (isLoading) return <Spinner className="text-zinc-500" />
+  if (members.length === 0) {
+    return <EmptyState message="Ninguém com atividade ontem." />
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      {members.map((m) => (
+        <StandupCard key={m.accountId} member={m} />
+      ))}
     </div>
+  )
+}
+
+function StandupCard({ member }: { member: TeamMemberSummary }): React.JSX.Element {
+  const shown = member.inProgress.slice(0, 3)
+  const extra = member.inProgress.length - shown.length
+
+  return (
+    <Card
+      title={
+        <span className="flex items-center gap-2">
+          <span className="flex size-6 items-center justify-center rounded-full bg-zinc-700 text-xs font-semibold text-zinc-200">
+            {initials(member.name)}
+          </span>
+          {member.name}
+          {member.isMe && <Badge color="indigo">você</Badge>}
+        </span>
+      }
+    >
+      <p className="mb-3 text-xs text-zinc-400">
+        Ontem: moveu {member.movedCount} · comentou {member.commentedCount}
+      </p>
+
+      {member.done.length > 0 && (
+        <div className="mb-2">
+          <div className="mb-1 text-xs font-semibold text-green-400">Concluiu</div>
+          <div className="space-y-0.5">
+            {member.done.map((i) => (
+              <MiniIssue key={i.key} issueKey={i.key} summary={i.summary} trailing={null} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="mb-2">
+        <div className="mb-1 text-xs font-semibold text-zinc-400">Em andamento</div>
+        {shown.length === 0 ? (
+          <p className="text-xs text-zinc-600">Nada em andamento.</p>
+        ) : (
+          <div className="space-y-0.5">
+            {shown.map((i) => (
+              <MiniIssue key={i.key} issueKey={i.key} summary={i.summary} trailing={null} />
+            ))}
+            {extra > 0 && <p className="px-1.5 text-xs text-zinc-600">+{extra}</p>}
+          </div>
+        )}
+      </div>
+
+      {member.stalled.length > 0 && (
+        <div>
+          <div className="mb-1 text-xs font-semibold text-amber-400">Atenção</div>
+          <div className="space-y-0.5">
+            {member.stalled.map((i) => (
+              <MiniIssue
+                key={i.key}
+                issueKey={i.key}
+                summary={i.summary}
+                trailing={<span className="text-xs text-amber-500">{i.stalledDays}d</span>}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </Card>
   )
 }
 

@@ -5,7 +5,7 @@ import { CheckCircle2, ExternalLink, XCircle } from 'lucide-react'
 import type { Prefs } from '@shared/domain'
 import { invoke } from '../../api/client'
 import { useAuthStatus, usePrefs, useProjects } from '../../api/hooks'
-import { Button, Card, Spinner } from '../../components/ui'
+import { Button, Card, Input, Spinner } from '../../components/ui'
 
 export default function Settings(): React.JSX.Element {
   return (
@@ -15,6 +15,7 @@ export default function Settings(): React.JSX.Element {
       <ProjectsSection />
       <SyncSection />
       <ClaudeSection />
+      <UpdateSection />
       <StorageSection />
       <AboutSection />
     </div>
@@ -187,6 +188,15 @@ function SyncSection(): React.JSX.Element {
             onChange={(e) => void update({ notifyCriticalAlerts: e.target.checked })}
           />
         </label>
+        <label className="flex cursor-pointer items-center justify-between text-sm text-zinc-300">
+          Gerar minha daily no primeiro uso do dia (com notificação)
+          <input
+            type="checkbox"
+            className="accent-indigo-600"
+            checked={prefs.morningBriefing}
+            onChange={(e) => void update({ morningBriefing: e.target.checked })}
+          />
+        </label>
       </div>
     </Card>
   )
@@ -285,6 +295,12 @@ function ClaudeSection(): React.JSX.Element {
                 options={CLAUDE_MODEL_OPTIONS}
                 onChange={(v) => void update({ modelComment: v as Prefs['modelComment'] })}
               />
+              <SelectRow
+                label="Perguntar ao Jiraiya"
+                value={prefs.modelAsk}
+                options={CLAUDE_MODEL_OPTIONS}
+                onChange={(v) => void update({ modelAsk: v as Prefs['modelAsk'] })}
+              />
             </>
           )}
         </div>
@@ -299,6 +315,130 @@ function ClaudeSection(): React.JSX.Element {
           </p>
         </div>
       )}
+    </Card>
+  )
+}
+
+function UpdateSection(): React.JSX.Element {
+  const queryClient = useQueryClient()
+  const { data: prefs } = usePrefs()
+  const {
+    data,
+    refetch,
+    isFetching: checking
+  } = useQuery({
+    queryKey: ['update-check-settings'],
+    queryFn: () => invoke('update:check', {}),
+    enabled: false
+  })
+  const [token, setToken] = useState('')
+  const [tokenBusy, setTokenBusy] = useState(false)
+
+  const update = async (patch: Partial<Prefs>): Promise<void> => {
+    await invoke('prefs:set', patch)
+    void queryClient.invalidateQueries({ queryKey: ['prefs'] })
+  }
+
+  const saveToken = async (): Promise<void> => {
+    const trimmed = token.trim()
+    if (!trimmed) return
+    setTokenBusy(true)
+    try {
+      await invoke('update:setToken', { token: trimmed })
+      setToken('')
+      await refetch()
+    } finally {
+      setTokenBusy(false)
+    }
+  }
+
+  const removeToken = async (): Promise<void> => {
+    setTokenBusy(true)
+    try {
+      await invoke('update:setToken', { token: null })
+      await refetch()
+    } finally {
+      setTokenBusy(false)
+    }
+  }
+
+  if (!prefs) return <Card title="Atualizações">{<Spinner className="text-zinc-500" />}</Card>
+
+  return (
+    <Card title="Atualizações">
+      <div className="space-y-4">
+        <label className="flex cursor-pointer items-center justify-between text-sm text-zinc-300">
+          Verificar novas versões automaticamente
+          <input
+            type="checkbox"
+            className="accent-indigo-600"
+            checked={prefs.updateCheck}
+            onChange={(e) => void update({ updateCheck: e.target.checked })}
+          />
+        </label>
+
+        <div className="flex items-center justify-between gap-4 text-sm">
+          <div className="min-w-0 flex-1">
+            {checking && <Spinner className="text-zinc-500" />}
+            {!checking && !data && (
+              <span className="text-zinc-500">Ainda não verificado nesta sessão.</span>
+            )}
+            {!checking && data?.error && <span className="text-amber-400">{data.error}</span>}
+            {!checking && data && !data.error && data.available && data.latest && (
+              <span className="text-zinc-300">
+                v{data.latest} disponível
+                {data.url && (
+                  <a
+                    className="ml-2 inline-flex items-center gap-1 text-indigo-400 hover:underline"
+                    href={data.url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <ExternalLink size={12} /> ver
+                  </a>
+                )}
+              </span>
+            )}
+            {!checking && data && !data.error && !data.available && (
+              <span className="text-zinc-500">Você está na versão mais recente.</span>
+            )}
+          </div>
+          <Button variant="secondary" disabled={checking} onClick={() => void refetch()}>
+            {checking && <Spinner />}
+            Verificar agora
+          </Button>
+        </div>
+
+        <div className="space-y-2 border-t border-zinc-800 pt-3">
+          <div className="flex items-end gap-2">
+            <Input
+              label="Token do GitHub (opcional — necessário para repo privado)"
+              type="password"
+              className="flex-1"
+              placeholder={data?.tokenConfigured ? 'configurado' : ''}
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+            />
+            <Button
+              variant="secondary"
+              disabled={tokenBusy || !token.trim()}
+              onClick={() => void saveToken()}
+            >
+              {tokenBusy && <Spinner />}
+              Salvar
+            </Button>
+            {data?.tokenConfigured && (
+              <Button variant="danger" disabled={tokenBusy} onClick={() => void removeToken()}>
+                Remover
+              </Button>
+            )}
+          </div>
+          {data?.tokenConfigured && <p className="text-xs text-green-400">Token configurado.</p>}
+          <p className="text-xs text-zinc-500">
+            Guardado criptografado no Keychain, escopo mínimo: repo (read).
+          </p>
+        </div>
+      </div>
     </Card>
   )
 }

@@ -1,11 +1,14 @@
 export const t = {
   app: {
     name: 'Jiraiya',
-    paletteHint: '⌘K busca'
+    paletteHint: '⌘K busca',
+    updateAvailable: (version: string) => `v${version} disponível`
   },
   nav: {
     dashboard: 'Dashboard',
     board: 'Quadro',
+    ask: 'Perguntar',
+    filters: 'Filtros',
     create: 'Criar task',
     split: 'Dividir task',
     timeline: 'Timeline',
@@ -132,6 +135,46 @@ export const t = {
     commentFailedHint: 'Os cards foram criados, mas o comentário no card original falhou.',
     openParentInJira: 'Ver card original',
     splitAnother: 'Dividir outro'
+  },
+  ask: {
+    title: 'Perguntar ao Jiraiya',
+    hint: 'Responde com base nos seus dados locais (janela de backfill)',
+    placeholder: 'Pergunte algo sobre seus cards, sprint ou time…',
+    send: 'Enviar',
+    thinking: 'Pensando… (pode levar alguns minutos)',
+    clearConversation: 'Limpar conversa',
+    claudeUnavailableHint: 'Instale o Claude Code para perguntar ao Jiraiya',
+    suggestions: [
+      'O que travou a sprint essa semana?',
+      'Resume o feedback que recebi nos meus cards',
+      'Quais cards estão parados e por quê?'
+    ] as string[]
+  },
+  filters: {
+    title: 'Filtros',
+    savedTitle: 'Salvos',
+    newFilter: '+ Novo filtro',
+    noSavedFilters: 'Nenhum filtro salvo ainda.',
+    nameLabel: 'Nome',
+    namePlaceholder: 'Ex.: Bugs críticos abertos',
+    jqlLabel: 'JQL',
+    jqlPlaceholder: 'Ex.: project = BT AND status != Done ORDER BY priority DESC',
+    jqlExamplesHint:
+      'Exemplos: assignee = currentUser() AND resolution = Unresolved · project = BT AND priority = Highest ORDER BY updated DESC',
+    run: 'Executar',
+    running: 'Executando…',
+    save: 'Salvar',
+    saving: 'Salvando…',
+    editTitle: 'Editar filtro',
+    edit: 'Editar',
+    delete: 'Excluir',
+    deleteConfirm: 'Excluir?',
+    yes: 'Sim',
+    no: 'Não',
+    resultsCount: (n: number) => `${n} resultado${n === 1 ? '' : 's'}`,
+    truncatedHint: 'Mostrando os primeiros 50.',
+    empty: 'Nenhum resultado.',
+    runToSeeResults: 'Execute o JQL para ver os resultados.'
   },
   board: {
     title: 'Quadro',

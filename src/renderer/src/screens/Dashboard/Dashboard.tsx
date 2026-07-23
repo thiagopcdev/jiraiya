@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { differenceInCalendarDays } from 'date-fns'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, FileText, X } from 'lucide-react'
 import type { Period } from '@shared/periods'
 import type { Issue } from '@shared/domain'
 import { invoke } from '../../api/client'
@@ -54,6 +55,8 @@ export default function Dashboard(): React.JSX.Element {
         </div>
       </div>
 
+      <BriefingBanner />
+
       {tab.key === 'sprint' && <SprintHeader />}
 
       <RejectedBanner />
@@ -70,6 +73,46 @@ export default function Dashboard(): React.JSX.Element {
         ))}
         <LeadTimeCard />
       </div>
+    </div>
+  )
+}
+
+function BriefingBanner(): React.JSX.Element | null {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [dismissed, setDismissed] = useState(false)
+  const { data } = useQuery({
+    queryKey: ['briefing-today'],
+    queryFn: () => invoke('briefing:today', {}),
+    staleTime: 60_000
+  })
+
+  useEffect(() => {
+    const off = window.api.on('push:briefing-ready', () => {
+      void queryClient.invalidateQueries({ queryKey: ['briefing-today'] })
+    })
+    return off
+  }, [queryClient])
+
+  if (dismissed || data?.summaryId == null) return null
+
+  return (
+    <div className="mb-4 flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm text-zinc-300">
+      <FileText size={15} className="shrink-0 text-indigo-400" />
+      <span className="flex-1">Sua daily de hoje está pronta.</span>
+      <button
+        className="rounded-md px-2 py-1 text-sm font-medium text-indigo-400 hover:bg-zinc-800"
+        onClick={() => void navigate('/resumos')}
+      >
+        Ver
+      </button>
+      <button
+        className="shrink-0 rounded p-1 text-zinc-600 hover:bg-zinc-800 hover:text-zinc-300"
+        title="Dispensar"
+        onClick={() => setDismissed(true)}
+      >
+        <X size={14} />
+      </button>
     </div>
   )
 }

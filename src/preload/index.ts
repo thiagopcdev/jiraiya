@@ -13,7 +13,9 @@ const ALLOWED_PUSH: readonly string[] = [
   'push:sync-complete',
   'push:alerts-updated',
   'push:mentions-updated',
-  'push:auth-invalid'
+  'push:auth-invalid',
+  'push:update-available',
+  'push:briefing-ready'
 ]
 
 const api: RendererApi = {

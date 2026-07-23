@@ -1,16 +1,21 @@
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import {
   AlertTriangle,
   AtSign,
   Calendar,
   Columns3,
+  Filter,
   FileText,
   LayoutDashboard,
+  MessageCircleQuestion,
   RefreshCw,
   Settings,
   Split,
   SquarePen,
-  Users
+  Users,
+  X
 } from 'lucide-react'
 import { invoke } from '../api/client'
 import { useAlerts, useMentions, usePushInvalidation, useSyncStatus } from '../api/hooks'
@@ -21,6 +26,8 @@ import { t } from '../strings/ptBR'
 const navItems = [
   { to: '/', label: t.nav.dashboard, icon: LayoutDashboard },
   { to: '/quadro', label: t.nav.board, icon: Columns3 },
+  { to: '/perguntar', label: t.nav.ask, icon: MessageCircleQuestion },
+  { to: '/filtros', label: t.nav.filters, icon: Filter },
   { to: '/criar', label: t.nav.create, icon: SquarePen },
   { to: '/dividir', label: t.nav.split, icon: Split },
   { to: '/timeline', label: t.nav.timeline, icon: Calendar },
@@ -38,6 +45,30 @@ export default function Shell(): React.JSX.Element {
   const { data: mentionsData } = useMentions()
   const alertCount = alertsData?.alerts.length ?? 0
   const mentionsUnreadCount = mentionsData?.unreadCount ?? 0
+
+  // Push de update disponível (empurrado pelo main a qualquer momento).
+  const [pushUpdate, setPushUpdate] = useState<{ version: string; url: string } | null>(null)
+  const [updateDismissed, setUpdateDismissed] = useState(false)
+  useEffect(() => {
+    const off = window.api.on('push:update-available', (payload) => {
+      setPushUpdate(payload)
+      setUpdateDismissed(false)
+    })
+    return () => off()
+  }, [])
+
+  // Checagem periódica de update (independente do push), em cache por 6h.
+  const { data: updateCheck } = useQuery({
+    queryKey: ['update-check'],
+    queryFn: () => invoke('update:check', {}),
+    staleTime: 6 * 60 * 60 * 1000,
+    retry: 0
+  })
+  const checkedUpdate =
+    updateCheck?.available && updateCheck.latest && updateCheck.url
+      ? { version: updateCheck.latest, url: updateCheck.url }
+      : null
+  const update = pushUpdate ?? checkedUpdate
 
   return (
     <div className="flex h-full">
@@ -76,6 +107,25 @@ export default function Shell(): React.JSX.Element {
           ))}
         </nav>
         <div className="border-t border-zinc-800 p-3">
+          {update && !updateDismissed && (
+            <div className="mb-2 flex items-center gap-2 rounded-md bg-zinc-800/60 px-2 py-1.5">
+              <a
+                href={update.url}
+                target="_blank"
+                rel="noreferrer"
+                className="min-w-0 flex-1 truncate text-xs text-indigo-400 hover:underline"
+              >
+                {t.app.updateAvailable(update.version)}
+              </a>
+              <button
+                className="shrink-0 rounded p-0.5 text-zinc-500 hover:text-zinc-200"
+                aria-label={t.common.dismiss}
+                onClick={() => setUpdateDismissed(true)}
+              >
+                <X size={12} />
+              </button>
+            </div>
+          )}
           <button
             className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-zinc-300 hover:bg-zinc-800 disabled:cursor-default disabled:text-zinc-500"
             disabled={sync?.running}

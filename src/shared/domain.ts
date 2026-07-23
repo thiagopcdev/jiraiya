@@ -212,6 +212,11 @@ export interface Prefs {
   modelDraft: ClaudeModel
   modelSplit: ClaudeModel
   modelComment: ClaudeModel
+  modelAsk: ClaudeModel
+  /** gera a daily de ontem no primeiro boot do dia e notifica */
+  morningBriefing: boolean
+  /** verifica novas releases no GitHub (repo privado exige token) */
+  updateCheck: boolean
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -227,5 +232,9 @@ export const DEFAULT_PREFS: Prefs = {
   modelDraft: 'sonnet',
   // divisão é a tarefa mais pesada de raciocínio — vale o modelo mais forte
   modelSplit: 'opus',
-  modelComment: 'sonnet'
+  modelComment: 'sonnet',
+  // perguntas abertas sobre os dados pedem o modelo mais capaz
+  modelAsk: 'opus',
+  morningBriefing: true,
+  updateCheck: true
 }

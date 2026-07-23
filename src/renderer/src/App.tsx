@@ -8,6 +8,8 @@ import CommandPalette from './components/CommandPalette'
 import Onboarding from './screens/Onboarding/Onboarding'
 import Dashboard from './screens/Dashboard/Dashboard'
 import Board from './screens/Board/Board'
+import Ask from './screens/Ask/Ask'
+import Filters from './screens/Filters/Filters'
 import Create from './screens/Create/Create'
 import Split from './screens/Split/Split'
 import Timeline from './screens/Timeline/Timeline'
@@ -54,6 +56,8 @@ export default function App(): React.JSX.Element {
           >
             <Route path="/" element={<Dashboard />} />
             <Route path="/quadro" element={<Board />} />
+            <Route path="/perguntar" element={<Ask />} />
+            <Route path="/filtros" element={<Filters />} />
             <Route path="/criar" element={<Create />} />
             <Route path="/dividir" element={<Split />} />
             <Route path="/timeline" element={<Timeline />} />

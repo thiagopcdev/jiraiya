@@ -173,6 +173,17 @@ const migrations: string[] = [
     UNIQUE(workspace_id, source_id)
   );
   CREATE INDEX idx_mention_time ON mention(workspace_id, occurred_at);
+  `,
+  // 004: filtros JQL salvos
+  `
+  CREATE TABLE jql_filter (
+    id INTEGER PRIMARY KEY,
+    workspace_id INTEGER NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    jql TEXT NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+  );
   `
 ]
 
