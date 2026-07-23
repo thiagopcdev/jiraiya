@@ -62,6 +62,23 @@ export default function Board(): React.JSX.Element {
     []
   )
 
+  // limpa a guarda de drag no window: quando o drop move o card, o update
+  // otimista remove o elemento original do DOM e o dragend dele NUNCA dispara —
+  // sem isso, didDragRef ficava travado em true e bloqueava os cliques seguintes
+  useEffect(() => {
+    const clear = (): void => {
+      setTimeout(() => {
+        didDragRef.current = false
+      }, 0)
+    }
+    window.addEventListener('dragend', clear)
+    window.addEventListener('drop', clear)
+    return () => {
+      window.removeEventListener('dragend', clear)
+      window.removeEventListener('drop', clear)
+    }
+  }, [])
+
   const moveMutation = useMutation<IpcResponse<'board:move'>, unknown, MoveVars, MoveContext>({
     mutationFn: (vars) => invoke('board:move', vars),
     onMutate: async (vars) => {
