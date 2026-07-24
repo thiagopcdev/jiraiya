@@ -193,6 +193,10 @@ export function updateIssueFields(
     priority?: string
     assigneeAccountId?: string | null
     assigneeName?: string | null
+    summary?: string
+    descriptionText?: string | null
+    // null limpa a coluna sprint_jira_id (card movido para o backlog)
+    sprintJiraId?: number | null
   }
 ): void {
   const sets: string[] = []
@@ -212,6 +216,18 @@ export function updateIssueFields(
   if (patch.assigneeName !== undefined) {
     sets.push('assignee_name = ?')
     values.push(patch.assigneeName)
+  }
+  if (patch.summary !== undefined) {
+    sets.push('summary = ?')
+    values.push(patch.summary)
+  }
+  if (patch.descriptionText !== undefined) {
+    sets.push('description_text = ?')
+    values.push(patch.descriptionText)
+  }
+  if (patch.sprintJiraId !== undefined) {
+    sets.push('sprint_jira_id = ?')
+    values.push(patch.sprintJiraId)
   }
   if (sets.length === 0) return
   sets.push('updated_at = ?')

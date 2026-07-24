@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, ExternalLink, XCircle } from 'lucide-react'
 import type { Prefs } from '@shared/domain'
 import { invoke } from '../../api/client'
-import { useAuthStatus, usePrefs, useProjects } from '../../api/hooks'
+import { useAuthStatus, usePrefs, usePrStatus, useProjects } from '../../api/hooks'
 import { Button, Card, Input, Spinner } from '../../components/ui'
 
 export default function Settings(): React.JSX.Element {
@@ -14,6 +14,7 @@ export default function Settings(): React.JSX.Element {
       <AccountSection />
       <ProjectsSection />
       <SyncSection />
+      <PullRequestsSection />
       <ClaudeSection />
       <UpdateSection />
       <StorageSection />
@@ -197,6 +198,56 @@ function SyncSection(): React.JSX.Element {
             onChange={(e) => void update({ morningBriefing: e.target.checked })}
           />
         </label>
+      </div>
+    </Card>
+  )
+}
+
+function PullRequestsSection(): React.JSX.Element {
+  const queryClient = useQueryClient()
+  const { data: prefs } = usePrefs()
+  const { data: prStatus } = usePrStatus()
+
+  const update = async (patch: Partial<Prefs>): Promise<void> => {
+    await invoke('prefs:set', patch)
+    void queryClient.invalidateQueries({ queryKey: ['prefs'] })
+  }
+
+  if (!prefs)
+    return <Card title="Pull requests (GitHub)">{<Spinner className="text-zinc-500" />}</Card>
+
+  return (
+    <Card title="Pull requests (GitHub)">
+      <div className="space-y-4">
+        <label className="flex cursor-pointer items-center justify-between text-sm text-zinc-300">
+          <span>
+            Mostrar PRs relacionados ao card
+            <span className="mt-0.5 block text-xs text-zinc-500">
+              Usa o CLI gh instalado na máquina para buscar PRs que mencionam a key do card.
+              Opcional — requer gh instalado e autenticado.
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            className="ml-4 shrink-0 accent-indigo-600"
+            checked={prefs.prIntegration}
+            onChange={(e) => void update({ prIntegration: e.target.checked })}
+          />
+        </label>
+
+        {prStatus?.ghAvailable === false && (
+          <p className="rounded-md bg-amber-950/40 px-3 py-2 text-xs text-amber-400">
+            CLI gh não encontrado — a integração ficará inativa até instalar (brew install gh).
+          </p>
+        )}
+
+        <Input
+          label="Escopo da busca"
+          placeholder="org:biudtech"
+          hint="Qualificadores extras da busca no GitHub; vazio busca em todo o GitHub."
+          value={prefs.prSearchScope}
+          onChange={(e) => void update({ prSearchScope: e.target.value })}
+        />
       </div>
     </Card>
   )

@@ -11,7 +11,9 @@ import {
   ExternalLink,
   Flag,
   MessageSquare,
+  Pause,
   Pencil,
+  Play,
   Plus,
   Ruler,
   Sparkles,
@@ -23,13 +25,25 @@ import {
 import type { ActivityKind, CreateIssueType, Issue, IssueActivity } from '@shared/domain'
 import type { IpcRequest, IpcResponse } from '@shared/ipc-contract'
 import { invoke, IpcError } from '../api/client'
-import { useAuthStatus, useIssueActivity, useIssueTypes, useSprintList } from '../api/hooks'
+import {
+  useAuthStatus,
+  useIssueActivity,
+  useIssueSearch,
+  useIssueTypes,
+  useLinkTypes,
+  useMoveTargets,
+  usePrsForIssue,
+  usePrStatus,
+  useSprintList,
+  useWorklogs
+} from '../api/hooks'
 import { Badge, Button, EmptyState, Input, Spinner } from './ui'
 import { AdfView } from './AdfView'
 import { AttachmentsSection, useMediaResolver } from './attachments'
 import { statusColor } from './statusColor'
 import { IssueDetailContext, useIssueDetail } from './issueDetail'
 import { t } from '../strings/ptBR'
+import { formatJiraDuration, formatTimer, useIssueTimer } from '../lib/timer'
 
 const kindMeta: Record<ActivityKind, { icon: typeof Zap; label: string; color: string }> = {
   created: { icon: Plus, label: 'criou', color: 'text-zinc-400' },
@@ -210,6 +224,7 @@ function IssueDetailDrawer({
   const [moveBusy, setMoveBusy] = useState(false)
   const [moveError, setMoveError] = useState<string | null>(null)
   const [moveSuccess, setMoveSuccess] = useState(false)
+  const [timerError, setTimerError] = useState<string | null>(null)
 
   const invalidateAfterTransition = (): void => {
     void queryClient.invalidateQueries({ queryKey: ['issue', issueKey] })
@@ -259,9 +274,11 @@ function IssueDetailDrawer({
   const { data: issueTypesData } = useIssueTypes(issue?.projectKey ?? null, true)
   const subtaskType = issueTypesData?.issueTypes.find((it) => it.subtask) ?? null
   const [subtaskFormOpen, setSubtaskFormOpen] = useState(false)
+  const [linkFormOpen, setLinkFormOpen] = useState(false)
 
-  const showRelatedSection =
-    !!issue?.parentKey || children.length > 0 || links.length > 0 || linksError || !!subtaskType
+  // sempre visível: a seção "Vinculados" agora oferece "+ Vincular" mesmo sem
+  // nenhum vínculo/pai/subtarefa ainda existente
+  const showRelatedSection = true
 
   // resolve nós media do ADF (descrição e comentários) para thumbs de anexo já carregados
   const mediaResolver = useMediaResolver(issueKey)
@@ -366,6 +383,7 @@ function IssueDetailDrawer({
               )}
               {issue?.issueType && <Badge color="zinc">{issue.issueType}</Badge>}
             </div>
+            <TimerControl issueKey={issueKey} onError={setTimerError} />
             <button
               className="shrink-0 rounded-md p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
               onClick={() => void shareIssue()}
@@ -429,6 +447,11 @@ function IssueDetailDrawer({
             <p className="text-sm text-amber-400">{moveError}</p>
           </div>
         )}
+        {timerError && (
+          <div className="border-b border-zinc-800 bg-zinc-950 px-4 py-2">
+            <p className="text-sm text-amber-400">{timerError}</p>
+          </div>
+        )}
 
         {/* select-text: o app usa user-select none global; aqui o conteúdo é copiável */}
         <div className="min-h-0 flex-1 overflow-y-auto select-text">
@@ -449,7 +472,7 @@ function IssueDetailDrawer({
           ) : (
             <div className="space-y-5 p-4">
               <div>
-                <h2 className="text-lg font-semibold text-zinc-100">{issue.summary}</h2>
+                <EditableTitle issue={issue} issueKey={issueKey} />
                 <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
                   {issue.assigneeName && (
                     <span className="flex items-center gap-1">
@@ -493,20 +516,14 @@ function IssueDetailDrawer({
                 )}
               </section>
 
-              {liveDescription?.description ? (
-                <AdfDescription
-                  doc={liveDescription.description}
-                  mediaResolver={mediaResolver}
-                  expanded={descExpanded}
-                  onExpand={() => setDescExpanded(true)}
-                />
-              ) : issue.descriptionText ? (
-                <DescriptionBlock
-                  text={issue.descriptionText}
-                  expanded={descExpanded}
-                  onExpand={() => setDescExpanded(true)}
-                />
-              ) : null}
+              <DescriptionSection
+                issue={issue}
+                issueKey={issueKey}
+                liveDescription={liveDescription?.description ?? null}
+                mediaResolver={mediaResolver}
+                descExpanded={descExpanded}
+                onExpand={() => setDescExpanded(true)}
+              />
 
               {statusSegments.length > 0 && (
                 <section>
@@ -588,36 +605,56 @@ function IssueDetailDrawer({
                         )}
                       </div>
                     )}
-                    {(links.length > 0 || linksError) && (
-                      <div>
-                        <p className="mb-1 text-xs text-zinc-500">{t.detail.linksTitle}</p>
-                        {links.length > 0 ? (
-                          <div className="space-y-1">
-                            {links.map((link) => (
-                              <button
-                                key={`${link.label}-${link.key}`}
-                                className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left text-sm text-zinc-300 hover:bg-zinc-900"
-                                onClick={() => openIssue(link.key)}
-                              >
-                                <span className="min-w-0 flex-1 truncate">
-                                  {link.label}: {link.key} — {link.summary ?? ''}
-                                </span>
-                                {link.statusCategory && (
-                                  <Badge color={statusColor(link.statusCategory)}>
-                                    {link.status}
-                                  </Badge>
-                                )}
-                              </button>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-zinc-600">{t.detail.linksOffline}</p>
+                    <div>
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <p className="text-xs text-zinc-500">{t.detail.linksTitle}</p>
+                        {!linkFormOpen && (
+                          <button
+                            className="text-xs text-indigo-400 hover:underline"
+                            onClick={() => setLinkFormOpen(true)}
+                          >
+                            + Vincular
+                          </button>
                         )}
                       </div>
-                    )}
+                      {links.length > 0 ? (
+                        <div className="space-y-1">
+                          {links.map((link) => (
+                            <button
+                              key={`${link.label}-${link.key}`}
+                              className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left text-sm text-zinc-300 hover:bg-zinc-900"
+                              onClick={() => openIssue(link.key)}
+                            >
+                              <span className="min-w-0 flex-1 truncate">
+                                {link.label}: {link.key} — {link.summary ?? ''}
+                              </span>
+                              {link.statusCategory && (
+                                <Badge color={statusColor(link.statusCategory)}>
+                                  {link.status}
+                                </Badge>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      ) : linksError ? (
+                        <p className="text-xs text-zinc-600">{t.detail.linksOffline}</p>
+                      ) : (
+                        <p className="text-xs text-zinc-600">Nenhum vínculo ainda.</p>
+                      )}
+                      {linkFormOpen && (
+                        <div className="mt-2">
+                          <LinkCreateForm
+                            issueKey={issueKey}
+                            onClose={() => setLinkFormOpen(false)}
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </section>
               )}
+
+              <PullRequestsSection issueKey={issueKey} />
 
               <AttachmentsSection issueKey={issueKey} />
 
@@ -809,12 +846,16 @@ function EditPanel({
   const initialOriginalEstimate = meta.originalEstimate ?? ''
 
   const initialAssigneeId = issue.assigneeAccountId ?? UNASSIGNED_ASSIGNEE
+  const initialSprintTarget = issue.sprintJiraId != null ? String(issue.sprintJiraId) : ''
 
   const [storyPoints, setStoryPoints] = useState(initialStoryPoints)
   const [priorityId, setPriorityId] = useState(initialPriorityId)
   const [severityId, setSeverityId] = useState(initialSeverityId)
   const [originalEstimate, setOriginalEstimate] = useState(initialOriginalEstimate)
   const [assigneeId, setAssigneeId] = useState(initialAssigneeId)
+  const [sprintTarget, setSprintTarget] = useState(initialSprintTarget)
+
+  const { data: moveTargetsData } = useMoveTargets(true)
 
   const [saveBusy, setSaveBusy] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -825,6 +866,7 @@ function EditPanel({
   const [logBusy, setLogBusy] = useState(false)
   const [logError, setLogError] = useState<string | null>(null)
   const [logSaved, setLogSaved] = useState(false)
+  const [worklogsOpen, setWorklogsOpen] = useState(false)
 
   const storyPointsDirty = meta.storyPointsEditable && storyPoints !== initialStoryPoints
   const priorityDirty = meta.priority.editable && priorityId !== initialPriorityId
@@ -835,8 +877,14 @@ function EditPanel({
     originalEstimate.trim() !== '' &&
     originalEstimate !== initialOriginalEstimate
   const assigneeDirty = assigneeId !== initialAssigneeId
+  const sprintDirty = sprintTarget !== '' && sprintTarget !== initialSprintTarget
   const dirty =
-    storyPointsDirty || priorityDirty || severityDirty || originalEstimateDirty || assigneeDirty
+    storyPointsDirty ||
+    priorityDirty ||
+    severityDirty ||
+    originalEstimateDirty ||
+    assigneeDirty ||
+    sprintDirty
 
   const invalidateAfterSave = (): void => {
     void queryClient.invalidateQueries({ queryKey: ['issue', issueKey] })
@@ -876,6 +924,10 @@ function EditPanel({
         }
       }
       await invoke('issues:update', payload)
+      if (sprintDirty) {
+        const target = sprintTarget === 'backlog' ? 'backlog' : Number(sprintTarget)
+        await invoke('sprint:moveIssue', { key: issueKey, target })
+      }
       setSaved(true)
       invalidateAfterSave()
       setTimeout(() => setSaved(false), 3000)
@@ -920,6 +972,26 @@ function EditPanel({
             {assigneeOptions.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="grid grid-cols-[130px_1fr] items-center gap-2">
+          <span className="text-xs text-zinc-500">Sprint</span>
+          <select
+            value={sprintTarget}
+            onChange={(e) => setSprintTarget(e.target.value)}
+            className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+          >
+            {sprintTarget === '' && (
+              <option value="" disabled>
+                Mover para…
+              </option>
+            )}
+            <option value="backlog">Backlog</option>
+            {(moveTargetsData?.sprints ?? []).map((s) => (
+              <option key={s.jiraId} value={String(s.jiraId)}>
+                {(s.name ?? `Sprint ${s.jiraId}`) + (s.state === 'active' ? ' (ativa)' : '')}
               </option>
             ))}
           </select>
@@ -1031,6 +1103,15 @@ function EditPanel({
         </div>
         <p className="text-xs text-zinc-600">{t.detail.timeSpentHint}</p>
         {logError && <p className="text-sm text-amber-400">{logError}</p>}
+      </div>
+
+      <div className="border-t border-zinc-800 pt-2">
+        <WorklogsAccordion
+          issueKey={issueKey}
+          open={worklogsOpen}
+          onToggle={() => setWorklogsOpen((v) => !v)}
+          onTotalChanged={setRegistered}
+        />
       </div>
     </div>
   )
@@ -1258,8 +1339,111 @@ function CommentItem({
   )
 }
 
-/** Descrição em ADF formatado; colapsa (com fade) apenas quando o conteúdo é longo. */
-function AdfDescription({
+/**
+ * Seção "Descrição": cabeçalho fixo + botão "Editar" (leitura -> textarea
+ * markdown). Modo leitura delega pro ADF ao vivo (quando disponível) ou pro
+ * texto local (fallback offline); sem nenhum dos dois, oferece "Editar" para
+ * criar a descrição do zero.
+ */
+function DescriptionSection({
+  issue,
+  issueKey,
+  liveDescription,
+  mediaResolver,
+  descExpanded,
+  onExpand
+}: {
+  issue: Issue
+  issueKey: string
+  liveDescription: unknown | null
+  mediaResolver: ReturnType<typeof useMediaResolver>
+  descExpanded: boolean
+  onExpand: () => void
+}): React.JSX.Element {
+  const queryClient = useQueryClient()
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(issue.descriptionText ?? '')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const startEdit = (): void => {
+    setValue(issue.descriptionText ?? '')
+    setError(null)
+    setEditing(true)
+  }
+
+  const save = async (): Promise<void> => {
+    setBusy(true)
+    setError(null)
+    try {
+      await invoke('issues:updateText', { key: issueKey, descriptionMarkdown: value })
+      void queryClient.invalidateQueries({ queryKey: ['issue-description', issueKey] })
+      void queryClient.invalidateQueries({ queryKey: ['issue', issueKey] })
+      setEditing(false)
+    } catch (err) {
+      setError(err instanceof IpcError ? err.message : t.common.error)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (editing) {
+    return (
+      <section>
+        <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+          {t.detail.description}
+        </h3>
+        <p className="mb-1.5 text-xs text-zinc-600">
+          Editar substitui a formatação atual — o texto será salvo como markdown (títulos #, listas
+          -, **negrito**, `código`).
+        </p>
+        <textarea
+          className="min-h-40 w-full resize-y rounded-md border border-zinc-700 bg-zinc-900 p-2.5 font-mono text-xs text-zinc-100 outline-none focus:border-indigo-500"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          disabled={busy}
+        />
+        <div className="mt-2 flex items-center gap-2">
+          <Button disabled={busy} onClick={() => void save()}>
+            {busy ? <Spinner /> : null}
+            {busy ? t.detail.saving : t.detail.save}
+          </Button>
+          <Button variant="ghost" disabled={busy} onClick={() => setEditing(false)}>
+            {t.common.cancel}
+          </Button>
+        </div>
+        {error && <p className="mt-1 text-sm text-amber-400">{error}</p>}
+      </section>
+    )
+  }
+
+  return (
+    <section>
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <h3 className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+          {t.detail.description}
+        </h3>
+        <button className="text-xs text-indigo-400 hover:underline" onClick={startEdit}>
+          Editar
+        </button>
+      </div>
+      {liveDescription ? (
+        <AdfDescriptionBody
+          doc={liveDescription}
+          mediaResolver={mediaResolver}
+          expanded={descExpanded}
+          onExpand={onExpand}
+        />
+      ) : issue.descriptionText ? (
+        <DescriptionBody text={issue.descriptionText} expanded={descExpanded} onExpand={onExpand} />
+      ) : (
+        <p className="text-sm text-zinc-500">Sem descrição.</p>
+      )}
+    </section>
+  )
+}
+
+function AdfDescriptionBody({
   doc,
   mediaResolver,
   expanded,
@@ -1274,7 +1458,7 @@ function AdfDescription({
   const isLong = JSON.stringify(doc).length > 2500
   const collapsed = isLong && !expanded
   return (
-    <section>
+    <div>
       <div className={collapsed ? 'relative max-h-96 overflow-hidden' : undefined}>
         <AdfView doc={doc} mediaResolver={mediaResolver} />
         {collapsed && (
@@ -1286,11 +1470,11 @@ function AdfDescription({
           {t.detail.showAll}
         </button>
       )}
-    </section>
+    </div>
   )
 }
 
-function DescriptionBlock({
+function DescriptionBody({
   text,
   expanded,
   onExpand
@@ -1303,10 +1487,7 @@ function DescriptionBlock({
   const truncated = !expanded && lines.length > DESCRIPTION_LINE_LIMIT
   const shown = truncated ? lines.slice(0, DESCRIPTION_LINE_LIMIT).join('\n') : text
   return (
-    <section>
-      <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
-        {t.detail.description}
-      </h3>
+    <div>
       <p className="rounded-md bg-zinc-900/60 p-3 text-sm whitespace-pre-wrap text-zinc-300">
         {shown}
         {truncated && '…'}
@@ -1316,7 +1497,7 @@ function DescriptionBlock({
           {t.detail.showAll}
         </button>
       )}
-    </section>
+    </div>
   )
 }
 
@@ -1395,4 +1576,628 @@ function buildStatusSegments(issue: Issue, activities: IssueActivity[]): StatusS
 function formatDays(ms: number): string {
   const days = ms / 86_400_000
   return `${days.toFixed(1).replace('.', ',')}d`
+}
+
+/**
+ * Timer de trabalho do header. Parado sem tempo → só o Play; rodando → tempo +
+ * Pause; pausado com tempo → tempo + Play (retomar) + Registrar (loga no Jira
+ * e reseta) + X (descarta, com confirmação). Compacto para caber na primeira
+ * linha do header ao lado dos demais botões.
+ */
+function TimerControl({
+  issueKey,
+  onError
+}: {
+  issueKey: string
+  onError: (message: string | null) => void
+}): React.JSX.Element {
+  const queryClient = useQueryClient()
+  const timer = useIssueTimer(issueKey)
+  const [busy, setBusy] = useState(false)
+
+  const handleLog = async (): Promise<void> => {
+    setBusy(true)
+    onError(null)
+    try {
+      await invoke('issues:logWork', {
+        key: issueKey,
+        timeSpent: formatJiraDuration(timer.seconds),
+        comment: 'Registrado pelo timer do Jiraiya'
+      })
+      timer.reset()
+      void queryClient.invalidateQueries({ queryKey: ['issue-editmeta', issueKey] })
+      void queryClient.invalidateQueries({ queryKey: ['worklogs', issueKey] })
+    } catch (err) {
+      onError(err instanceof IpcError ? err.message : t.common.error)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleDiscard = (): void => {
+    if (!window.confirm('Descartar o tempo acumulado no timer?')) return
+    timer.reset()
+  }
+
+  if (!timer.hasTime) {
+    return (
+      <button
+        className="shrink-0 rounded-md p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+        onClick={timer.start}
+        title="Iniciar timer"
+        aria-label="Iniciar timer"
+      >
+        <Play size={15} />
+      </button>
+    )
+  }
+
+  if (timer.running) {
+    return (
+      <div className="flex shrink-0 items-center gap-1">
+        <span className="font-mono text-xs tabular-nums text-zinc-300">
+          {formatTimer(timer.seconds)}
+        </span>
+        <button
+          className="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+          onClick={timer.pause}
+          title="Pausar timer"
+          aria-label="Pausar timer"
+        >
+          <Pause size={15} />
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex shrink-0 items-center gap-0.5">
+      <span className="font-mono text-xs tabular-nums text-zinc-400">
+        {formatTimer(timer.seconds)}
+      </span>
+      <button
+        className="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+        onClick={timer.start}
+        title="Retomar timer"
+        aria-label="Retomar timer"
+      >
+        <Play size={15} />
+      </button>
+      <button
+        className="rounded-md p-1 text-xs font-medium text-indigo-400 hover:underline disabled:opacity-50"
+        disabled={busy}
+        onClick={() => void handleLog()}
+      >
+        {busy ? <Spinner /> : 'Registrar'}
+      </button>
+      <button
+        className="rounded-md p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+        onClick={handleDiscard}
+        title="Descartar tempo do timer"
+        aria-label="Descartar tempo do timer"
+      >
+        <X size={13} />
+      </button>
+    </div>
+  )
+}
+
+/**
+ * Título editável: lápis aparece só no hover; clique troca pelo input inline
+ * (Enter salva, Esc cancela, botões ✓/✗ fazem o mesmo). Invalida as mesmas
+ * queries que as demais edições do card.
+ */
+function EditableTitle({ issue, issueKey }: { issue: Issue; issueKey: string }): React.JSX.Element {
+  const queryClient = useQueryClient()
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(issue.summary)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const startEdit = (): void => {
+    setValue(issue.summary)
+    setError(null)
+    setEditing(true)
+  }
+
+  const cancel = (): void => {
+    setEditing(false)
+    setError(null)
+  }
+
+  const save = async (): Promise<void> => {
+    const trimmed = value.trim()
+    if (!trimmed || trimmed === issue.summary) {
+      setEditing(false)
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      await invoke('issues:updateText', { key: issueKey, summary: trimmed })
+      void queryClient.invalidateQueries({ queryKey: ['issue', issueKey] })
+      void queryClient.invalidateQueries({ queryKey: ['board'] })
+      void queryClient.invalidateQueries({ queryKey: ['issues'] })
+      void queryClient.invalidateQueries({ queryKey: ['issue-activity', issueKey] })
+      setEditing(false)
+    } catch (err) {
+      setError(err instanceof IpcError ? err.message : t.common.error)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center gap-1.5">
+          <input
+            autoFocus
+            className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-lg font-semibold text-zinc-100 outline-none focus:border-indigo-500"
+            value={value}
+            disabled={busy}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void save()
+              if (e.key === 'Escape') cancel()
+            }}
+          />
+          <button
+            className="shrink-0 rounded-md p-1 text-green-400 hover:bg-zinc-800 disabled:opacity-50"
+            disabled={busy || !value.trim()}
+            onClick={() => void save()}
+            aria-label="Salvar título"
+          >
+            {busy ? <Spinner /> : <CheckCircle2 size={16} />}
+          </button>
+          <button
+            className="shrink-0 rounded-md p-1 text-zinc-500 hover:bg-zinc-800 disabled:opacity-50"
+            disabled={busy}
+            onClick={cancel}
+            aria-label="Cancelar edição do título"
+          >
+            <X size={16} />
+          </button>
+        </div>
+        {error && <p className="text-sm text-amber-400">{error}</p>}
+      </div>
+    )
+  }
+
+  return (
+    <div className="group flex items-start gap-1.5">
+      <h2 className="text-lg font-semibold text-zinc-100">{issue.summary}</h2>
+      <button
+        className="mt-1 shrink-0 rounded p-0.5 text-zinc-600 opacity-0 hover:bg-zinc-800 hover:text-zinc-300 group-hover:opacity-100"
+        onClick={startEdit}
+        title="Editar título"
+        aria-label="Editar título"
+      >
+        <Pencil size={14} />
+      </button>
+    </div>
+  )
+}
+
+/**
+ * Accordion "Lançamentos": fechado por padrão, só busca `useWorklogs` ao
+ * abrir. `onTotalChanged` propaga o novo total pro "Registrado: X" do painel
+ * de edição depois de editar/apagar um lançamento.
+ */
+function WorklogsAccordion({
+  issueKey,
+  open,
+  onToggle,
+  onTotalChanged
+}: {
+  issueKey: string
+  open: boolean
+  onToggle: () => void
+  onTotalChanged: (total: string | null) => void
+}): React.JSX.Element {
+  const { data, isLoading } = useWorklogs(issueKey, open)
+  const total = data?.totalTimeSpent ?? null
+
+  return (
+    <div>
+      <button
+        className="flex w-full items-center gap-1 text-xs font-semibold tracking-wide text-zinc-500 uppercase hover:text-zinc-300"
+        onClick={onToggle}
+      >
+        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        Lançamentos
+        {total && <span className="normal-case text-zinc-600">({total})</span>}
+      </button>
+      {open && (
+        <div className="mt-2 space-y-1.5">
+          {isLoading ? (
+            <Spinner className="text-zinc-500" />
+          ) : !data || data.worklogs.length === 0 ? (
+            <p className="text-sm text-zinc-500">Nenhum lançamento ainda.</p>
+          ) : (
+            data.worklogs.map((w) => (
+              <WorklogItem
+                key={w.id}
+                worklog={w}
+                issueKey={issueKey}
+                onTotalChanged={onTotalChanged}
+              />
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function WorklogItem({
+  worklog,
+  issueKey,
+  onTotalChanged
+}: {
+  worklog: IpcResponse<'worklog:list'>['worklogs'][number]
+  issueKey: string
+  onTotalChanged: (total: string | null) => void
+}): React.JSX.Element {
+  const queryClient = useQueryClient()
+  const [mode, setMode] = useState<'view' | 'edit' | 'confirmDelete'>('view')
+  const [timeSpent, setTimeSpent] = useState(worklog.timeSpent)
+  const [commentValue, setCommentValue] = useState(worklog.comment ?? '')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (mode !== 'confirmDelete') return
+    const timer = setTimeout(() => setMode('view'), 5000)
+    return () => clearTimeout(timer)
+  }, [mode])
+
+  const invalidate = (): void => {
+    void queryClient.invalidateQueries({ queryKey: ['worklogs', issueKey] })
+    void queryClient.invalidateQueries({ queryKey: ['issue-editmeta', issueKey] })
+  }
+
+  const handleSave = async (): Promise<void> => {
+    if (!timeSpent.trim()) return
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await invoke('worklog:update', {
+        key: issueKey,
+        worklogId: worklog.id,
+        timeSpent: timeSpent.trim(),
+        comment: commentValue.trim() || undefined
+      })
+      onTotalChanged(res.totalTimeSpent)
+      invalidate()
+      setMode('view')
+    } catch (err) {
+      setError(err instanceof IpcError ? err.message : t.common.error)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleDelete = async (): Promise<void> => {
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await invoke('worklog:delete', { key: issueKey, worklogId: worklog.id })
+      onTotalChanged(res.totalTimeSpent)
+      invalidate()
+    } catch (err) {
+      setError(err instanceof IpcError ? err.message : t.common.error)
+      setMode('view')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="rounded-md border border-zinc-800 bg-zinc-900/60 p-2.5 text-sm">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="font-medium text-zinc-300">{worklog.authorName ?? 'Alguém'}</span>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="text-xs text-zinc-600">
+            {format(new Date(worklog.started), 'dd/MM/yyyy HH:mm')}
+          </span>
+          {worklog.isMine && mode === 'view' && (
+            <div className="flex items-center gap-1">
+              <button
+                className="rounded p-0.5 text-zinc-600 hover:text-zinc-300"
+                title="Editar lançamento"
+                aria-label="Editar lançamento"
+                onClick={() => {
+                  setTimeSpent(worklog.timeSpent)
+                  setCommentValue(worklog.comment ?? '')
+                  setMode('edit')
+                }}
+              >
+                <Pencil size={12} />
+              </button>
+              <button
+                className="rounded p-0.5 text-zinc-600 hover:text-zinc-300"
+                title="Apagar lançamento"
+                aria-label="Apagar lançamento"
+                onClick={() => setMode('confirmDelete')}
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+          )}
+          {worklog.isMine && mode === 'confirmDelete' && (
+            <div className="flex items-center gap-1.5 text-xs">
+              <span className="text-zinc-500">{t.detail.deleteConfirm}</span>
+              <button
+                className="font-medium text-red-400 hover:underline disabled:opacity-50"
+                disabled={busy}
+                onClick={() => void handleDelete()}
+              >
+                {busy ? <Spinner className="text-red-400" /> : t.detail.yes}
+              </button>
+              <button
+                className="text-zinc-500 hover:underline disabled:opacity-50"
+                disabled={busy}
+                onClick={() => setMode('view')}
+              >
+                {t.detail.no}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+      {mode === 'edit' ? (
+        <div className="mt-1.5 space-y-1.5">
+          <input
+            className="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+            placeholder="1h 30m"
+            value={timeSpent}
+            onChange={(e) => setTimeSpent(e.target.value)}
+          />
+          <input
+            className="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+            placeholder="Comentário (opcional)"
+            value={commentValue}
+            onChange={(e) => setCommentValue(e.target.value)}
+          />
+          <div className="flex items-center gap-2">
+            <Button disabled={busy || !timeSpent.trim()} onClick={() => void handleSave()}>
+              {busy ? <Spinner /> : null}
+              {busy ? t.detail.saving : t.common.save}
+            </Button>
+            <Button variant="ghost" disabled={busy} onClick={() => setMode('view')}>
+              {t.common.cancel}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <p className="mt-1 text-zinc-300">{worklog.timeSpent}</p>
+          {worklog.comment && <p className="mt-0.5 text-xs text-zinc-500">{worklog.comment}</p>}
+        </>
+      )}
+      {error && <p className="mt-1 text-sm text-amber-400">{error}</p>}
+    </div>
+  )
+}
+
+/**
+ * Mini-form "+ Vincular": tipo+direção (cada tipo do Jira vira duas opções,
+ * outward/inward) + busca do card alvo (até 8 resultados) + botão Vincular.
+ */
+function LinkCreateForm({
+  issueKey,
+  onClose
+}: {
+  issueKey: string
+  onClose: () => void
+}): React.JSX.Element {
+  const queryClient = useQueryClient()
+  const { data: linkTypesData } = useLinkTypes(true)
+  const [typeValue, setTypeValue] = useState('')
+  const [search, setSearch] = useState('')
+  const [target, setTarget] = useState<{ key: string; summary: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const { data: searchData } = useIssueSearch(search)
+  const results = (searchData?.issues ?? []).filter((i) => i.key !== issueKey).slice(0, 8)
+
+  const typeOptions = (linkTypesData?.types ?? []).flatMap((type) => [
+    { value: `${type.name}|outward`, label: type.outward },
+    { value: `${type.name}|inward`, label: type.inward }
+  ])
+
+  const handleSubmit = async (): Promise<void> => {
+    if (!typeValue || !target) return
+    const separatorIndex = typeValue.lastIndexOf('|')
+    const typeName = typeValue.slice(0, separatorIndex)
+    const direction = typeValue.slice(separatorIndex + 1) as 'outward' | 'inward'
+    setBusy(true)
+    setError(null)
+    try {
+      await invoke('issues:linkCreate', {
+        fromKey: issueKey,
+        toKey: target.key,
+        typeName,
+        direction
+      })
+      void queryClient.invalidateQueries({ queryKey: ['issue-links', issueKey] })
+      onClose()
+    } catch (err) {
+      setError(err instanceof IpcError ? err.message : t.common.error)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="space-y-2 rounded-md border border-zinc-800 bg-zinc-900/60 p-2.5">
+      <select
+        value={typeValue}
+        onChange={(e) => setTypeValue(e.target.value)}
+        className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+      >
+        <option value="" disabled>
+          Tipo de vínculo
+        </option>
+        {typeOptions.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      {target ? (
+        <div className="flex items-center justify-between gap-2 rounded-md bg-zinc-950 px-2 py-1.5 text-sm">
+          <span className="min-w-0 flex-1 truncate text-zinc-300">
+            {target.key} — {target.summary}
+          </span>
+          <button
+            className="shrink-0 text-xs text-zinc-500 hover:text-zinc-300"
+            onClick={() => setTarget(null)}
+          >
+            trocar
+          </button>
+        </div>
+      ) : (
+        <div>
+          <Input
+            placeholder="Buscar card por key ou título…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {results.length > 0 && (
+            <div className="mt-1 space-y-0.5">
+              {results.map((r) => (
+                <button
+                  key={r.key}
+                  className="block w-full truncate rounded px-1.5 py-1 text-left text-xs text-zinc-300 hover:bg-zinc-800"
+                  onClick={() => {
+                    setTarget({ key: r.key, summary: r.summary })
+                    setSearch('')
+                  }}
+                >
+                  {r.key} — {r.summary}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      <div className="flex items-center gap-2">
+        <Button disabled={busy || !typeValue || !target} onClick={() => void handleSubmit()}>
+          {busy ? <Spinner /> : null}
+          {busy ? 'Vinculando…' : 'Vincular'}
+        </Button>
+        <Button variant="ghost" disabled={busy} onClick={onClose}>
+          {t.common.cancel}
+        </Button>
+      </div>
+      {error && <p className="text-sm text-amber-400">{error}</p>}
+    </div>
+  )
+}
+
+/** Badge com tons que o `Badge` de `./ui` não cobre (emerald/purple pros estados de PR). */
+function MiniBadge({
+  children,
+  tone
+}: {
+  children: ReactNode
+  tone: 'emerald' | 'purple' | 'zinc' | 'amber' | 'green' | 'red'
+}): React.JSX.Element {
+  const styles: Record<'emerald' | 'purple' | 'zinc' | 'amber' | 'green' | 'red', string> = {
+    emerald: 'bg-emerald-900/50 text-emerald-300',
+    purple: 'bg-purple-900/50 text-purple-300',
+    zinc: 'bg-zinc-800 text-zinc-300',
+    amber: 'bg-amber-900/50 text-amber-300',
+    green: 'bg-green-900/50 text-green-300',
+    red: 'bg-red-900/50 text-red-300'
+  }
+  return (
+    <span
+      className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap ${styles[tone]}`}
+    >
+      {children}
+    </span>
+  )
+}
+
+/**
+ * Seção "Pull requests" — opcional e silenciosa: some por completo se a
+ * integração estiver desligada, o `gh` não estiver disponível, ou não houver
+ * PRs para o card (não é erro, é estado normal pra maioria dos cards).
+ */
+function PullRequestsSection({ issueKey }: { issueKey: string }): React.JSX.Element | null {
+  const { data: prStatus } = usePrStatus()
+  const enabled = !!prStatus?.enabled && !!prStatus?.ghAvailable
+  const { data: prsData } = usePrsForIssue(issueKey, enabled)
+
+  if (!enabled || !prsData || prsData.available === false || prsData.prs.length === 0) {
+    return null
+  }
+
+  return (
+    <section>
+      <h3 className="mb-2 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+        Pull requests
+      </h3>
+      <div className="space-y-1.5">
+        {prsData.prs.map((pr) => (
+          <PullRequestRow key={`${pr.repo}#${pr.number}`} pr={pr} />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function PullRequestRow({
+  pr
+}: {
+  pr: IpcResponse<'prs:forIssue'>['prs'][number]
+}): React.JSX.Element {
+  const stateMeta =
+    pr.state === 'open'
+      ? { label: 'aberto', tone: 'emerald' as const }
+      : pr.state === 'merged'
+        ? { label: 'merged', tone: 'purple' as const }
+        : { label: 'fechado', tone: 'zinc' as const }
+
+  const reviewMeta =
+    pr.reviewDecision === 'APPROVED'
+      ? { label: 'aprovado', tone: 'green' as const }
+      : pr.reviewDecision === 'CHANGES_REQUESTED'
+        ? { label: 'mudanças', tone: 'amber' as const }
+        : pr.reviewDecision === 'REVIEW_REQUIRED'
+          ? { label: 'aguarda review', tone: 'zinc' as const }
+          : null
+
+  const checksMeta =
+    pr.checks === 'passing'
+      ? { label: '✓', tone: 'green' as const }
+      : pr.checks === 'failing'
+        ? { label: '✗', tone: 'red' as const }
+        : pr.checks === 'pending'
+          ? { label: '●', tone: 'amber' as const }
+          : null
+
+  return (
+    <button
+      className="flex w-full items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900/40 px-2.5 py-1.5 text-left text-sm hover:bg-zinc-900"
+      onClick={() => window.open(pr.url, '_blank')}
+    >
+      <span className="min-w-0 flex-1 truncate text-zinc-300">
+        <span className="text-zinc-500">
+          {pr.repo}#{pr.number}
+        </span>{' '}
+        {pr.title}
+      </span>
+      <div className="flex shrink-0 items-center gap-1">
+        <MiniBadge tone={stateMeta.tone}>{stateMeta.label}</MiniBadge>
+        {pr.isDraft && <MiniBadge tone="zinc">draft</MiniBadge>}
+        {reviewMeta && <MiniBadge tone={reviewMeta.tone}>{reviewMeta.label}</MiniBadge>}
+        {checksMeta && <MiniBadge tone={checksMeta.tone}>{checksMeta.label}</MiniBadge>}
+      </div>
+    </button>
+  )
 }

@@ -139,6 +139,74 @@ export function useLeadTime(days?: number): UseQueryResult<IpcResponse<'stats:le
   })
 }
 
+export function useWorklogs(
+  key: string | null,
+  enabled = true
+): UseQueryResult<IpcResponse<'worklog:list'>> {
+  return useQuery({
+    queryKey: ['worklogs', key],
+    queryFn: () => invoke('worklog:list', { key: key! }),
+    enabled: !!key && enabled
+  })
+}
+
+export function useMoveTargets(enabled = true): UseQueryResult<IpcResponse<'sprint:moveTargets'>> {
+  return useQuery({
+    queryKey: ['sprint-move-targets'],
+    queryFn: () => invoke('sprint:moveTargets', {}),
+    enabled,
+    staleTime: 60_000
+  })
+}
+
+export function useLinkTypes(enabled = true): UseQueryResult<IpcResponse<'issues:linkTypes'>> {
+  return useQuery({
+    queryKey: ['issue-link-types'],
+    queryFn: () => invoke('issues:linkTypes', {}),
+    enabled,
+    staleTime: 5 * 60_000
+  })
+}
+
+export function useEpics(): UseQueryResult<IpcResponse<'epics:overview'>> {
+  return useQuery({
+    queryKey: ['epics-overview'],
+    queryFn: () => invoke('epics:overview', {}),
+    staleTime: 30_000
+  })
+}
+
+export function useGlobalSearch(query: string): UseQueryResult<IpcResponse<'search:global'>> {
+  const trimmed = query.trim()
+  return useQuery({
+    queryKey: ['global-search', trimmed],
+    queryFn: () => invoke('search:global', { query: trimmed }),
+    enabled: trimmed.length >= 2,
+    staleTime: 15_000,
+    placeholderData: (prev) => prev
+  })
+}
+
+export function usePrStatus(): UseQueryResult<IpcResponse<'prs:status'>> {
+  return useQuery({
+    queryKey: ['prs-status'],
+    queryFn: () => invoke('prs:status', {}),
+    staleTime: 60_000
+  })
+}
+
+export function usePrsForIssue(
+  key: string | null,
+  enabled = true
+): UseQueryResult<IpcResponse<'prs:forIssue'>> {
+  return useQuery({
+    queryKey: ['prs-for-issue', key],
+    queryFn: () => invoke('prs:forIssue', { key: key! }),
+    enabled: !!key && enabled,
+    staleTime: 5 * 60_000
+  })
+}
+
 /** Assina os canais push uma única vez e invalida os caches relevantes. */
 export function usePushInvalidation(): void {
   const queryClient = useQueryClient()

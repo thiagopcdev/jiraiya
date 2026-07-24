@@ -8,6 +8,7 @@ import CommandPalette from './components/CommandPalette'
 import Onboarding from './screens/Onboarding/Onboarding'
 import Dashboard from './screens/Dashboard/Dashboard'
 import Board from './screens/Board/Board'
+import Epics from './screens/Epics/Epics'
 import Ask from './screens/Ask/Ask'
 import Filters from './screens/Filters/Filters'
 import Create from './screens/Create/Create'
@@ -56,6 +57,7 @@ export default function App(): React.JSX.Element {
           >
             <Route path="/" element={<Dashboard />} />
             <Route path="/quadro" element={<Board />} />
+            <Route path="/epicos" element={<Epics />} />
             <Route path="/perguntar" element={<Ask />} />
             <Route path="/filtros" element={<Filters />} />
             <Route path="/criar" element={<Create />} />

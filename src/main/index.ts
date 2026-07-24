@@ -25,6 +25,10 @@ import { registerAskHandlers } from './ipc/handlers/ask'
 import { registerFilterHandlers } from './ipc/handlers/filters'
 import { registerRiskHandlers } from './ipc/handlers/risk'
 import { registerUpdateHandlers } from './ipc/handlers/update'
+import { registerSprintMoveHandlers } from './ipc/handlers/sprintMove'
+import { registerSearchHandlers } from './ipc/handlers/search'
+import { registerEpicHandlers } from './ipc/handlers/epics'
+import { registerPrHandlers } from './ipc/handlers/prs'
 import { clearTempDir } from './attachments/store'
 import { runAlertEngine } from './alerts/engine'
 import { getWorkspaceRow } from './db/repos/workspace'
@@ -244,6 +248,10 @@ app.whenReady().then(() => {
   registerFilterHandlers(ctx)
   registerRiskHandlers(ctx)
   registerUpdateHandlers(ctx)
+  registerSprintMoveHandlers(ctx)
+  registerSearchHandlers(ctx)
+  registerEpicHandlers(ctx)
+  registerPrHandlers(ctx)
 
   createWindow()
 

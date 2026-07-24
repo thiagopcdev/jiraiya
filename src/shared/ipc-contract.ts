@@ -165,7 +165,9 @@ export const ipcContract = {
       modelComment: claudeModelSchema,
       modelAsk: claudeModelSchema,
       morningBriefing: z.boolean().optional(),
-      updateCheck: z.boolean().optional()
+      updateCheck: z.boolean().optional(),
+      prIntegration: z.boolean().optional(),
+      prSearchScope: z.string().trim().max(200).optional()
     }),
     res: undefined as unknown as Prefs
   },
@@ -566,6 +568,137 @@ export const ipcContract = {
       parentKey: z.string().trim().min(1).max(64).optional()
     }),
     res: undefined as unknown as { key: string }
+  },
+  'issues:updateText': {
+    req: z.object({
+      key: z.string().trim().min(1).max(64),
+      summary: z.string().trim().min(1).max(500).optional(),
+      /** markdown simples; convertido para ADF no main (markdownToAdf) */
+      descriptionMarkdown: z.string().max(50000).optional()
+    }),
+    res: undefined as unknown as { ok: true }
+  },
+  'sprint:moveTargets': {
+    req: z.object({}),
+    res: undefined as unknown as {
+      sprints: Array<{ jiraId: number; name: string | null; state: 'active' | 'future' }>
+    }
+  },
+  'sprint:moveIssue': {
+    req: z.object({
+      key: z.string().trim().min(1).max(64),
+      /** 'backlog' ou o jiraId da sprint de destino */
+      target: z.union([z.literal('backlog'), z.number().int()])
+    }),
+    res: undefined as unknown as { ok: true }
+  },
+  'worklog:list': {
+    req: z.object({ key: z.string().trim().min(1).max(64) }),
+    res: undefined as unknown as {
+      worklogs: Array<{
+        id: string
+        authorName: string | null
+        authorAccountId: string | null
+        /** autor == conta conectada (permite editar/apagar) */
+        isMine: boolean
+        started: string
+        timeSpent: string
+        timeSpentSeconds: number
+        comment: string | null
+      }>
+      totalTimeSpent: string | null
+    }
+  },
+  'worklog:update': {
+    req: z.object({
+      key: z.string().trim().min(1).max(64),
+      worklogId: z.string().min(1),
+      timeSpent: z
+        .string()
+        .trim()
+        .regex(/^(\d+[wdhm])(\s+\d+[wdhm])*$/i, 'Formato: 1w 2d 3h 30m'),
+      comment: z.string().max(2000).optional()
+    }),
+    res: undefined as unknown as { ok: true; totalTimeSpent: string | null }
+  },
+  'worklog:delete': {
+    req: z.object({
+      key: z.string().trim().min(1).max(64),
+      worklogId: z.string().min(1)
+    }),
+    res: undefined as unknown as { ok: true; totalTimeSpent: string | null }
+  },
+  'search:global': {
+    req: z.object({
+      query: z.string().trim().min(2).max(200),
+      limit: z.number().int().min(1).max(50).optional()
+    }),
+    res: undefined as unknown as {
+      results: Array<{
+        key: string
+        summary: string
+        status: string | null
+        statusCategory: StatusCategory | null
+        url: string
+        /** trecho com o termo destacado entre 「 e 」 (snippet do FTS) */
+        snippet: string | null
+        match: 'title' | 'description' | 'comment'
+      }>
+    }
+  },
+  'epics:overview': {
+    req: z.object({}),
+    res: undefined as unknown as {
+      epics: Array<{
+        key: string
+        summary: string
+        status: string | null
+        statusCategory: StatusCategory | null
+        url: string
+        total: number
+        done: number
+        spTotal: number
+        spDone: number
+      }>
+    }
+  },
+  'issues:linkTypes': {
+    req: z.object({}),
+    res: undefined as unknown as {
+      types: Array<{ id: string; name: string; inward: string; outward: string }>
+    }
+  },
+  'issues:linkCreate': {
+    req: z.object({
+      fromKey: z.string().trim().min(1).max(64),
+      toKey: z.string().trim().min(1).max(64),
+      typeName: z.string().min(1),
+      /** outward: fromKey é o lado outward (ex. 'blocks'); inward: fromKey é o lado inward (ex. 'is blocked by') */
+      direction: z.enum(['outward', 'inward'])
+    }),
+    res: undefined as unknown as { ok: true }
+  },
+  'prs:status': {
+    req: z.object({}),
+    res: undefined as unknown as { ghAvailable: boolean; enabled: boolean }
+  },
+  'prs:forIssue': {
+    req: z.object({ key: z.string().trim().min(1).max(64) }),
+    res: undefined as unknown as {
+      /** false quando a integração está desligada ou o gh não está disponível */
+      available: boolean
+      prs: Array<{
+        repo: string
+        number: number
+        title: string
+        url: string
+        state: 'open' | 'closed' | 'merged'
+        isDraft: boolean
+        reviewDecision: 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED' | null
+        checks: 'passing' | 'failing' | 'pending' | null
+        updatedAt: string
+      }>
+    }
   },
   'mentions:list': {
     req: z.object({}),

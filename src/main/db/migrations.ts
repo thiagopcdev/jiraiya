@@ -184,6 +184,41 @@ const migrations: string[] = [
     position INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
   );
+  `,
+  // 005: busca full-text (FTS5) em issues e comentários
+  // issue_fts.rowid = issue.id; comment_fts.rowid = issue_activity.id (só kind='comment').
+  // Sem external content: triggers fazem delete+insert por rowid para manter sincronia.
+  `
+  CREATE VIRTUAL TABLE issue_fts USING fts5(summary, description, tokenize='unicode61 remove_diacritics 2');
+  CREATE VIRTUAL TABLE comment_fts USING fts5(body, tokenize='unicode61 remove_diacritics 2');
+
+  INSERT INTO issue_fts(rowid, summary, description)
+    SELECT id, summary, COALESCE(description_text, '') FROM issue;
+
+  INSERT INTO comment_fts(rowid, body)
+    SELECT id, body_text FROM issue_activity WHERE kind = 'comment' AND body_text IS NOT NULL;
+
+  CREATE TRIGGER issue_fts_ai AFTER INSERT ON issue BEGIN
+    INSERT INTO issue_fts(rowid, summary, description) VALUES (new.id, new.summary, COALESCE(new.description_text, ''));
+  END;
+  CREATE TRIGGER issue_fts_au AFTER UPDATE OF summary, description_text ON issue BEGIN
+    DELETE FROM issue_fts WHERE rowid = old.id;
+    INSERT INTO issue_fts(rowid, summary, description) VALUES (new.id, new.summary, COALESCE(new.description_text, ''));
+  END;
+  CREATE TRIGGER issue_fts_ad AFTER DELETE ON issue BEGIN
+    DELETE FROM issue_fts WHERE rowid = old.id;
+  END;
+
+  CREATE TRIGGER comment_fts_ai AFTER INSERT ON issue_activity WHEN new.kind = 'comment' BEGIN
+    INSERT INTO comment_fts(rowid, body) VALUES (new.id, COALESCE(new.body_text, ''));
+  END;
+  CREATE TRIGGER comment_fts_au AFTER UPDATE OF body_text ON issue_activity WHEN new.kind = 'comment' BEGIN
+    DELETE FROM comment_fts WHERE rowid = old.id;
+    INSERT INTO comment_fts(rowid, body) VALUES (new.id, COALESCE(new.body_text, ''));
+  END;
+  CREATE TRIGGER comment_fts_ad AFTER DELETE ON issue_activity WHEN old.kind = 'comment' BEGIN
+    DELETE FROM comment_fts WHERE rowid = old.id;
+  END;
   `
 ]
 

@@ -7,6 +7,7 @@ import type { SummaryTemplate } from '@shared/domain'
 import { invoke } from '../../api/client'
 import { useSprintList } from '../../api/hooks'
 import { Button, Card, EmptyState, Spinner } from '../../components/ui'
+import { useIssueDetail } from '../../components/issueDetail'
 import { t } from '../../strings/ptBR'
 
 /** União local: 'sprint_retro' é um pseudo-template só desta tela, não faz parte do domínio compartilhado. */
@@ -217,6 +218,7 @@ export default function Summaries(): React.JSX.Element {
             value={content}
             onChange={(e) => setContent(e.target.value)}
           />
+          <CitedIssueChips content={content} />
           <div className="mt-3 flex gap-2">
             <Button variant="secondary" onClick={() => void copy()}>
               {copied ? <Check size={14} /> : <Copy size={14} />}
@@ -273,6 +275,30 @@ export default function Summaries(): React.JSX.Element {
           </div>
         )}
       </Card>
+    </div>
+  )
+}
+
+/** Keys de cards citadas no resumo, como chips que abrem a gaveta (o texto acima é um textarea — não dá para linkificar dentro dele). */
+function CitedIssueChips({ content }: { content: string }): React.JSX.Element | null {
+  const { openIssue } = useIssueDetail()
+  const keys = useMemo(() => {
+    const found = content.match(/\b[A-Z][A-Z0-9]{1,9}-\d+\b/g) ?? []
+    return [...new Set(found)]
+  }, [content])
+  if (keys.length === 0) return null
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+      <span className="text-xs text-zinc-500">Cards citados:</span>
+      {keys.map((key) => (
+        <button
+          key={key}
+          className="rounded bg-zinc-800 px-1.5 py-0.5 text-xs font-medium text-indigo-400 hover:bg-zinc-700 hover:text-indigo-300"
+          onClick={() => openIssue(key)}
+        >
+          {key}
+        </button>
+      ))}
     </div>
   )
 }

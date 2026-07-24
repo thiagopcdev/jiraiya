@@ -8,6 +8,7 @@ import {
   Columns3,
   Filter,
   FileText,
+  Layers,
   LayoutDashboard,
   MessageCircleQuestion,
   RefreshCw,
@@ -22,10 +23,12 @@ import { useAlerts, useMentions, usePushInvalidation, useSyncStatus } from '../a
 import { Spinner } from './ui'
 import { compactAgo } from '../lib/relativeTime'
 import { t } from '../strings/ptBR'
+import TimerWidget from './TimerWidget'
 
 const navItems = [
   { to: '/', label: t.nav.dashboard, icon: LayoutDashboard },
   { to: '/quadro', label: t.nav.board, icon: Columns3 },
+  { to: '/epicos', label: t.nav.epics, icon: Layers },
   { to: '/perguntar', label: t.nav.ask, icon: MessageCircleQuestion },
   { to: '/filtros', label: t.nav.filters, icon: Filter },
   { to: '/criar', label: t.nav.create, icon: SquarePen },
@@ -158,6 +161,7 @@ export default function Shell(): React.JSX.Element {
       <main className="min-w-0 flex-1 overflow-y-auto">
         <Outlet />
       </main>
+      <TimerWidget />
     </div>
   )
 }

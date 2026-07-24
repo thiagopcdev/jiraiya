@@ -217,6 +217,10 @@ export interface Prefs {
   morningBriefing: boolean
   /** verifica novas releases no GitHub (repo privado exige token) */
   updateCheck: boolean
+  /** PR↔card via CLI `gh` — opcional: exige gh instalado e autenticado; desligado por padrão */
+  prIntegration: boolean
+  /** escopo extra da busca de PRs (ex. 'org:biudtech'); vazio = busca global */
+  prSearchScope: string
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -236,5 +240,7 @@ export const DEFAULT_PREFS: Prefs = {
   // perguntas abertas sobre os dados pedem o modelo mais capaz
   modelAsk: 'opus',
   morningBriefing: true,
-  updateCheck: true
+  updateCheck: true,
+  prIntegration: false,
+  prSearchScope: ''
 }

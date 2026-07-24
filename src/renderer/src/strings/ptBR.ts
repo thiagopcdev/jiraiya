@@ -7,6 +7,7 @@ export const t = {
   nav: {
     dashboard: 'Dashboard',
     board: 'Quadro',
+    epics: 'Épicos',
     ask: 'Perguntar',
     filters: 'Filtros',
     create: 'Criar task',
@@ -260,6 +261,7 @@ export const t = {
   },
   palette: {
     placeholder: 'Buscar card por key, título ou texto…',
+    emptyHint: 'Busque por título, descrição ou comentários…',
     minChars: 'Digite ao menos 2 caracteres para buscar.',
     noResults: 'Nada encontrado.',
     hintOpen: '↵ abrir · ⌘↵ abrir no Jira'

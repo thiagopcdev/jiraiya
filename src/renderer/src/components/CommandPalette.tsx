@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { invoke } from '../api/client'
-import { useIssueSearch } from '../api/hooks'
+import { useGlobalSearch } from '../api/hooks'
 import { Badge, Spinner } from './ui'
 import { statusColor } from './statusColor'
 import { useIssueDetail } from './issueDetail'
@@ -28,14 +28,39 @@ export default function CommandPalette(): React.JSX.Element | null {
   return <PaletteModal onClose={() => setOpen(false)} />
 }
 
+/** Quebra o snippet do FTS em pedaços, destacando os termos entre 「 e 」. */
+function renderSnippet(snippet: string): React.ReactNode[] {
+  const nodes: React.ReactNode[] = []
+  const re = /「(.+?)」/g
+  let lastIndex = 0
+  let idx = 0
+  let match: RegExpExecArray | null
+  while ((match = re.exec(snippet))) {
+    if (match.index > lastIndex) {
+      nodes.push(snippet.slice(lastIndex, match.index))
+    }
+    nodes.push(
+      <mark key={idx} className="rounded bg-indigo-900/50 text-indigo-200">
+        {match[1]}
+      </mark>
+    )
+    idx += 1
+    lastIndex = match.index + match[0].length
+  }
+  if (lastIndex < snippet.length) {
+    nodes.push(snippet.slice(lastIndex))
+  }
+  return nodes
+}
+
 function PaletteModal({ onClose }: { onClose: () => void }): React.JSX.Element {
   const [query, setQuery] = useState('')
   const [rawActiveIndex, setActiveIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const { openIssue } = useIssueDetail()
 
-  const { data, isFetching } = useIssueSearch(query)
-  const results = data?.issues ?? []
+  const { data, isFetching } = useGlobalSearch(query)
+  const results = data?.results ?? []
   const activeIndex = Math.min(rawActiveIndex, Math.max(results.length - 1, 0))
 
   useEffect(() => {
@@ -96,31 +121,35 @@ function PaletteModal({ onClose }: { onClose: () => void }): React.JSX.Element {
         </div>
 
         <div className="max-h-96 overflow-y-auto py-1">
-          {trimmed.length < 2 ? (
+          {trimmed.length === 0 ? (
+            <p className="px-3 py-6 text-center text-sm text-zinc-500">{t.palette.emptyHint}</p>
+          ) : trimmed.length < 2 ? (
             <p className="px-3 py-6 text-center text-sm text-zinc-500">{t.palette.minChars}</p>
           ) : results.length === 0 ? (
             <p className="px-3 py-6 text-center text-sm text-zinc-500">{t.palette.noResults}</p>
           ) : (
-            results.map((issue, i) => (
+            results.map((result, i) => (
               <button
-                key={issue.key}
-                className={`flex w-full items-center gap-2 px-3 py-2 text-left ${
+                key={result.key}
+                className={`flex w-full flex-col gap-0.5 px-3 py-2 text-left ${
                   i === activeIndex ? 'bg-zinc-800' : 'hover:bg-zinc-800/60'
                 }`}
                 onMouseEnter={() => setActiveIndex(i)}
-                onClick={() => openResult(issue.key)}
+                onClick={() => openResult(result.key)}
               >
-                <span className="shrink-0 font-mono text-xs text-zinc-500">{issue.key}</span>
-                <span className="min-w-0 flex-1 truncate text-sm text-zinc-200">
-                  {issue.summary}
-                </span>
-                {issue.status && (
-                  <Badge color={statusColor(issue.statusCategory)}>{issue.status}</Badge>
-                )}
-                {issue.assigneeName && (
-                  <span className="shrink-0 max-w-28 truncate text-xs text-zinc-500">
-                    {issue.assigneeName}
+                <div className="flex items-center gap-2">
+                  <span className="shrink-0 font-mono text-xs text-zinc-500">{result.key}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm text-zinc-200">
+                    {result.summary}
                   </span>
+                  {result.status && (
+                    <Badge color={statusColor(result.statusCategory)}>{result.status}</Badge>
+                  )}
+                </div>
+                {result.snippet && (
+                  <p className="truncate pl-0 text-xs text-zinc-500">
+                    {renderSnippet(result.snippet)}
+                  </p>
                 )}
               </button>
             ))

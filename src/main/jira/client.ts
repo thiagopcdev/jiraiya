@@ -19,12 +19,15 @@ import type {
   JiraFieldDef,
   JiraIssue,
   JiraIssueLink,
+  JiraIssueLinkTypesResponse,
   JiraMyself,
   JiraProject,
   JiraProjectSearchResponse,
   JiraSearchResponse,
   JiraStatus,
-  JiraTransitionsResponse
+  JiraTransitionsResponse,
+  JiraWorklog,
+  JiraWorklogsResponse
 } from './types'
 
 /** Normaliza a categoria de status do Jira; valor desconhecido → 'new' (defensivo). */
@@ -351,6 +354,68 @@ export class JiraClient {
       timeSpent,
       ...(commentAdf !== undefined ? { comment: commentAdf } : {})
     })
+  }
+
+  /** Worklogs da issue (até 100; body.worklogs). */
+  async listWorklogs(issueKey: string): Promise<JiraWorklog[]> {
+    const res = await this.http.get<JiraWorklogsResponse>(
+      `/rest/api/3/issue/${encodeURIComponent(issueKey)}/worklog?maxResults=100`
+    )
+    return res.worklogs ?? []
+  }
+
+  /** Edita um worklog. commentAdf em ADF (o chamador converte). */
+  async updateWorklog(
+    issueKey: string,
+    worklogId: string,
+    timeSpent: string,
+    commentAdf?: unknown
+  ): Promise<void> {
+    await this.http.put<unknown>(
+      `/rest/api/3/issue/${encodeURIComponent(issueKey)}/worklog/${encodeURIComponent(worklogId)}`,
+      { timeSpent, ...(commentAdf !== undefined ? { comment: commentAdf } : {}) }
+    )
+  }
+
+  /** Exclui um worklog (o Jira responde 204 sem corpo). */
+  async deleteWorklog(issueKey: string, worklogId: string): Promise<void> {
+    await this.http.delete(
+      `/rest/api/3/issue/${encodeURIComponent(issueKey)}/worklog/${encodeURIComponent(worklogId)}`
+    )
+  }
+
+  /** Tipos de vínculo entre issues do site (id + rótulos inward/outward). */
+  async listIssueLinkTypes(): Promise<
+    Array<{ id: string; name: string; inward: string; outward: string }>
+  > {
+    const res = await this.http.get<JiraIssueLinkTypesResponse>('/rest/api/3/issueLinkType')
+    return (res.issueLinkTypes ?? []).map((t) => ({
+      id: t.id,
+      name: t.name,
+      inward: t.inward,
+      outward: t.outward
+    }))
+  }
+
+  /** Cria um vínculo entre duas issues (typeName = nome do tipo, ex. 'Blocks'). */
+  async createIssueLink(typeName: string, inwardKey: string, outwardKey: string): Promise<void> {
+    await this.http.post<unknown>('/rest/api/3/issueLink', {
+      type: { name: typeName },
+      inwardIssue: { key: inwardKey },
+      outwardIssue: { key: outwardKey }
+    })
+  }
+
+  /** Move issues para uma sprint (Agile). */
+  async moveIssuesToSprint(sprintJiraId: number, issueKeys: string[]): Promise<void> {
+    await this.http.post<unknown>(`/rest/agile/1.0/sprint/${sprintJiraId}/issue`, {
+      issues: issueKeys
+    })
+  }
+
+  /** Move issues de volta ao backlog (Agile). */
+  async moveIssuesToBacklog(issueKeys: string[]): Promise<void> {
+    await this.http.post<unknown>('/rest/agile/1.0/backlog/issue', { issues: issueKeys })
   }
 
   /** Tempo gasto / estimativa original da issue (campo timetracking). */

@@ -5,7 +5,8 @@ export interface AdfNode {
   text?: string
   content?: AdfNode[]
   attrs?: Record<string, unknown>
-  marks?: Array<{ type: string }>
+  // attrs opcional no mark: usado por link (href); marcas simples (strong/em/code) omitem
+  marks?: Array<{ type: string; attrs?: Record<string, unknown> }>
   version?: number
 }
 
@@ -224,6 +225,29 @@ export interface JiraIssueLink {
   type?: { name?: string; inward?: string; outward?: string }
   outwardIssue?: JiraLinkedIssue
   inwardIssue?: JiraLinkedIssue
+}
+
+/** Um item de worklogs (GET /rest/api/3/issue/{key}/worklog). */
+export interface JiraWorklog {
+  id: string
+  author?: { accountId?: string; displayName?: string } | null
+  started: string
+  timeSpent: string
+  timeSpentSeconds: number
+  comment?: AdfNode | null
+}
+
+/** GET /rest/api/3/issue/{key}/worklog */
+export interface JiraWorklogsResponse {
+  worklogs?: JiraWorklog[]
+  startAt?: number
+  maxResults?: number
+  total?: number
+}
+
+/** GET /rest/api/3/issueLinkType */
+export interface JiraIssueLinkTypesResponse {
+  issueLinkTypes?: Array<{ id: string; name: string; inward: string; outward: string }>
 }
 
 /** GET /rest/api/3/issue/{key}/transitions */
