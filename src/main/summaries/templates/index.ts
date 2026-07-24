@@ -21,8 +21,14 @@ export function standupTemplate(digest: PeriodDigest): string {
 
   parts.push(
     section('Ontem fiz', dedupe(ontemItems), '_Sem registros no período._'),
-    section('Hoje pretendo', digest.emAndamento, '_Nada em andamento atribuído a mim._')
+    // acionáveis por mim (backlog + andamento real) — cards em teste/deploy/review
+    // não entram aqui: a bola está com terceiros (vão para "Aguardando")
+    section('Hoje pretendo', digest.paraHoje, '_Nada puxado — sugestão: pegar um item do backlog._')
   )
+
+  if (digest.aguardando.length > 0) {
+    parts.push(section('Aguardando (bola com terceiros)', digest.aguardando))
+  }
 
   const bloqueios = [
     ...digest.bloqueados,

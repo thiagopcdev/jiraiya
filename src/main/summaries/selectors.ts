@@ -22,6 +22,13 @@ export interface PeriodDigest {
   criados: DigestItem[]
   /** atribuídas a mim, em andamento agora */
   emAndamento: DigestItem[]
+  /**
+   * acionáveis por MIM hoje: backlog atribuído a mim (categoria 'new') +
+   * em andamento cujo status não é estado de espera — alimenta o "Hoje pretendo"
+   */
+  paraHoje: DigestItem[]
+  /** minhas, em estado de espera (teste/deploy/review/homologação) — bola com terceiros */
+  aguardando: DigestItem[]
   /** flagged/prioridade máxima, abertas */
   bloqueados: DigestItem[]
   /** em andamento sem atividade há N dias */
@@ -102,6 +109,14 @@ export function buildPeriodDigest(
   const inProgress = queryIssues(ctx, { ...common, bucket: 'inProgress' })
   const stalled = queryIssues(ctx, { ...common, bucket: 'stalled' })
 
+  // "Hoje pretendo" não pode listar card em estado de espera (a bola está com
+  // QA/deploy/review, não comigo): separa meus cards abertos em acionáveis
+  // (backlog + andamento real) e aguardando terceiros, pelo NOME do status.
+  const WAITING_STATUS = /teste|test|qa|deploy|review|revis|homolog|aguard|valida/i
+  const mine = queryIssues(ctx, { ...common, bucket: 'mine' })
+  const waiting = mine.filter((i) => i.status && WAITING_STATUS.test(i.status))
+  const actionable = mine.filter((i) => !(i.status && WAITING_STATUS.test(i.status)))
+
   // últimos status por issue para detalhe de "avancaram"
   const myActivities = queryTimeline(db, workspace.id, {
     start: range.start,
@@ -163,6 +178,18 @@ export function buildPeriodDigest(
       .map((i) => ({ key: i.key, summary: i.summary, url: i.url })),
     criados: created,
     emAndamento: inProgress.map((i) => ({
+      key: i.key,
+      summary: i.summary,
+      url: i.url,
+      detail: i.status ?? undefined
+    })),
+    paraHoje: actionable.map((i) => ({
+      key: i.key,
+      summary: i.summary,
+      url: i.url,
+      detail: i.status ?? undefined
+    })),
+    aguardando: waiting.map((i) => ({
       key: i.key,
       summary: i.summary,
       url: i.url,

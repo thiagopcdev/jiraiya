@@ -126,6 +126,7 @@ export function enhanceWithClaude(input: {
     'Reescreva o resumo em português do Brasil, com tom profissional e conciso, bom para colar numa daily/weekly.',
     'Regras: não invente fatos; mantenha as chaves dos tickets (ex.: BT-123) exatamente como estão; mantenha a estrutura de seções em markdown; agrupe itens relacionados quando fizer sentido; corte redundância.',
     'Se o JSON tiver "comentariosDoPeriodo", use-os para enriquecer os itens com contexto real (decisões tomadas, bloqueios, feedback de QA/PO, próximos passos) — resuma com suas palavras, sem transcrever comentários longos nem citar autores desnecessariamente.',
+    'Na seção "Hoje pretendo" liste APENAS itens acionáveis pelo autor (campo paraHoje do JSON); cards em teste/deploy/review/homologação estão com terceiros e pertencem a "Aguardando" ou "Bloqueios" — nunca a "Hoje pretendo".',
     'Responda SOMENTE com o markdown final, sem preâmbulo.',
     '',
     '=== RESUMO (template) ===',
