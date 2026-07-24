@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
+  Link2,
   ChevronRight,
   ExternalLink,
   Flag,
@@ -291,6 +292,15 @@ function IssueDetailDrawer({
 
   const openInJira = (): void => void invoke('shell:openIssue', { issueKey })
 
+  const [shareCopied, setShareCopied] = useState(false)
+  const shareIssue = async (): Promise<void> => {
+    const url =
+      issue?.url ?? `${authStatus?.workspace?.siteUrl?.replace(/\/$/, '') ?? ''}/browse/${issueKey}`
+    await invoke('export:clipboard', { text: url })
+    setShareCopied(true)
+    setTimeout(() => setShareCopied(false), 2000)
+  }
+
   const submitComment = async (): Promise<void> => {
     if (!comment.trim()) return
     setCommentBusy(true)
@@ -347,7 +357,7 @@ function IssueDetailDrawer({
                 <ChevronLeft size={16} />
               </button>
             )}
-            <span className="shrink-0 font-mono text-sm whitespace-nowrap text-zinc-400">
+            <span className="shrink-0 font-mono text-sm whitespace-nowrap text-zinc-400 select-text">
               {issueKey}
             </span>
             <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
@@ -356,6 +366,18 @@ function IssueDetailDrawer({
               )}
               {issue?.issueType && <Badge color="zinc">{issue.issueType}</Badge>}
             </div>
+            <button
+              className="shrink-0 rounded-md p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+              onClick={() => void shareIssue()}
+              title={shareCopied ? t.detail.shareCopied : t.detail.share}
+              aria-label={t.detail.share}
+            >
+              {shareCopied ? (
+                <CheckCircle2 size={15} className="text-green-400" />
+              ) : (
+                <Link2 size={15} />
+              )}
+            </button>
             <button
               className="shrink-0 rounded-md p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
               onClick={openInJira}
@@ -408,7 +430,8 @@ function IssueDetailDrawer({
           </div>
         )}
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        {/* select-text: o app usa user-select none global; aqui o conteúdo é copiável */}
+        <div className="min-h-0 flex-1 overflow-y-auto select-text">
           {issueLoading ? (
             <div className="flex justify-center py-12">
               <Spinner className="text-zinc-500" />

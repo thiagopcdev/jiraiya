@@ -197,6 +197,8 @@ export const t = {
   },
   detail: {
     openInJira: 'Abrir no Jira',
+    share: 'Copiar link do card',
+    shareCopied: 'Link copiado!',
     close: 'Fechar',
     notSynced: 'Este card ainda não foi sincronizado localmente.',
     storyPoints: (n: number) => `${n} pts`,
