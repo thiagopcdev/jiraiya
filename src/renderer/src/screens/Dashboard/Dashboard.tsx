@@ -77,10 +77,17 @@ export default function Dashboard(): React.JSX.Element {
   )
 }
 
+// dispensa persistida por id do resumo: sobrevive à navegação/reinício e o
+// banner volta sozinho no dia seguinte (novo resumo = novo id)
+const DISMISSED_BRIEFING_KEY = 'jiraiya.dismissedBriefingId'
+
 function BriefingBanner(): React.JSX.Element | null {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [dismissed, setDismissed] = useState(false)
+  const [dismissedId, setDismissedId] = useState<number | null>(() => {
+    const stored = localStorage.getItem(DISMISSED_BRIEFING_KEY)
+    return stored ? Number(stored) : null
+  })
   const { data } = useQuery({
     queryKey: ['briefing-today'],
     queryFn: () => invoke('briefing:today', {}),
@@ -94,7 +101,12 @@ function BriefingBanner(): React.JSX.Element | null {
     return off
   }, [queryClient])
 
-  if (dismissed || data?.summaryId == null) return null
+  if (data?.summaryId == null || data.summaryId === dismissedId) return null
+
+  const dismiss = (): void => {
+    localStorage.setItem(DISMISSED_BRIEFING_KEY, String(data.summaryId))
+    setDismissedId(data.summaryId)
+  }
 
   return (
     <div className="mb-4 flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm text-zinc-300">
@@ -109,7 +121,7 @@ function BriefingBanner(): React.JSX.Element | null {
       <button
         className="shrink-0 rounded p-1 text-zinc-600 hover:bg-zinc-800 hover:text-zinc-300"
         title="Dispensar"
-        onClick={() => setDismissed(true)}
+        onClick={dismiss}
       >
         <X size={14} />
       </button>
