@@ -11,6 +11,27 @@ const cache = new AttachmentCache()
 /** Acima disso o `full` não vai inline pro renderer (usar salvar/abrir). */
 const INLINE_MAX_BYTES = 8 * 1024 * 1024
 
+/** Limite de upload (binário já decodificado). */
+const UPLOAD_MAX_BYTES = 20 * 1024 * 1024
+
+/** Mapa mínimo extensão → mime; desconhecido fica null (o Jira infere). */
+const MIME_BY_EXT: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  pdf: 'application/pdf',
+  txt: 'text/plain',
+  log: 'text/plain',
+  zip: 'application/zip'
+}
+
+function mimeFromFilename(filename: string): string | null {
+  const ext = filename.slice(filename.lastIndexOf('.') + 1).toLowerCase()
+  return MIME_BY_EXT[ext] ?? null
+}
+
 function requireWorkspace(ctx: AppContext): NonNullable<ReturnType<typeof getWorkspaceRow>> {
   const workspace = getWorkspaceRow(ctx.db)
   if (!workspace) throw new AppError('NOT_CONNECTED', 'Nenhuma conta Jira conectada')
@@ -36,6 +57,35 @@ export function registerAttachmentHandlers(ctx: AppContext): void {
       isImage: a.mimeType?.startsWith('image/') ?? false
     }))
     return { attachments }
+  })
+
+  handle('issues:attachmentUpload', async ({ key, filename, dataBase64 }) => {
+    requireWorkspace(ctx)
+    const client = requireClient(ctx)
+
+    const data = Buffer.from(dataBase64, 'base64')
+    if (data.length === 0) {
+      throw new AppError('VALIDATION', 'Arquivo vazio ou conteúdo inválido')
+    }
+    if (data.length > UPLOAD_MAX_BYTES) {
+      const mb = (data.length / (1024 * 1024)).toFixed(1)
+      throw new AppError('FILE_TOO_LARGE', `Arquivo de ${mb} MB excede o limite de 20 MB por anexo`)
+    }
+
+    const name = filename.trim()
+    const mimeType = mimeFromFilename(name)
+    const uploaded = await client.addAttachment(key.trim().toUpperCase(), name, data, mimeType)
+    const resolvedMime = uploaded.mimeType ?? mimeType
+
+    return {
+      attachment: {
+        id: uploaded.id,
+        filename: uploaded.filename,
+        mimeType: resolvedMime,
+        size: uploaded.size,
+        isImage: resolvedMime?.startsWith('image/') ?? false
+      }
+    }
   })
 
   handle('issues:attachmentData', async ({ attachmentId, variant }) => {

@@ -100,6 +100,21 @@ export class JiraHttp {
     return this.request<T>('PUT', path, body)
   }
 
+  /**
+   * POST multipart/form-data (upload de anexo). Não seta Content-Type: quem monta
+   * o boundary é o fetch, a partir do FormData. O Jira exige
+   * `X-Atlassian-Token: no-check` nos endpoints de upload.
+   */
+  async postForm<T>(path: string, form: FormData): Promise<T> {
+    const res = await this.fetchOk('POST', path, {
+      accept: 'application/json',
+      rawBody: form,
+      extraHeaders: { 'X-Atlassian-Token': 'no-check' }
+    })
+    if (res.status === 204) return undefined as T
+    return (await res.json()) as T
+  }
+
   /** DELETE (o Jira responde 204 sem corpo). */
   async delete(path: string): Promise<void> {
     await this.fetchOk('DELETE', path, { accept: 'application/json' })
@@ -128,9 +143,15 @@ export class JiraHttp {
   private fetchOk(
     method: string,
     path: string,
-    opts: { accept: string; body?: unknown }
+    opts: {
+      accept: string
+      body?: unknown
+      /** corpo já pronto (FormData/stream): enviado sem JSON.stringify e sem Content-Type */
+      rawBody?: BodyInit
+      extraHeaders?: Record<string, string>
+    }
   ): Promise<Response> {
-    const { accept, body } = opts
+    const { accept, body, rawBody, extraHeaders } = opts
     return this.queue.add(async () => {
       let attempt = 0
       for (;;) {
@@ -143,9 +164,10 @@ export class JiraHttp {
             headers: {
               Authorization: this.authHeader,
               Accept: accept,
-              ...(body !== undefined ? { 'Content-Type': 'application/json' } : {})
+              ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+              ...extraHeaders
             },
-            body: body !== undefined ? JSON.stringify(body) : undefined
+            body: rawBody ?? (body !== undefined ? JSON.stringify(body) : undefined)
           })
         } catch (err) {
           // erro de rede: retry com backoff

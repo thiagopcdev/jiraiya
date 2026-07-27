@@ -227,6 +227,20 @@ export interface Prefs {
 /** Tema visual do app; 'system' segue o modo claro/escuro do SO. */
 export type ThemePref = 'dark' | 'light' | 'system'
 
+/** Ação proposta pelo Perguntar — só executa com confirmação explícita do usuário. */
+export interface AskAction {
+  type: 'move_status' | 'assign_me' | 'comment' | 'log_work' | 'set_story_points'
+  key: string
+  /** move_status: nome do status de destino (resolvido para transição no executor) */
+  statusName?: string
+  /** comment */
+  text?: string
+  /** log_work (formato Jira: 1h 30m) */
+  timeSpent?: string
+  /** set_story_points */
+  storyPoints?: number
+}
+
 export const DEFAULT_PREFS: Prefs = {
   syncIntervalMinutes: 15,
   backfillDays: 30,

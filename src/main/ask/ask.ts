@@ -1,5 +1,6 @@
-import type { ClaudeModel } from '@shared/domain'
+import type { AskAction, ClaudeModel } from '@shared/domain'
 import { runClaudePrompt } from '../summaries/claude'
+import { ACTIONS_PROMPT, parseAskResponse } from './actions'
 
 /** Monta o prompt pt-BR do "Pergunte ao Jiraiya". Pura — testável sem CLI. */
 export function buildAskPrompt(input: {
@@ -29,6 +30,8 @@ export function buildAskPrompt(input: {
 
   parts.push(
     '',
+    ACTIONS_PROMPT,
+    '',
     '=== DADOS (snapshot) ===',
     input.snapshotJson,
     '',
@@ -39,14 +42,18 @@ export function buildAskPrompt(input: {
   return parts.join('\n')
 }
 
-/** Executa a pergunta no CLI do Claude e devolve o texto direto (sem parse). */
+/**
+ * Executa a pergunta no CLI do Claude e separa a resposta em texto + ações
+ * propostas (as ações só rodam depois de confirmação do usuário, via ask:execute).
+ */
 export async function askJiraiya(input: {
   question: string
   history?: Array<{ role: 'user' | 'assistant'; content: string }>
   snapshotJson: string
   todayIso: string
   model?: ClaudeModel
-}): Promise<string> {
+}): Promise<{ answer: string; actions: AskAction[] }> {
   const prompt = buildAskPrompt(input)
-  return runClaudePrompt(prompt, input.model)
+  const raw = await runClaudePrompt(prompt, input.model)
+  return parseAskResponse(raw)
 }

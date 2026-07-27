@@ -5,6 +5,7 @@ import type {
   JiraAgilePage,
   JiraAgileSprint,
   JiraAttachment,
+  JiraAttachmentUploaded,
   JiraBoard,
   JiraBoardConfiguration,
   JiraBulkChangelogResponse,
@@ -163,6 +164,32 @@ export class JiraClient {
       mimeType: a.mimeType ?? null,
       size: a.size
     }))
+  }
+
+  /**
+   * Sobe um anexo na issue (multipart). O Jira responde com um ARRAY dos anexos
+   * criados — devolve o primeiro.
+   */
+  async addAttachment(
+    issueKey: string,
+    filename: string,
+    data: Buffer,
+    mimeType: string | null
+  ): Promise<JiraAttachmentUploaded> {
+    const form = new FormData()
+    // Buffer não é BlobPart no lib do TS deste projeto — passa o ArrayBuffer subjacente
+    const bytes = data.buffer.slice(
+      data.byteOffset,
+      data.byteOffset + data.byteLength
+    ) as ArrayBuffer
+    form.append('file', new Blob([bytes], mimeType ? { type: mimeType } : undefined), filename)
+    const res = await this.http.postForm<JiraAttachmentUploaded[]>(
+      `/rest/api/3/issue/${encodeURIComponent(issueKey)}/attachments`,
+      form
+    )
+    const first = Array.isArray(res) ? res[0] : undefined
+    if (!first) throw new Error('O Jira não devolveu o anexo criado')
+    return first
   }
 
   /** Bytes da miniatura do anexo (redireciona p/ CDN assinada). */

@@ -144,6 +144,14 @@ export interface JiraAttachment {
   content?: string
 }
 
+/** Um item da resposta de POST /rest/api/3/issue/{key}/attachments (array). */
+export interface JiraAttachmentUploaded {
+  id: string
+  filename: string
+  mimeType?: string | null
+  size: number
+}
+
 export interface JiraProject {
   id: string
   key: string

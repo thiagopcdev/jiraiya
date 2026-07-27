@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import {
@@ -8,9 +8,14 @@ import {
   ChevronLeft,
   Link2,
   ChevronRight,
+  Eye,
+  EyeOff,
   ExternalLink,
   Flag,
+  GitBranch,
+  Lock,
   MessageSquare,
+  Paperclip,
   Pause,
   Pencil,
   Play,
@@ -44,6 +49,23 @@ import { statusColor } from './statusColor'
 import { IssueDetailContext, useIssueDetail } from './issueDetail'
 import { t } from '../strings/ptBR'
 import { formatJiraDuration, formatTimer, useIssueTimer } from '../lib/timer'
+import { branchName } from '../lib/branchName'
+
+/** Converte um File em base64 puro (sem o prefixo `data:...;base64,`). */
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = (): void => {
+      const result = reader.result as string
+      const commaIndex = result.indexOf(',')
+      resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : result)
+    }
+    reader.onerror = (): void => reject(reader.error ?? new Error('Falha ao ler o arquivo'))
+    reader.readAsDataURL(file)
+  })
+}
+
+const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
 
 const kindMeta: Record<ActivityKind, { icon: typeof Zap; label: string; color: string }> = {
   created: { icon: Plus, label: 'criou', color: 'text-zinc-400' },
@@ -162,6 +184,12 @@ export function IssueDetailProvider({ children }: { children: ReactNode }): Reac
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [stack.length])
+
+  // notificação de card seguido (ex.: mudança de status) -> abre a gaveta direto
+  useEffect(() => {
+    const off = window.api.on('push:open-issue', ({ key }) => openIssue(key))
+    return () => off()
+  }, [])
 
   const topKey = stack[stack.length - 1] ?? null
 
@@ -342,6 +370,35 @@ function IssueDetailDrawer({
     setTimeout(() => setShareCopied(false), 2000)
   }
 
+  const [branchCopied, setBranchCopied] = useState(false)
+  const copyBranch = async (): Promise<void> => {
+    if (!issue) return
+    const text = branchName(issue.issueType ?? null, issueKey, issue.summary)
+    await invoke('export:clipboard', { text })
+    setBranchCopied(true)
+    setTimeout(() => setBranchCopied(false), 2000)
+  }
+
+  // "Seguir card": notifica mudanças no card mesmo fora do escopo padrão de alertas
+  const { data: watchData } = useQuery({
+    queryKey: ['watch', issueKey],
+    queryFn: () => invoke('watch:status', { key: issueKey }),
+    enabled: !!issue
+  })
+  const watching = watchData?.watching ?? false
+  const [watchBusy, setWatchBusy] = useState(false)
+  const toggleWatch = async (): Promise<void> => {
+    setWatchBusy(true)
+    try {
+      const res = await invoke('watch:toggle', { key: issueKey })
+      queryClient.setQueryData(['watch', issueKey], res)
+    } catch {
+      // silencioso — o botão simplesmente não muda de estado
+    } finally {
+      setWatchBusy(false)
+    }
+  }
+
   const submitComment = async (): Promise<void> => {
     if (!comment.trim()) return
     setCommentBusy(true)
@@ -358,6 +415,29 @@ function IssueDetailDrawer({
       setCommentError(err instanceof IpcError ? err.message : t.common.error)
     } finally {
       setCommentBusy(false)
+    }
+  }
+
+  // cola uma imagem no textarea de comentário -> sobe como anexo do card e
+  // referencia o arquivo por nome no corpo do comentário em edição
+  const handleCommentPaste = async (
+    e: React.ClipboardEvent<HTMLTextAreaElement>
+  ): Promise<void> => {
+    const images = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith('image/'))
+    if (images.length === 0) return
+    for (const file of images) {
+      if (file.size > MAX_ATTACHMENT_BYTES) {
+        setCommentError(`Imagem muito grande (máx. 20MB): ${file.name}`)
+        continue
+      }
+      try {
+        const dataBase64 = await fileToBase64(file)
+        await invoke('issues:attachmentUpload', { key: issueKey, filename: file.name, dataBase64 })
+        void queryClient.invalidateQueries({ queryKey: ['issue-attachments', issueKey] })
+        setComment((prev) => (prev ? `${prev}\n(anexo: ${file.name})` : `(anexo: ${file.name})`))
+      } catch (err) {
+        setCommentError(err instanceof IpcError ? err.message : t.common.error)
+      }
     }
   }
 
@@ -418,6 +498,35 @@ function IssueDetailDrawer({
                 <CheckCircle2 size={15} className="text-green-400 light:text-green-600" />
               ) : (
                 <Link2 size={15} />
+              )}
+            </button>
+            {issue && (
+              <button
+                className="shrink-0 rounded-md p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+                onClick={() => void copyBranch()}
+                title={branchCopied ? 'Nome do branch copiado!' : 'Copiar nome do branch'}
+                aria-label="Copiar nome do branch"
+              >
+                {branchCopied ? (
+                  <CheckCircle2 size={15} className="text-green-400 light:text-green-600" />
+                ) : (
+                  <GitBranch size={15} />
+                )}
+              </button>
+            )}
+            <button
+              className="shrink-0 rounded-md p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-50"
+              onClick={() => void toggleWatch()}
+              disabled={watchBusy}
+              title={
+                watching ? 'Deixar de seguir (notifica mudanças)' : 'Seguir (notifica mudanças)'
+              }
+              aria-label={watching ? 'Deixar de seguir' : 'Seguir card'}
+            >
+              {watching ? (
+                <Eye size={15} className="text-indigo-400 light:text-indigo-600" />
+              ) : (
+                <EyeOff size={15} />
               )}
             </button>
             <button
@@ -680,7 +789,7 @@ function IssueDetailDrawer({
 
               <PullRequestsSection issueKey={issueKey} />
 
-              <AttachmentsSection issueKey={issueKey} />
+              <AttachmentsUploadSection issueKey={issueKey} />
 
               <section>
                 <h3 className="mb-2 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
@@ -793,7 +902,9 @@ function IssueDetailDrawer({
                   placeholder={t.detail.commentPlaceholder}
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
+                  onPaste={(e) => void handleCommentPaste(e)}
                 />
+                <p className="-mt-1 text-xs text-zinc-600">Cole uma imagem para anexar</p>
                 <div className="flex items-center gap-2">
                   <Button
                     disabled={commentBusy || !comment.trim()}
@@ -821,6 +932,8 @@ function IssueDetailDrawer({
                   <p className="text-xs text-zinc-600">{t.detail.claudeUnavailableHint}</p>
                 )}
               </section>
+
+              <NotesSection issueKey={issueKey} />
             </div>
           )}
         </div>
@@ -2236,5 +2349,161 @@ function PullRequestRow({
         {checksMeta && <MiniBadge tone={checksMeta.tone}>{checksMeta.label}</MiniBadge>}
       </div>
     </button>
+  )
+}
+
+/**
+ * Envolve `AttachmentsSection` (de ./attachments) com upload: botão "Anexar"
+ * (input file oculto, multiple) e drop de arquivos em toda a área da seção.
+ * Mantém sua própria query de contagem (mesma chave de `AttachmentsSection`,
+ * cache compartilhado) só para decidir se mostra o título "Anexos" — quando já
+ * há anexos, o título com contagem vem do próprio `AttachmentsSection`.
+ */
+function AttachmentsUploadSection({ issueKey }: { issueKey: string }): React.JSX.Element {
+  const queryClient = useQueryClient()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploadingName, setUploadingName] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const { data } = useQuery({
+    queryKey: ['issue-attachments', issueKey],
+    queryFn: () => invoke('issues:attachments', { key: issueKey }),
+    staleTime: 60_000,
+    retry: 0
+  })
+  const hasAttachments = (data?.attachments.length ?? 0) > 0
+
+  const uploadFiles = async (files: FileList | File[]): Promise<void> => {
+    setError(null)
+    for (const file of Array.from(files)) {
+      if (file.size > MAX_ATTACHMENT_BYTES) {
+        setError(`Arquivo muito grande (máx. 20MB): ${file.name}`)
+        continue
+      }
+      setUploadingName(file.name)
+      try {
+        const dataBase64 = await fileToBase64(file)
+        await invoke('issues:attachmentUpload', { key: issueKey, filename: file.name, dataBase64 })
+        void queryClient.invalidateQueries({ queryKey: ['issue-attachments', issueKey] })
+      } catch (err) {
+        setError(err instanceof IpcError ? err.message : t.common.error)
+      }
+    }
+    setUploadingName(null)
+  }
+
+  return (
+    <section
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => {
+        e.preventDefault()
+        if (e.dataTransfer.files.length > 0) void uploadFiles(e.dataTransfer.files)
+      }}
+    >
+      {!hasAttachments && (
+        <h3 className="mb-2 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+          {t.detail.attachmentsTitle}
+        </h3>
+      )}
+      <div className="mb-2 flex items-center gap-2">
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files && e.target.files.length > 0) void uploadFiles(e.target.files)
+            e.target.value = ''
+          }}
+        />
+        <Button variant="secondary" onClick={() => fileInputRef.current?.click()}>
+          <Paperclip size={14} />
+          Anexar
+        </Button>
+        {uploadingName && (
+          <span className="flex items-center gap-1.5 text-xs text-zinc-500">
+            <Spinner /> Enviando {uploadingName}…
+          </span>
+        )}
+      </div>
+      {error && <p className="mb-2 text-sm text-amber-400 light:text-amber-600">{error}</p>}
+      <AttachmentsSection issueKey={issueKey} />
+    </section>
+  )
+}
+
+/**
+ * Seção "Notas (só suas)" — última da gaveta. Fica só neste app (nunca vai
+ * para o Jira). Só monta o editor (`NoteEditor`) depois que o fetch resolve,
+ * então o valor inicial vem direto da prop — sem useEffect de sincronização
+ * (mesmo padrão do `EditPanel`, que também só monta após o fetch do editMeta).
+ */
+function NotesSection({ issueKey }: { issueKey: string }): React.JSX.Element {
+  const { data, isLoading } = useQuery({
+    queryKey: ['note', issueKey],
+    queryFn: () => invoke('notes:get', { key: issueKey }),
+    enabled: true // a gaveta só monta este componente quando o card está aberto
+  })
+
+  return (
+    <section className="space-y-2 border-t border-zinc-800 pt-4">
+      <h3 className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+        <Lock size={12} />
+        Notas (só suas)
+      </h3>
+      {isLoading ? (
+        <Spinner className="text-zinc-500" />
+      ) : (
+        <NoteEditor issueKey={issueKey} initialContent={data?.content ?? ''} />
+      )}
+    </section>
+  )
+}
+
+/** Editor de nota privada: debounce de 800ms após digitar, com flush no blur. */
+function NoteEditor({
+  issueKey,
+  initialContent
+}: {
+  issueKey: string
+  initialContent: string
+}): React.JSX.Element {
+  const [value, setValue] = useState(initialContent)
+  const [synced, setSynced] = useState(true)
+  const debounceRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current !== null) window.clearTimeout(debounceRef.current)
+    }
+  }, [])
+
+  const flush = (content: string): void => {
+    if (debounceRef.current !== null) {
+      window.clearTimeout(debounceRef.current)
+      debounceRef.current = null
+    }
+    void invoke('notes:set', { key: issueKey, content }).then(() => setSynced(true))
+  }
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>): void => {
+    const next = e.target.value
+    setValue(next)
+    setSynced(false)
+    if (debounceRef.current !== null) window.clearTimeout(debounceRef.current)
+    debounceRef.current = window.setTimeout(() => flush(next), 800)
+  }
+
+  return (
+    <>
+      <textarea
+        className="h-20 w-full resize-y rounded-md border border-zinc-700 bg-zinc-900 p-2.5 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+        placeholder="Notas privadas — ficam só neste app, nunca vão para o Jira."
+        value={value}
+        onChange={handleChange}
+        onBlur={() => flush(value)}
+      />
+      {synced && <p className="text-xs text-zinc-600">salvo</p>}
+    </>
   )
 }

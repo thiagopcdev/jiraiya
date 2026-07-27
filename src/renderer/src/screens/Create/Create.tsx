@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, ExternalLink, Sparkles } from 'lucide-react'
 import { invoke, IpcError } from '../../api/client'
@@ -40,7 +41,11 @@ export default function Create(): React.JSX.Element {
   })
   const activeSprint = sprintData?.sprint ?? null
 
-  const [idea, setIdea] = useState('')
+  // Prefill vindo do command palette ("criar <ideia>" -> /criar?idea=...). Initializer
+  // lazy do useState roda uma única vez, na montagem — sem sobrescrever o que o
+  // usuário digitar depois (evita disparar setState de dentro de um effect).
+  const [searchParams] = useSearchParams()
+  const [idea, setIdea] = useState(() => searchParams.get('idea') ?? '')
   const [draftBusy, setDraftBusy] = useState(false)
   const [draftError, setDraftError] = useState<string | null>(null)
 

@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Plus } from 'lucide-react'
 import { invoke } from '../api/client'
 import { useGlobalSearch } from '../api/hooks'
 import { Badge, Spinner } from './ui'
@@ -61,10 +63,25 @@ function PaletteModal({ onClose }: { onClose: () => void }): React.JSX.Element {
   const [rawActiveIndex, setActiveIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const { openIssue } = useIssueDetail()
+  const navigate = useNavigate()
 
   const { data, isFetching } = useGlobalSearch(query)
   const results = data?.results ?? []
   const activeIndex = Math.min(rawActiveIndex, Math.max(results.length - 1, 0))
+
+  // "criar <ideia>" (ou ">ideia") atalha direto para a criação de card, sem passar pela busca.
+  const createIdea = query.toLowerCase().startsWith('criar ')
+    ? query.slice(6)
+    : query.startsWith('>')
+      ? query.slice(1)
+      : null
+  const trimmedCreateIdea = createIdea?.trim() ?? ''
+
+  const goCreate = (): void => {
+    if (!trimmedCreateIdea) return
+    navigate(`/criar?idea=${encodeURIComponent(trimmedCreateIdea)}`)
+    onClose()
+  }
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -84,6 +101,13 @@ function PaletteModal({ onClose }: { onClose: () => void }): React.JSX.Element {
   }
 
   const onInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (createIdea !== null) {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        goCreate()
+      }
+      return
+    }
     if (e.key === 'ArrowDown') {
       e.preventDefault()
       setActiveIndex((i) => Math.min(i + 1, results.length - 1))
@@ -120,12 +144,31 @@ function PaletteModal({ onClose }: { onClose: () => void }): React.JSX.Element {
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onInputKeyDown}
           />
-          {isFetching && <Spinner className="shrink-0 text-zinc-500" />}
+          {isFetching && createIdea === null && <Spinner className="shrink-0 text-zinc-500" />}
         </div>
 
         <div className="max-h-96 overflow-y-auto py-1">
-          {trimmed.length === 0 ? (
-            <p className="px-3 py-6 text-center text-sm text-zinc-500">{t.palette.emptyHint}</p>
+          {createIdea !== null ? (
+            trimmedCreateIdea.length === 0 ? (
+              <p className="px-3 py-6 text-center text-sm text-zinc-500">Digite a ideia do card…</p>
+            ) : (
+              <button
+                className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-zinc-800/60"
+                onClick={goCreate}
+              >
+                <Plus size={14} className="shrink-0 text-indigo-400 light:text-indigo-600" />
+                <span className="min-w-0 flex-1 truncate text-sm text-zinc-200">
+                  Criar card: &quot;{trimmedCreateIdea}&quot;
+                </span>
+              </button>
+            )
+          ) : trimmed.length === 0 ? (
+            <div className="px-3 py-6 text-center">
+              <p className="text-sm text-zinc-500">{t.palette.emptyHint}</p>
+              <p className="mt-1 text-xs text-zinc-600">
+                &quot;criar &lt;ideia&gt;&quot; abre a criação de card
+              </p>
+            </div>
           ) : trimmed.length < 2 ? (
             <p className="px-3 py-6 text-center text-sm text-zinc-500">{t.palette.minChars}</p>
           ) : results.length === 0 ? (
@@ -159,7 +202,7 @@ function PaletteModal({ onClose }: { onClose: () => void }): React.JSX.Element {
           )}
         </div>
 
-        {results.length > 0 && (
+        {results.length > 0 && createIdea === null && (
           <div className="border-t border-zinc-800 px-3 py-1.5 text-xs text-zinc-600">
             {t.palette.hintOpen}
           </div>

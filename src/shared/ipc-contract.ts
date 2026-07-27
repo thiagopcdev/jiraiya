@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type {
   Alert,
+  AskAction,
   Mention,
   Board,
   CreateIssueType,
@@ -186,7 +187,89 @@ export const ipcContract = {
         .max(12)
         .optional()
     }),
-    res: undefined as unknown as { answer: string; generatedBy: 'claude' }
+    res: undefined as unknown as {
+      answer: string
+      generatedBy: 'claude'
+      /** ações propostas pelo Claude — só executam com confirmação do usuário */
+      actions: AskAction[]
+    }
+  },
+  'ask:execute': {
+    req: z.object({
+      action: z.object({
+        type: z.enum(['move_status', 'assign_me', 'comment', 'log_work', 'set_story_points']),
+        key: z.string().trim().min(1).max(64),
+        statusName: z.string().min(1).max(100).optional(),
+        text: z.string().min(1).max(5000).optional(),
+        timeSpent: z
+          .string()
+          .trim()
+          .regex(/^(\d+[wdhm])(\s+\d+[wdhm])*$/i, 'Formato: 1w 2d 3h 30m')
+          .optional(),
+        storyPoints: z.number().min(0).optional()
+      })
+    }),
+    res: undefined as unknown as { ok: true; message: string }
+  },
+  'issues:attachmentUpload': {
+    req: z.object({
+      key: z.string().trim().min(1).max(64),
+      filename: z.string().trim().min(1).max(255),
+      /** conteúdo em base64 (limite ~22MB binário) */
+      dataBase64: z.string().min(1).max(30_000_000)
+    }),
+    res: undefined as unknown as {
+      attachment: {
+        id: string
+        filename: string
+        mimeType: string | null
+        size: number
+        isImage: boolean
+      }
+    }
+  },
+  'watch:toggle': {
+    req: z.object({ key: z.string().trim().min(1).max(64) }),
+    res: undefined as unknown as { watching: boolean }
+  },
+  'watch:status': {
+    req: z.object({ key: z.string().trim().min(1).max(64) }),
+    res: undefined as unknown as { watching: boolean }
+  },
+  'watch:list': {
+    req: z.object({}),
+    res: undefined as unknown as { issues: Issue[] }
+  },
+  'worklog:export': {
+    req: z.object({
+      /** datas locais YYYY-MM-DD, intervalo fechado */
+      start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+    }),
+    res: undefined as unknown as {
+      rows: Array<{
+        /** ISO do started */
+        date: string
+        key: string
+        summary: string
+        timeSpent: string
+        seconds: number
+        comment: string | null
+      }>
+      totalSeconds: number
+    }
+  },
+  'notes:get': {
+    req: z.object({ key: z.string().trim().min(1).max(64) }),
+    res: undefined as unknown as { content: string | null; updatedAt: string | null }
+  },
+  'notes:set': {
+    req: z.object({
+      key: z.string().trim().min(1).max(64),
+      /** vazio apaga a nota */
+      content: z.string().max(20000)
+    }),
+    res: undefined as unknown as { ok: true }
   },
   'filters:list': {
     req: z.object({}),
@@ -729,6 +812,8 @@ export interface PushEvents {
   'push:auth-invalid': Record<string, never>
   'push:update-available': { version: string; url: string }
   'push:briefing-ready': { summaryId: number }
+  /** abrir um card na gaveta (ex.: clique em notificação de card seguido) */
+  'push:open-issue': { key: string }
 }
 export type PushChannel = keyof PushEvents
 
@@ -739,7 +824,8 @@ export const PUSH_CHANNELS: PushChannel[] = [
   'push:mentions-updated',
   'push:auth-invalid',
   'push:update-available',
-  'push:briefing-ready'
+  'push:briefing-ready',
+  'push:open-issue'
 ]
 
 /** Superfície exposta no preload como window.api */

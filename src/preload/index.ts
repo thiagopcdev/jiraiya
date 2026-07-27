@@ -15,7 +15,8 @@ const ALLOWED_PUSH: readonly string[] = [
   'push:mentions-updated',
   'push:auth-invalid',
   'push:update-available',
-  'push:briefing-ready'
+  'push:briefing-ready',
+  'push:open-issue'
 ]
 
 const api: RendererApi = {

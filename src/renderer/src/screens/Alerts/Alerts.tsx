@@ -1,11 +1,12 @@
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { AlertOctagon, AlertTriangle, ExternalLink, Info, X } from 'lucide-react'
 import type { Alert, AlertSeverity } from '@shared/domain'
 import { invoke } from '../../api/client'
 import { useAlerts } from '../../api/hooks'
-import { EmptyState, Spinner } from '../../components/ui'
+import { Card, EmptyState, Spinner } from '../../components/ui'
+import { IssueRow } from '../../components/IssueRow'
 import { t } from '../../strings/ptBR'
 import { useIssueDetail } from '../../components/issueDetail'
 
@@ -22,6 +23,12 @@ export default function Alerts(): React.JSX.Element {
     .map((sev) => ({ sev, items: alerts.filter((a) => a.severity === sev) }))
     .filter((g) => g.items.length > 0)
 
+  const { data: watchData, isLoading: watchLoading } = useQuery({
+    queryKey: ['watch-list'],
+    queryFn: () => invoke('watch:list', {})
+  })
+  const watched = watchData?.issues ?? []
+
   return (
     <div className="p-6">
       <h2 className="mb-5 text-xl font-semibold text-zinc-100">Alertas</h2>
@@ -33,6 +40,22 @@ export default function Alerts(): React.JSX.Element {
         {groups.map(({ sev, items }) => (
           <AlertGroup key={sev} severity={sev} items={items} />
         ))}
+      </div>
+
+      <div className="mt-6">
+        <Card title="Seguindo">
+          {watchLoading ? (
+            <Spinner className="text-zinc-500" />
+          ) : watched.length === 0 ? (
+            <EmptyState message="Você não segue nenhum card — use o olho na gaveta do card." />
+          ) : (
+            <div className="space-y-1">
+              {watched.map((issue) => (
+                <IssueRow key={issue.key} issue={issue} />
+              ))}
+            </div>
+          )}
+        </Card>
       </div>
     </div>
   )

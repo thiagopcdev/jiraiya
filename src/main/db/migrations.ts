@@ -219,6 +219,26 @@ const migrations: string[] = [
   CREATE TRIGGER comment_fts_ad AFTER DELETE ON issue_activity WHEN old.kind = 'comment' BEGIN
     DELETE FROM comment_fts WHERE rowid = old.id;
   END;
+  `,
+  // 006: cards seguidos (watch) e notas privadas por card
+  `
+  CREATE TABLE watch (
+    id INTEGER PRIMARY KEY,
+    workspace_id INTEGER NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,
+    issue_key TEXT NOT NULL,
+    last_status TEXT,
+    last_activity_at TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(workspace_id, issue_key)
+  );
+  CREATE TABLE issue_note (
+    id INTEGER PRIMARY KEY,
+    workspace_id INTEGER NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,
+    issue_key TEXT NOT NULL,
+    content TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(workspace_id, issue_key)
+  );
   `
 ]
 

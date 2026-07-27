@@ -38,8 +38,12 @@ import { registerSprintMoveHandlers } from './ipc/handlers/sprintMove'
 import { registerSearchHandlers } from './ipc/handlers/search'
 import { registerEpicHandlers } from './ipc/handlers/epics'
 import { registerPrHandlers } from './ipc/handlers/prs'
+import { registerWatchHandlers } from './ipc/handlers/watch'
+import { registerNotesHandlers } from './ipc/handlers/notes'
+import { registerWorklogExportHandlers } from './ipc/handlers/worklogExport'
 import { clearTempDir } from './attachments/store'
 import { runAlertEngine } from './alerts/engine'
+import { runWatchEngine } from './watch/engine'
 import { getWorkspaceRow } from './db/repos/workspace'
 import { getPrefs, listActiveAlerts } from './db/repos/misc'
 import { seedMentionHistory, unreadCount } from './db/repos/mentions'
@@ -227,6 +231,20 @@ app.whenReady().then(() => {
         }
       }
 
+      // cards seguidos: mudanças de status e comentários de outras pessoas
+      const watchEvents = runWatchEngine(db, workspace.id, workspace.account_id)
+      if (notify) {
+        // teto de 5 por sync — evita tempestade de notificações num sync grande
+        for (const event of watchEvents.slice(0, 5)) {
+          const n = new Notification({ title: 'Card seguido', body: event.message })
+          n.on('click', () => {
+            showMainWindow()
+            ctx.push('push:open-issue', { key: event.issueKey })
+          })
+          n.show()
+        }
+      }
+
       ctx.push('push:mentions-updated', { unreadCount: unreadCount(db, workspace.id) })
 
       if (prefs.notifyMentions && notify) {
@@ -270,6 +288,9 @@ app.whenReady().then(() => {
   registerSearchHandlers(ctx)
   registerEpicHandlers(ctx)
   registerPrHandlers(ctx)
+  registerWatchHandlers(ctx)
+  registerNotesHandlers(ctx)
+  registerWorklogExportHandlers(ctx)
 
   createWindow()
 
