@@ -219,15 +219,21 @@ const buttonClass = 'rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc
  */
 function ToolbarTip({
   label,
+  align = 'center',
   children
 }: {
   label: string
+  /** 'right' para botões no fim da barra: tooltip centralizado estouraria a borda da gaveta */
+  align?: 'center' | 'right'
   children: React.ReactNode
 }): React.JSX.Element {
+  const position = align === 'right' ? 'right-0' : 'left-1/2 -translate-x-1/2'
   return (
     <span className="group relative inline-flex">
       {children}
-      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 -translate-x-1/2 whitespace-nowrap rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-200 opacity-0 shadow-sm transition-opacity delay-150 group-hover:opacity-100">
+      <span
+        className={`pointer-events-none absolute top-full z-20 mt-1 whitespace-nowrap rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-200 opacity-0 shadow-sm transition-opacity delay-150 group-hover:opacity-100 ${position}`}
+      >
         {label}
       </span>
     </span>
@@ -332,6 +338,7 @@ export function MarkdownToolbar({
           <div className="mx-1 h-4 border-l border-zinc-700" />
           <ToolbarTip
             label={polishError ?? 'Formatar com IA — reescreve com formatação profissional'}
+            align="right"
           >
             <button
               type="button"
