@@ -35,3 +35,9 @@ No primeiro uso, conecte com a URL do site (`suaempresa.atlassian.net`), e-mail 
 - `src/renderer/` — React + Tailwind 4 + TanStack Query sobre IPC; sem acesso a Node (`sandbox: true`)
 
 A integração com o Claude invoca `claude -p` (modo não-interativo) resolvendo o binário em `~/.local/bin`, `/opt/homebrew/bin` ou `/usr/local/bin`; qualquer falha cai no template determinístico.
+
+## Licença e autoria
+
+Construído por **Thiago Prado** ([@thiagopcdev](https://github.com/thiagopcdev)). Distribuído sob a licença [MIT](LICENSE) — use, modifique e redistribua mantendo o aviso de copyright.
+
+> **Disclaimer**: projeto pessoal, **não afiliado nem endossado pela Atlassian**. "Jira" é marca registrada da Atlassian; "Jiraiya" é uma referência ao personagem do folclore japonês.
