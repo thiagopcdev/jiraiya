@@ -295,6 +295,45 @@ export const ipcContract = {
     req: z.object({}),
     res: undefined as unknown as { ok: true; path: string }
   },
+  'templates:list': {
+    req: z.object({}),
+    res: undefined as unknown as {
+      templates: Array<{ id: number; name: string; content: string }>
+    }
+  },
+  'templates:save': {
+    req: z.object({
+      /** presente = editar; ausente = criar */
+      id: z.number().int().optional(),
+      name: z.string().trim().min(1).max(100),
+      content: z.string().trim().min(1).max(5000)
+    }),
+    res: undefined as unknown as { template: { id: number; name: string; content: string } }
+  },
+  'templates:delete': {
+    req: z.object({ id: z.number().int() }),
+    res: undefined as unknown as { ok: true }
+  },
+  'backup:export': {
+    /** dialog de salvar; grava JSON com notas, seguidos, filtros, templates e prefs */
+    req: z.object({}),
+    res: undefined as unknown as { ok: true; path: string | null }
+  },
+  'backup:import': {
+    /** dialog de abrir; MERGE no workspace atual (upsert por chave/nome, nada é apagado) */
+    req: z.object({}),
+    res: undefined as unknown as {
+      ok: true
+      canceled: boolean
+      imported: {
+        notes: number
+        watches: number
+        filters: number
+        templates: number
+        prefs: boolean
+      }
+    }
+  },
   'text:polish': {
     req: z.object({
       text: z.string().trim().min(1).max(20000),

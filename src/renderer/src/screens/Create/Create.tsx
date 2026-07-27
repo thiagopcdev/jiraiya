@@ -1,13 +1,25 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, ExternalLink, Sparkles } from 'lucide-react'
 import { invoke, IpcError } from '../../api/client'
-import { useIssueTypes, useProjects } from '../../api/hooks'
-import { Button, Card, EmptyState, Input, Spinner } from '../../components/ui'
+import { useGlobalSearch, useIssueTypes, useProjects } from '../../api/hooks'
+import { Badge, Button, Card, EmptyState, Input, Spinner } from '../../components/ui'
 import { MarkdownToolbar } from '../../components/MarkdownToolbar'
+import { statusColor } from '../../components/statusColor'
 import { t } from '../../strings/ptBR'
 import { useIssueDetail } from '../../components/issueDetail'
+
+/** Primeiras 6 palavras com mais de 2 caracteres, juntas com espaço — consultas
+ * FTS longas com AND (todos os termos) ficam restritivas demais. */
+function buildDuplicateQuery(text: string): string {
+  return text
+    .trim()
+    .split(/\s+/)
+    .filter((word) => word.length > 2)
+    .slice(0, 6)
+    .join(' ')
+}
 
 export default function Create(): React.JSX.Element {
   const queryClient = useQueryClient()
@@ -60,6 +72,23 @@ export default function Create(): React.JSX.Element {
   const [createBusy, setCreateBusy] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [createdKey, setCreatedKey] = useState<string | null>(null)
+
+  // Aviso de possíveis duplicados: usa o que estiver preenchido (título/summary do
+  // modo manual, senão a ideia do modo Claude), debounced para não bater a busca a
+  // cada tecla.
+  const duplicateSource = summary.trim() || idea.trim()
+  const duplicateQuery = buildDuplicateQuery(duplicateSource)
+  const [debouncedDuplicateQuery, setDebouncedDuplicateQuery] = useState('')
+  useEffect(() => {
+    if (duplicateQuery.length < 3) return
+    const timer = setTimeout(() => setDebouncedDuplicateQuery(duplicateQuery), 500)
+    return () => clearTimeout(timer)
+  }, [duplicateQuery])
+  // Some fonte ficou curta demais (ou vazia) desde a última rodada debounced —
+  // não mostra resultado obsoleto de uma busca anterior.
+  const activeDuplicateQuery = duplicateQuery.length < 3 ? '' : debouncedDuplicateQuery
+  const { data: duplicatesData } = useGlobalSearch(activeDuplicateQuery)
+  const duplicates = (duplicatesData?.results ?? []).slice(0, 5)
 
   const resetForm = (): void => {
     setIdea('')
@@ -298,6 +327,32 @@ export default function Create(): React.JSX.Element {
               />
             </div>
           </Card>
+
+          {activeDuplicateQuery.length >= 3 && duplicates.length > 0 && (
+            <div className="rounded-md border border-amber-900/50 bg-amber-950/20 p-2 light:border-amber-300 light:bg-amber-50">
+              <p className="text-xs font-medium text-amber-400 light:text-amber-700">
+                Cards parecidos já existem:
+              </p>
+              <div className="mt-1.5 space-y-1">
+                {duplicates.map((result) => (
+                  <div key={result.key} className="flex items-center gap-2">
+                    <button
+                      className="shrink-0 font-mono text-xs text-indigo-400 hover:underline light:text-indigo-600"
+                      onClick={() => openIssue(result.key)}
+                    >
+                      {result.key}
+                    </button>
+                    <span className="min-w-0 flex-1 truncate text-xs text-zinc-400 light:text-zinc-600">
+                      {result.summary}
+                    </span>
+                    {result.status && (
+                      <Badge color={statusColor(result.statusCategory)}>{result.status}</Badge>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {createError && <p className="text-sm text-red-400 light:text-red-600">{createError}</p>}
 

@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, ExternalLink, XCircle } from 'lucide-react'
 import type { Prefs } from '@shared/domain'
-import { invoke } from '../../api/client'
+import { invoke, IpcError } from '../../api/client'
 import { useAuthStatus, usePrefs, usePrStatus, useProjects } from '../../api/hooks'
 import { Button, Card, Input, Spinner } from '../../components/ui'
+
+type CommentTemplate = { id: number; name: string; content: string }
 
 export default function Settings(): React.JSX.Element {
   return (
@@ -18,6 +20,8 @@ export default function Settings(): React.JSX.Element {
       <SyncSection />
       <PullRequestsSection />
       <ClaudeSection />
+      <TemplatesSection />
+      <BackupSection />
       <UpdateSection />
       <StorageSection />
       <AboutSection />
@@ -441,6 +445,213 @@ function ClaudeSection(): React.JSX.Element {
           </p>
         </div>
       )}
+    </Card>
+  )
+}
+
+function TemplatesSection(): React.JSX.Element {
+  const queryClient = useQueryClient()
+  const { data, isLoading } = useQuery({
+    queryKey: ['comment-templates'],
+    queryFn: () => invoke('templates:list', {})
+  })
+  const templates = data?.templates ?? []
+
+  const [editing, setEditing] = useState<CommentTemplate | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [name, setName] = useState('')
+  const [content, setContent] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const showForm = creating || editing !== null
+
+  const startEdit = (template: CommentTemplate): void => {
+    setEditing(template)
+    setCreating(false)
+    setName(template.name)
+    setContent(template.content)
+  }
+
+  const startCreate = (): void => {
+    setEditing(null)
+    setCreating(true)
+    setName('')
+    setContent('')
+  }
+
+  const cancel = (): void => {
+    setEditing(null)
+    setCreating(false)
+  }
+
+  const invalidate = async (): Promise<void> => {
+    await queryClient.invalidateQueries({ queryKey: ['comment-templates'] })
+  }
+
+  const save = async (): Promise<void> => {
+    if (!name.trim() || !content.trim()) return
+    setBusy(true)
+    try {
+      await invoke('templates:save', {
+        id: editing?.id,
+        name: name.trim(),
+        content: content.trim()
+      })
+      await invalidate()
+      setEditing(null)
+      setCreating(false)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const remove = async (id: number): Promise<void> => {
+    if (!window.confirm('Apagar este template?')) return
+    await invoke('templates:delete', { id })
+    await invalidate()
+  }
+
+  return (
+    <Card title="Templates de comentário">
+      <div className="space-y-3">
+        <p className="text-xs text-zinc-500">
+          Use {'{placeholders}'} — ao inserir, o primeiro fica selecionado para digitar por cima.
+          Disponíveis no editor de comentário da gaveta.
+        </p>
+
+        {isLoading && <Spinner className="text-zinc-500" />}
+        {!isLoading && templates.length === 0 && (
+          <p className="text-sm text-zinc-500">Nenhum template ainda.</p>
+        )}
+
+        {templates.length > 0 && (
+          <div className="space-y-2">
+            {templates.map((template) => (
+              <div key={template.id} className="rounded-md border border-zinc-800 p-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate text-sm text-zinc-200">{template.name}</span>
+                  <div className="flex shrink-0 gap-1">
+                    <Button variant="ghost" onClick={() => startEdit(template)}>
+                      Editar
+                    </Button>
+                    <Button variant="ghost" onClick={() => void remove(template.id)}>
+                      Apagar
+                    </Button>
+                  </div>
+                </div>
+                <p className="mt-1 truncate text-xs text-zinc-500">{template.content}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {showForm ? (
+          <div className="space-y-2 rounded-md border border-zinc-700 p-3">
+            <Input label="Nome" value={name} onChange={(e) => setName(e.target.value)} />
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-zinc-300">Conteúdo</span>
+              <textarea
+                className="h-20 w-full resize-y rounded-md border border-zinc-700 bg-zinc-900 p-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+              />
+            </label>
+            <div className="flex gap-2">
+              <Button
+                disabled={busy || !name.trim() || !content.trim()}
+                onClick={() => void save()}
+              >
+                {busy && <Spinner />}
+                Salvar
+              </Button>
+              <Button variant="ghost" onClick={cancel}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button variant="secondary" onClick={startCreate}>
+            + Novo template
+          </Button>
+        )}
+      </div>
+    </Card>
+  )
+}
+
+function BackupSection(): React.JSX.Element {
+  const queryClient = useQueryClient()
+  const [exportBusy, setExportBusy] = useState(false)
+  const [exportPath, setExportPath] = useState<string | null>(null)
+  const [importBusy, setImportBusy] = useState(false)
+  const [importMsg, setImportMsg] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const doExport = async (): Promise<void> => {
+    setExportBusy(true)
+    setError(null)
+    try {
+      const res = await invoke('backup:export', {})
+      if (res.path) setExportPath(res.path)
+    } catch (err) {
+      setError(err instanceof IpcError ? err.message : 'Falha ao exportar backup.')
+    } finally {
+      setExportBusy(false)
+    }
+  }
+
+  const doImport = async (): Promise<void> => {
+    if (
+      !window.confirm(
+        'Importar mescla os dados do arquivo com os atuais (nada é apagado). Continuar?'
+      )
+    ) {
+      return
+    }
+    setImportBusy(true)
+    setError(null)
+    try {
+      const res = await invoke('backup:import', {})
+      if (!res.canceled) {
+        const { notes, watches, filters, templates, prefs } = res.imported
+        setImportMsg(
+          `Importado: ${notes} notas, ${watches} seguidos, ${filters} filtros, ${templates} templates` +
+            (prefs ? ' (preferências aplicadas)' : '')
+        )
+        void queryClient.invalidateQueries()
+      }
+    } catch (err) {
+      setError(err instanceof IpcError ? err.message : 'Falha ao importar backup.')
+    } finally {
+      setImportBusy(false)
+    }
+  }
+
+  return (
+    <Card title="Backup">
+      <div className="space-y-3">
+        <p className="text-xs text-zinc-500">
+          Exporta o que só existe neste app: notas privadas, cards seguidos, filtros salvos,
+          templates e preferências. Os dados do Jira são ressincronizáveis.
+        </p>
+        <div className="flex gap-2">
+          <Button variant="secondary" disabled={exportBusy} onClick={() => void doExport()}>
+            {exportBusy && <Spinner />}
+            Exportar backup…
+          </Button>
+          <Button variant="secondary" disabled={importBusy} onClick={() => void doImport()}>
+            {importBusy && <Spinner />}
+            Importar backup…
+          </Button>
+        </div>
+        {exportPath && (
+          <p className="truncate text-xs text-green-400" title={exportPath}>
+            Backup salvo em {exportPath}
+          </p>
+        )}
+        {importMsg && <p className="text-xs text-green-400">{importMsg}</p>}
+        {error && <p className="text-xs text-amber-400 light:text-amber-600">{error}</p>}
+      </div>
     </Card>
   )
 }

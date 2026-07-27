@@ -41,6 +41,8 @@ import { registerEpicHandlers } from './ipc/handlers/epics'
 import { registerPrHandlers } from './ipc/handlers/prs'
 import { registerPolishHandlers } from './ipc/handlers/polish'
 import { registerTrendHandlers } from './ipc/handlers/trends'
+import { registerTemplateHandlers } from './ipc/handlers/templates'
+import { registerBackupHandlers } from './ipc/handlers/backup'
 import { registerWatchHandlers } from './ipc/handlers/watch'
 import { registerNotesHandlers } from './ipc/handlers/notes'
 import { registerWorklogExportHandlers } from './ipc/handlers/worklogExport'
@@ -362,6 +364,8 @@ app.whenReady().then(() => {
   registerPrHandlers(ctx)
   registerPolishHandlers(ctx)
   registerTrendHandlers(ctx)
+  registerTemplateHandlers(ctx)
+  registerBackupHandlers(ctx)
   registerWatchHandlers(ctx)
   registerNotesHandlers(ctx)
   registerWorklogExportHandlers(ctx)

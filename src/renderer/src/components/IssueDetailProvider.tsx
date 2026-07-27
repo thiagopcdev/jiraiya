@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import {
@@ -13,6 +13,7 @@ import {
   ExternalLink,
   Flag,
   GitBranch,
+  LibraryBig,
   Lock,
   MessageSquare,
   Paperclip,
@@ -938,12 +939,19 @@ function IssueDetailDrawer({
                 <div className="flex items-center justify-between gap-2">
                   <EditPreviewTabs mode={commentViewMode} onChange={setCommentViewMode} />
                   {commentViewMode === 'edit' && (
-                    <MarkdownToolbar
-                      textareaRef={commentRef}
-                      value={comment}
-                      onChange={setComment}
-                      aiContext="comment"
-                    />
+                    <div className="flex items-center gap-1">
+                      <MarkdownToolbar
+                        textareaRef={commentRef}
+                        value={comment}
+                        onChange={setComment}
+                        aiContext="comment"
+                      />
+                      <TemplatesMenu
+                        textareaRef={commentRef}
+                        value={comment}
+                        onChange={setComment}
+                      />
+                    </div>
                   )}
                 </div>
                 {commentViewMode === 'edit' ? (
@@ -1393,6 +1401,193 @@ function SubtaskCreateForm({
 }
 
 /**
+ * Menu dropdown de templates de comentário — reutilizado pelo editor de comentário novo e
+ * pela edição de um comentário existente (ambos passam a ref do textarea que estão
+ * controlando). Insere o conteúdo do template na posição do cursor: se houver texto e o
+ * cursor estiver no fim, prefixa com quebra de linha; senão insere direto na posição.
+ * Depois de inserir, se o template tiver placeholders `{...}`, seleciona o primeiro para
+ * o usuário digitar por cima. Também permite salvar o texto atual do textarea como um
+ * novo template via um mini-form inline.
+ */
+function TemplatesMenu({
+  textareaRef,
+  value,
+  onChange
+}: {
+  textareaRef: RefObject<HTMLTextAreaElement | null>
+  value: string
+  onChange: (next: string) => void
+}): React.JSX.Element {
+  const queryClient = useQueryClient()
+  const [open, setOpen] = useState(false)
+  const [showSaveForm, setShowSaveForm] = useState(false)
+  const [templateName, setTemplateName] = useState('')
+  const [saveBusy, setSaveBusy] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  const { data } = useQuery({
+    queryKey: ['comment-templates'],
+    queryFn: () => invoke('templates:list', {}),
+    staleTime: 60_000,
+    enabled: open
+  })
+
+  // fecha com clique fora ou Esc, só ouvindo enquanto o dropdown está aberto
+  useEffect(() => {
+    if (!open) return
+    const onPointerDown = (e: MouseEvent): void => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open])
+
+  const closeMenu = (): void => {
+    setOpen(false)
+    setShowSaveForm(false)
+    setTemplateName('')
+    setSaveError(null)
+  }
+
+  const insertTemplate = (content: string): void => {
+    const el = textareaRef.current
+    const start = el?.selectionStart ?? value.length
+    const end = el?.selectionEnd ?? value.length
+    const atEnd = value.length > 0 && start === value.length && end === value.length
+    const needsBreak = atEnd && !value.endsWith('\n')
+    const insertText = needsBreak ? `\n${content}` : content
+    const next = value.slice(0, start) + insertText + value.slice(end)
+    onChange(next)
+    const base = start + (needsBreak ? 1 : 0)
+    const placeholder = content.match(/\{[^}]+\}/)
+    const selStart = placeholder ? base + (placeholder.index ?? 0) : base + content.length
+    const selEnd = placeholder ? selStart + placeholder[0].length : selStart
+    requestAnimationFrame(() => {
+      const node = textareaRef.current
+      if (!node) return
+      node.focus()
+      node.setSelectionRange(selStart, selEnd)
+    })
+    closeMenu()
+  }
+
+  const saveCurrentAsTemplate = async (): Promise<void> => {
+    if (!templateName.trim() || !value.trim()) return
+    setSaveBusy(true)
+    setSaveError(null)
+    try {
+      await invoke('templates:save', { name: templateName.trim(), content: value.trim() })
+      void queryClient.invalidateQueries({ queryKey: ['comment-templates'] })
+      closeMenu()
+    } catch (err) {
+      setSaveError(err instanceof IpcError ? err.message : t.common.error)
+    } finally {
+      setSaveBusy(false)
+    }
+  }
+
+  const templates = data?.templates ?? []
+
+  return (
+    <div ref={containerRef} className="relative inline-flex">
+      <button
+        type="button"
+        className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+        title="Templates de comentário"
+        aria-label="Templates de comentário"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <LibraryBig size={14} />
+      </button>
+      {open && (
+        <div className="absolute top-full right-0 z-20 mt-1 max-h-64 min-w-56 overflow-y-auto rounded-md border border-zinc-700 bg-zinc-900 shadow-lg">
+          {templates.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-zinc-500">
+              Nenhum template — salve um comentário como template.
+            </p>
+          ) : (
+            <ul className="py-1">
+              {templates.map((tpl) => {
+                const firstLine = tpl.content.split('\n')[0]
+                return (
+                  <li key={tpl.id}>
+                    <button
+                      type="button"
+                      className="block w-full px-3 py-1.5 text-left hover:bg-zinc-800"
+                      onClick={() => insertTemplate(tpl.content)}
+                    >
+                      <span className="block truncate text-sm font-medium text-zinc-200">
+                        {tpl.name}
+                      </span>
+                      <span className="block truncate text-xs text-zinc-500">{firstLine}</span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+          <div className="border-t border-zinc-800 p-1.5">
+            {showSaveForm ? (
+              <div className="space-y-1.5">
+                <Input
+                  autoFocus
+                  className="text-xs"
+                  placeholder="Nome do template"
+                  value={templateName}
+                  onChange={(e) => setTemplateName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void saveCurrentAsTemplate()
+                  }}
+                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    disabled={saveBusy || !templateName.trim()}
+                    onClick={() => void saveCurrentAsTemplate()}
+                  >
+                    {saveBusy ? <Spinner /> : null}
+                    {t.common.save}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    disabled={saveBusy}
+                    onClick={() => setShowSaveForm(false)}
+                  >
+                    {t.common.cancel}
+                  </Button>
+                </div>
+                {saveError && (
+                  <p className="text-xs text-amber-400 light:text-amber-600">{saveError}</p>
+                )}
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="block w-full rounded px-2 py-1 text-left text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={!value.trim()}
+                onClick={() => setShowSaveForm(true)}
+              >
+                Salvar comentário atual como template…
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
  * Um comentário ao vivo. Se for do usuário atual, mostra ações discretas de
  * editar/excluir no header; edição troca o corpo por um textarea prefilled com o
  * markdown do comentário (preserva a formatação); exclusão pede confirmação
@@ -1520,12 +1715,15 @@ function CommentItem({
           <div className="flex items-center justify-between gap-2">
             <EditPreviewTabs mode={editViewMode} onChange={setEditViewMode} />
             {editViewMode === 'edit' && (
-              <MarkdownToolbar
-                textareaRef={bodyRef}
-                value={body}
-                onChange={setBody}
-                aiContext="comment"
-              />
+              <div className="flex items-center gap-1">
+                <MarkdownToolbar
+                  textareaRef={bodyRef}
+                  value={body}
+                  onChange={setBody}
+                  aiContext="comment"
+                />
+                <TemplatesMenu textareaRef={bodyRef} value={body} onChange={setBody} />
+              </div>
             )}
           </div>
           {editViewMode === 'edit' ? (

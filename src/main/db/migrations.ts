@@ -239,6 +239,17 @@ const migrations: string[] = [
     updated_at TEXT NOT NULL,
     UNIQUE(workspace_id, issue_key)
   );
+  `,
+  // 007: templates de comentário
+  `
+  CREATE TABLE comment_template (
+    id INTEGER PRIMARY KEY,
+    workspace_id INTEGER NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    content TEXT NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+  );
   `
 ]
 
