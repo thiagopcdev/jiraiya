@@ -1,11 +1,15 @@
 import { AppError, handle } from '../registry'
 import type { AppContext } from '../../appContext'
+import type { StatusCategory } from '@shared/domain'
 import { getWorkspaceRow } from '../../db/repos/workspace'
 import { getIssueByKey, updateIssueFields, updateIssueStatus } from '../../db/repos/issue'
 import { adfToText, textToAdf } from '../../jira/adf'
 import { JiraHttpError } from '../../jira/http'
 import { mapEditMeta } from '../../issues/editMeta'
 import { markdownToAdf } from '../../issues/markdownToAdf'
+import { isRetryableNetworkError } from '../../queue/classify'
+import { buildJiraUpdateFields, type QueuedUpdateFields } from '../../queue/perform'
+import { enqueueAction, queueCounts } from '../../queue/repo'
 import { parseCreateError } from './create'
 
 function requireWorkspace(ctx: AppContext): NonNullable<ReturnType<typeof getWorkspaceRow>> {
@@ -76,28 +80,22 @@ export function registerEditHandlers(ctx: AppContext): void {
       }
 
       const spFieldId = storyPointsFieldId(workspace)
-      const fields: Record<string, unknown> = {}
-      if (storyPoints !== undefined && spFieldId) fields[spFieldId] = storyPoints
-      if (priorityId) fields.priority = { id: priorityId }
-      if (severity) fields[severity.fieldId] = { id: severity.optionId }
-      if (originalEstimate) fields.timetracking = { originalEstimate }
-      if (assigneeAccountId !== undefined) {
-        fields.assignee = assigneeAccountId === null ? null : { id: assigneeAccountId }
+      const requested: QueuedUpdateFields = {
+        ...(storyPoints !== undefined && { storyPoints }),
+        ...(priorityId !== undefined && { priorityId }),
+        ...(priorityName !== undefined && { priorityName }),
+        ...(severity !== undefined && { severity }),
+        ...(originalEstimate !== undefined && { originalEstimate }),
+        ...(assigneeAccountId !== undefined && { assigneeAccountId }),
+        ...(assigneeName !== undefined && { assigneeName })
       }
+      const fields = buildJiraUpdateFields(requested, spFieldId)
 
       if (Object.keys(fields).length === 0) {
         throw new AppError('NOTHING_TO_UPDATE', 'Nada para atualizar')
       }
 
-      try {
-        await client.updateIssue(issueKey, fields)
-      } catch (err) {
-        if (err instanceof JiraHttpError) {
-          throw new AppError('UPDATE_FAILED', 'O Jira recusou a edição: ' + parseCreateError(err))
-        }
-        throw err
-      }
-
+      // patch do cache local (só dos campos que existem localmente)
       const patch: {
         storyPoints?: number | null
         priority?: string
@@ -108,10 +106,40 @@ export function registerEditHandlers(ctx: AppContext): void {
       if (priorityName) patch.priority = priorityName
       if (assigneeAccountId !== undefined) patch.assigneeAccountId = assigneeAccountId
       if (assigneeName !== undefined) patch.assigneeName = assigneeName
+
+      try {
+        await client.updateIssue(issueKey, fields)
+      } catch (err) {
+        if (isRetryableNetworkError(err)) {
+          // sem rede: enfileira e aplica a edição no cache local, guardando os
+          // valores antigos para desfazer se a ação falhar de vez
+          const revert: QueuedUpdateFields = {}
+          if (patch.storyPoints !== undefined) revert.storyPoints = issue.story_points
+          if (patch.priority !== undefined) revert.priorityName = issue.priority
+          if (patch.assigneeAccountId !== undefined) {
+            revert.assigneeAccountId = issue.assignee_account_id
+          }
+          if (patch.assigneeName !== undefined) revert.assigneeName = issue.assignee_name
+
+          enqueueAction(ctx.db, workspace.id, {
+            issueKey,
+            type: 'update',
+            payload: { summary: 'Editar campos', fields: requested, revert }
+          })
+          updateIssueFields(ctx.db, workspace.id, issueKey, patch)
+          ctx.push('push:queue-changed', queueCounts(ctx.db, workspace.id))
+          return { ok: true as const, queued: true }
+        }
+        if (err instanceof JiraHttpError) {
+          throw new AppError('UPDATE_FAILED', 'O Jira recusou a edição: ' + parseCreateError(err))
+        }
+        throw err
+      }
+
       updateIssueFields(ctx.db, workspace.id, issueKey, patch)
       void ctx.scheduler?.trigger({})
 
-      return { ok: true as const }
+      return { ok: true as const, queued: false }
     }
   )
 
@@ -135,7 +163,7 @@ export function registerEditHandlers(ctx: AppContext): void {
     return { transitions }
   })
 
-  handle('issues:transition', async ({ key, transitionId }) => {
+  handle('issues:transition', async ({ key, transitionId, toStatusName, toCategoryKey }) => {
     const workspace = requireWorkspace(ctx)
     const client = requireClient(ctx)
     const issueKey = key.trim().toUpperCase()
@@ -147,15 +175,36 @@ export function registerEditHandlers(ctx: AppContext): void {
       )
     }
 
-    const transitions = await client.issueTransitions(issueKey)
-    const picked = transitions.find((t) => t.id === transitionId)
-    if (!picked) {
-      throw new AppError('NO_TRANSITION', 'Transição inválida — recarregue o card')
-    }
-
+    let picked: { id: string; toStatusName: string; toCategoryKey: StatusCategory }
     try {
+      const transitions = await client.issueTransitions(issueKey)
+      const found = transitions.find((t) => t.id === transitionId)
+      if (!found) {
+        throw new AppError('NO_TRANSITION', 'Transição inválida — recarregue o card')
+      }
+      picked = found
       await client.doTransition(issueKey, picked.id)
     } catch (err) {
+      // sem rede: só é possível enfileirar se o renderer mandou o destino
+      if (isRetryableNetworkError(err) && toStatusName && toCategoryKey) {
+        enqueueAction(ctx.db, workspace.id, {
+          issueKey,
+          type: 'transition',
+          payload: {
+            summary: `Mover para ${toStatusName}`,
+            transitionId,
+            toStatusName,
+            toCategoryKey,
+            revert: {
+              status: issue.status,
+              category: issue.status_category as StatusCategory | null
+            }
+          }
+        })
+        updateIssueStatus(ctx.db, workspace.id, issueKey, toStatusName, toCategoryKey)
+        ctx.push('push:queue-changed', queueCounts(ctx.db, workspace.id))
+        return { newStatus: toStatusName, newStatusCategory: toCategoryKey, queued: true }
+      }
       if (err instanceof JiraHttpError) {
         throw new AppError(
           'TRANSITION_FAILED',
@@ -167,7 +216,11 @@ export function registerEditHandlers(ctx: AppContext): void {
 
     updateIssueStatus(ctx.db, workspace.id, issueKey, picked.toStatusName, picked.toCategoryKey)
     void ctx.scheduler?.trigger({})
-    return { newStatus: picked.toStatusName, newStatusCategory: picked.toCategoryKey }
+    return {
+      newStatus: picked.toStatusName,
+      newStatusCategory: picked.toCategoryKey,
+      queued: false
+    }
   })
 
   handle('issues:assignable', async ({ key }) => {
@@ -201,6 +254,20 @@ export function registerEditHandlers(ctx: AppContext): void {
     try {
       await client.addWorklog(issueKey, timeSpent, trimmed ? textToAdf(trimmed) : undefined)
     } catch (err) {
+      if (isRetryableNetworkError(err)) {
+        // sem rede: enfileira (não há total local para atualizar)
+        enqueueAction(ctx.db, workspace.id, {
+          issueKey,
+          type: 'worklog',
+          payload: {
+            summary: `Apontar ${timeSpent}`,
+            timeSpent,
+            comment: trimmed && trimmed !== '' ? trimmed : null
+          }
+        })
+        ctx.push('push:queue-changed', queueCounts(ctx.db, workspace.id))
+        return { ok: true as const, totalTimeSpent: null, queued: true }
+      }
       if (err instanceof JiraHttpError) {
         throw new AppError('WORKLOG_FAILED', 'O Jira recusou o registro: ' + parseCreateError(err))
       }
@@ -210,7 +277,7 @@ export function registerEditHandlers(ctx: AppContext): void {
     const t = await client
       .issueTimeTracking(issueKey)
       .catch(() => ({ timeSpent: null, originalEstimate: null }))
-    return { ok: true as const, totalTimeSpent: t.timeSpent }
+    return { ok: true as const, totalTimeSpent: t.timeSpent, queued: false }
   })
 
   handle('issues:updateText', async ({ key, summary, descriptionMarkdown }) => {

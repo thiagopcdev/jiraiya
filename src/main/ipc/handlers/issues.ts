@@ -8,6 +8,7 @@ import { queryIssues, searchIssues } from '../../queries/issues'
 import { buildLeadTime } from '../../queries/leadTime'
 import { getIssueByKey, listChildIssues, rowToIssue } from '../../db/repos/issue'
 import { mapIssueLinks } from '../../issues/links'
+import { mapChangelog } from '../../issues/changelog'
 import { resolvePeriod, type Period } from '@shared/periods'
 import type { SprintListItem } from '@shared/domain'
 
@@ -76,6 +77,13 @@ export function registerIssueHandlers(ctx: AppContext): void {
     const client = requireClient(ctx)
     const links = mapIssueLinks(await client.issueLinks(key.trim().toUpperCase()))
     return { links }
+  })
+
+  handle('issues:changelog', async ({ key }) => {
+    requireWorkspace(ctx)
+    const client = requireClient(ctx)
+    const entries = mapChangelog(await client.issueChangelog(key.trim().toUpperCase()))
+    return { entries }
   })
 
   handle('sprint:active', () => {

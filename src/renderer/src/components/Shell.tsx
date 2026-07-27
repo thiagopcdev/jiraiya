@@ -25,6 +25,7 @@ import { Spinner } from './ui'
 import { compactAgo } from '../lib/relativeTime'
 import { t } from '../strings/ptBR'
 import KeyboardShortcuts from './KeyboardShortcuts'
+import { QueueBadge } from './QueueCenter'
 import TimerWidget from './TimerWidget'
 
 const navItems = [
@@ -112,6 +113,7 @@ export default function Shell(): React.JSX.Element {
           ))}
         </nav>
         <div className="border-t border-zinc-800 p-3">
+          <QueueBadge />
           {update && !updateDismissed && (
             <div className="mb-2 flex items-center gap-2 rounded-md bg-zinc-800/60 px-2 py-1.5">
               <a

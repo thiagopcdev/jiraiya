@@ -264,6 +264,44 @@ export const t = {
     emptyHint: 'Busque por título, descrição ou comentários…',
     minChars: 'Digite ao menos 2 caracteres para buscar.',
     noResults: 'Nada encontrado.',
-    hintOpen: '↵ abrir · ⌘↵ abrir no Jira'
+    hintOpen: '↵ abrir · ⌘↵ abrir no Jira',
+    actionHint:
+      'ações: mover KEY status · atribuir KEY nome|mim · apontar 1h30m KEY · comentar KEY texto',
+    actionMove: 'Mover',
+    actionAssign: 'Atribuir',
+    actionAssignMe: 'Atribuir a mim',
+    actionWorklog: 'Apontar',
+    actionComment: 'Comentar em',
+    actionRun: '↵ executar',
+    actionDone: 'Feito!',
+    actionQueued: 'Sem rede — ação enfileirada.',
+    actionNoMatch: 'Nenhum status compatível.',
+    actionNoUser: 'Pessoa não encontrada.',
+    actionLoading: 'Executando…'
+  },
+  changelog: {
+    title: 'Histórico',
+    empty: 'Sem alterações registradas.',
+    error: 'Não foi possível carregar o histórico (sem conexão?).',
+    cleared: '(vazio)'
+  },
+  queue: {
+    title: 'Ações pendentes',
+    badgeTitle: 'ações aguardando sincronização',
+    empty: 'Nada aguardando sincronização.',
+    pendingOnIssue: 'Aguardando sincronização',
+    statusPending: 'pendente',
+    statusInflight: 'enviando…',
+    statusFailed: 'falhou',
+    retry: 'Tentar agora',
+    retryAll: 'Tentar todas',
+    discard: 'Descartar',
+    discardConfirm: 'Descartar esta ação?',
+    queuedToast: 'Sem rede — a ação ficou na fila e será enviada quando a conexão voltar.',
+    failedNotice: 'Uma ação da fila falhou e foi revertida. Veja em Ações pendentes.'
+  },
+  drafts: {
+    restored: 'Rascunho recuperado',
+    discard: 'Descartar rascunho'
   }
 }

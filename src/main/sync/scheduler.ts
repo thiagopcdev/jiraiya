@@ -12,6 +12,8 @@ export interface SchedulerDeps {
   onProgress: (p: SyncProgress) => void
   onComplete: (result: { success: boolean; error: string | null }) => void
   onAfterSync?: (info: AfterSyncInfo) => void
+  /** roda antes do engine (drena a fila offline) — falha aqui não derruba o sync */
+  onBeforeSync?: () => Promise<void>
 }
 
 /** Agenda o sync: no boot, a cada N minutos e sob demanda. Nunca roda 2 em paralelo. */
@@ -60,6 +62,13 @@ export class SyncScheduler {
     this.lastError = null
     this.lastProgress = null
     try {
+      if (this.deps.onBeforeSync) {
+        try {
+          await this.deps.onBeforeSync()
+        } catch (err) {
+          console.error('[sync] onBeforeSync falhou', err)
+        }
+      }
       await runSync(
         {
           db: this.deps.db,

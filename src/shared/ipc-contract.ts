@@ -2,9 +2,11 @@ import { z } from 'zod'
 import type {
   Alert,
   AskAction,
+  ChangelogEntry,
   Mention,
   Board,
   CreateIssueType,
+  PendingAction,
   Issue,
   IssueActivity,
   LeadTimeStat,
@@ -513,9 +515,18 @@ export const ipcContract = {
   'issues:transition': {
     req: z.object({
       key: z.string().trim().min(1).max(64),
-      transitionId: z.string().min(1)
+      transitionId: z.string().min(1),
+      /** nome/categoria do status de destino (da lista já carregada no renderer) —
+       *  permitem enfileirar offline com efeito otimista local */
+      toStatusName: z.string().min(1).optional(),
+      toCategoryKey: z.enum(['new', 'indeterminate', 'done']).optional()
     }),
-    res: undefined as unknown as { newStatus: string; newStatusCategory: StatusCategory }
+    res: undefined as unknown as {
+      newStatus: string
+      newStatusCategory: StatusCategory
+      /** true = sem rede; ação enfileirada e aplicada localmente */
+      queued: boolean
+    }
   },
   'issues:assignable': {
     req: z.object({ key: z.string().trim().min(1).max(64) }),
@@ -580,7 +591,7 @@ export const ipcContract = {
       /** nome exibido, para atualizar o cache local sem novo fetch */
       assigneeName: z.string().min(1).nullable().optional()
     }),
-    res: undefined as unknown as { ok: true }
+    res: undefined as unknown as { ok: true; queued: boolean }
   },
   'issues:logWork': {
     req: z.object({
@@ -592,7 +603,12 @@ export const ipcContract = {
         .regex(/^(\d+[wdhm])(\s+\d+[wdhm])*$/i, 'Formato: 1w 2d 3h 30m'),
       comment: z.string().max(2000).optional()
     }),
-    res: undefined as unknown as { ok: true; totalTimeSpent: string | null }
+    res: undefined as unknown as {
+      ok: true
+      /** null quando enfileirado offline (total só é conhecido após sincronizar) */
+      totalTimeSpent: string | null
+      queued: boolean
+    }
   },
   'issues:description': {
     req: z.object({ key: z.string().trim().min(1).max(64) }),
@@ -625,7 +641,11 @@ export const ipcContract = {
       issueKey: z.string().trim().min(1).max(64),
       body: z.string().trim().min(1).max(10000)
     }),
-    res: undefined as unknown as { ok: true }
+    res: undefined as unknown as {
+      ok: true
+      /** true = sem rede; comentário enfileirado (aparece como pendente na gaveta) */
+      queued: boolean
+    }
   },
   'issues:commentDraft': {
     req: z.object({
@@ -866,6 +886,23 @@ export const ipcContract = {
   'mentions:markAllRead': {
     req: z.object({}),
     res: undefined as unknown as { ok: true }
+  },
+  'issues:changelog': {
+    req: z.object({ key: z.string().trim().min(1).max(64) }),
+    res: undefined as unknown as { entries: ChangelogEntry[] }
+  },
+  'queue:list': {
+    req: z.object({}),
+    res: undefined as unknown as { actions: PendingAction[] }
+  },
+  'queue:retry': {
+    /** sem id: drena a fila inteira agora */
+    req: z.object({ id: z.number().int().optional() }),
+    res: undefined as unknown as { ok: true }
+  },
+  'queue:discard': {
+    req: z.object({ id: z.number().int() }),
+    res: undefined as unknown as { ok: true }
   }
 } as const
 
@@ -890,6 +927,8 @@ export interface PushEvents {
   /** abrir um card na gaveta (ex.: clique em notificação de card seguido) */
   'push:open-issue': { key: string }
   'push:update-progress': { percent: number }
+  /** fila offline mudou (enfileirou, drenou, falhou, descartou) */
+  'push:queue-changed': { pending: number; failed: number }
 }
 export type PushChannel = keyof PushEvents
 
@@ -902,7 +941,8 @@ export const PUSH_CHANNELS: PushChannel[] = [
   'push:update-available',
   'push:briefing-ready',
   'push:open-issue',
-  'push:update-progress'
+  'push:update-progress',
+  'push:queue-changed'
 ]
 
 /** Superfície exposta no preload como window.api */

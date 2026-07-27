@@ -10,7 +10,15 @@ import { markdownToAdf } from '../../issues/markdownToAdf'
 import { JiraHttpError } from '../../jira/http'
 import { claudeStatus, ClaudeUnavailableError } from '../../summaries/claude'
 import { draftCommentWithClaude } from '../../issues/commentDraft'
+import { isRetryableNetworkError } from '../../queue/classify'
+import { enqueueAction, queueCounts } from '../../queue/repo'
 import { parseCreateError } from './create'
+
+/** Trecho do comentário para o resumo da fila (uma linha, no máximo 60 chars). */
+function excerpt(body: string): string {
+  const flat = body.replace(/\s+/g, ' ').trim()
+  return flat.length > 60 ? `${flat.slice(0, 60)}…` : flat
+}
 
 /**
  * ADF → markdown tolerante a falhas: documento vazio ou conversão que lance
@@ -106,8 +114,24 @@ export function registerCommentHandlers(ctx: AppContext): void {
         'Card não encontrado localmente — sincronize ou confira a key'
       )
     }
-    await client.addComment(issue.key, markdownToAdf(body))
-    return { ok: true as const }
+    // conversão fora do try: falha aqui é markdown inválido, não falta de rede
+    const adf = markdownToAdf(body)
+    try {
+      await client.addComment(issue.key, adf)
+    } catch (err) {
+      if (isRetryableNetworkError(err)) {
+        // sem rede: guarda o markdown cru (convertido de novo no envio)
+        enqueueAction(ctx.db, workspace.id, {
+          issueKey: issue.key,
+          type: 'comment',
+          payload: { summary: `Comentar: "${excerpt(body)}"`, body }
+        })
+        ctx.push('push:queue-changed', queueCounts(ctx.db, workspace.id))
+        return { ok: true as const, queued: true }
+      }
+      throw err
+    }
+    return { ok: true as const, queued: false }
   })
 
   handle('issues:commentUpdate', async ({ issueKey, commentId, body }) => {

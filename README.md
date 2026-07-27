@@ -10,7 +10,9 @@ Tudo local: cache em SQLite (`better-sqlite3`), tokens criptografados via `safeS
 
 - **Dashboard pessoal** — concluí/movi/comentei/em andamento/parados por período, reprovados, burndown da sprint em story points
 - **Quadro** kanban com drag & drop, filtros por pessoa e sprint
-- **Gaveta do card** em todas as telas: descrição e comentários formatados (ADF), anexos com upload/arrastar/colar imagem, subtarefas, vínculos, worklogs (ver/editar/apagar), navegação entre cards relacionados
+- **Gaveta do card** em todas as telas: descrição e comentários formatados (ADF), anexos com upload/arrastar/colar imagem, subtarefas, vínculos, worklogs (ver/editar/apagar), histórico de alterações (changelog), navegação entre cards relacionados
+- **Fila offline** — comentar, mover, apontar tempo e editar campos sem rede: a ação é aplicada localmente, entra na fila com indicador na sidebar e sincroniza sozinha quando a conexão volta (conflitos são revertidos e notificados)
+- **Rascunho automático de comentário** — fechou a gaveta com um comentário pela metade? Ele volta quando você reabrir o card
 - **Edição completa**: título, descrição, status, responsável, story points, prioridade, severidade, estimativa, sprint/backlog — com barra de formatação markdown, abas Editar/Prévia e checklists nativos
 - **Timer de trabalho** por card com registro em 1 clique + widget flutuante
 - **Painel rápido no tray**: timer, cards em andamento, menções e daily sem abrir a janela
@@ -25,7 +27,7 @@ Tudo local: cache em SQLite (`better-sqlite3`), tokens criptografados via `safeS
 
 **Busca e navegação**
 
-- **⌘K / Ctrl+K** — busca full-text local (FTS5) em título, descrição, comentários e key, criação rápida (`criar <ideia>`)
+- **⌘K / Ctrl+K** — busca full-text local (FTS5) em título, descrição, comentários e key, criação rápida (`criar <ideia>`) e ações rápidas (`mover BT-12 review`, `atribuir BT-12 mim`, `apontar 1h30m BT-12`, `comentar BT-12 …`)
 - **Atalhos de teclado** — `g`+letra navega entre telas, `j/k/Enter` percorre listas, `?` mostra o mapa completo
 - **Aviso de cards parecidos** ao criar (anti-duplicados)
 

@@ -47,6 +47,8 @@ import { registerWatchHandlers } from './ipc/handlers/watch'
 import { registerNotesHandlers } from './ipc/handlers/notes'
 import { registerWorklogExportHandlers } from './ipc/handlers/worklogExport'
 import { registerTrayPanelHandlers } from './ipc/handlers/trayPanel'
+import { registerQueueHandlers } from './ipc/handlers/queue'
+import { drainQueue } from './queue/drainer'
 import { startWorklogReminder } from './worklogReminder'
 import { clearTempDir } from './attachments/store'
 import { runAlertEngine } from './alerts/engine'
@@ -269,6 +271,8 @@ app.whenReady().then(() => {
     getClient: () => ctx.getClient(),
     onProgress: (p) => ctx.push('push:sync-progress', p),
     onComplete: (r) => ctx.push('push:sync-complete', r),
+    // fila offline: tenta enviar o que ficou pendente antes de reconciliar
+    onBeforeSync: () => drainQueue(ctx).then(() => undefined),
     onAfterSync: (info) => {
       const workspace = getWorkspaceRow(db)
       if (!workspace) return
@@ -370,6 +374,7 @@ app.whenReady().then(() => {
   registerNotesHandlers(ctx)
   registerWorklogExportHandlers(ctx)
   registerTrayPanelHandlers(ctx, { showWindow: showMainWindow })
+  registerQueueHandlers(ctx)
 
   createWindow()
 

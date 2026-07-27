@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'rea
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import {
+  AlertTriangle,
   ArrowRightLeft,
   CheckCircle2,
   ChevronDown,
@@ -28,7 +29,13 @@ import {
   X,
   Zap
 } from 'lucide-react'
-import type { ActivityKind, CreateIssueType, Issue, IssueActivity } from '@shared/domain'
+import type {
+  ActivityKind,
+  ChangelogEntry,
+  CreateIssueType,
+  Issue,
+  IssueActivity
+} from '@shared/domain'
 import type { IpcRequest, IpcResponse } from '@shared/ipc-contract'
 import { invoke, IpcError } from '../api/client'
 import {
@@ -53,6 +60,9 @@ import { IssueDetailContext, useIssueDetail } from './issueDetail'
 import { t } from '../strings/ptBR'
 import { formatJiraDuration, formatTimer, useIssueTimer } from '../lib/timer'
 import { branchName } from '../lib/branchName'
+import { compactAgo } from '../lib/relativeTime'
+import { clearDraft, loadDraft, saveDraft } from '../lib/drafts'
+import { useQueue } from '../lib/queue'
 
 /** Converte um File em base64 puro (sem o prefixo `data:...;base64,`). */
 function fileToBase64(file: File): Promise<string> {
@@ -323,13 +333,24 @@ function IssueDetailDrawer({
 
   const handleTransitionChange = async (transitionId: string): Promise<void> => {
     if (!transitionId) return
+    const transition = transitionsData?.transitions.find((tr) => tr.id === transitionId)
     setMoveBusy(true)
     setMoveError(null)
     try {
-      await invoke('issues:transition', { key: issueKey, transitionId })
+      const res = await invoke('issues:transition', {
+        key: issueKey,
+        transitionId,
+        toStatusName: transition?.toStatusName,
+        toCategoryKey: transition?.toCategoryKey
+      })
       invalidateAfterTransition()
-      setMoveSuccess(true)
-      setTimeout(() => setMoveSuccess(false), 3000)
+      if (res.queued) {
+        setMoveError(t.queue.queuedToast)
+        setTimeout(() => setMoveError(null), 6000)
+      } else {
+        setMoveSuccess(true)
+        setTimeout(() => setMoveSuccess(false), 3000)
+      }
     } catch (err) {
       const message = err instanceof IpcError ? err.message : t.common.error
       setMoveError(message)
@@ -339,6 +360,10 @@ function IssueDetailDrawer({
       setSelectedTransitionId('')
     }
   }
+
+  // ações da fila offline pendentes especificamente para este card
+  const { actions: queueActions } = useQueue()
+  const pendingActionsOnIssue = queueActions.filter((a) => a.issueKey === issueKey)
 
   // subtarefas locais, vínculos ao vivo (podem falhar offline) e navegação para o pai
   const { data: childrenData } = useQuery({
@@ -382,16 +407,44 @@ function IssueDetailDrawer({
   })
 
   const [descExpanded, setDescExpanded] = useState(false)
-  const [comment, setComment] = useState('')
+  // o drawer inteiro remonta por issueKey (veja o `key={topKey}` no provider), então
+  // este useState só roda uma vez por card — é o ponto certo pra restaurar o rascunho
+  const [comment, setComment] = useState(() => loadDraft(issueKey) ?? '')
+  const [draftRestored, setDraftRestored] = useState(() => loadDraft(issueKey) !== null)
   const [commentViewMode, setCommentViewMode] = useState<'edit' | 'preview'>('edit')
   const commentRef = useRef<HTMLTextAreaElement>(null)
   const [commentBusy, setCommentBusy] = useState(false)
   const [commentError, setCommentError] = useState<string | null>(null)
   const [commentSent, setCommentSent] = useState(false)
 
+  // salva o rascunho do comentário em edição com debounce — não é set-state síncrono,
+  // só grava no localStorage após o usuário parar de digitar por ~500ms
+  useEffect(() => {
+    const timer = window.setTimeout(() => saveDraft(issueKey, comment), 500)
+    return () => window.clearTimeout(timer)
+  }, [issueKey, comment])
+
+  const discardDraft = (): void => {
+    clearDraft(issueKey)
+    setComment('')
+    setDraftRestored(false)
+  }
+
   const [aiOpen, setAiOpen] = useState(false)
   // timeline em accordion, fechada por padrão
   const [timelineOpen, setTimelineOpen] = useState(false)
+  // histórico (changelog) em accordion, fechado por padrão — só busca ao expandir
+  const [changelogOpen, setChangelogOpen] = useState(false)
+  const {
+    data: changelogData,
+    isLoading: changelogLoading,
+    isError: changelogFailed
+  } = useQuery({
+    queryKey: ['issue-changelog', issueKey],
+    queryFn: () => invoke('issues:changelog', { key: issueKey }),
+    enabled: changelogOpen,
+    retry: 0
+  })
   const [aiNotes, setAiNotes] = useState('')
   const [aiBusy, setAiBusy] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
@@ -441,13 +494,19 @@ function IssueDetailDrawer({
     setCommentBusy(true)
     setCommentError(null)
     try {
-      await invoke('issues:comment', { issueKey, body: comment.trim() })
+      const res = await invoke('issues:comment', { issueKey, body: comment.trim() })
       setComment('')
-      setCommentSent(true)
+      clearDraft(issueKey)
+      setDraftRestored(false)
       void invoke('sync:run', { full: false })
       void queryClient.invalidateQueries({ queryKey: ['issue-activity', issueKey] })
       void queryClient.invalidateQueries({ queryKey: ['issue-comments', issueKey] })
-      setTimeout(() => setCommentSent(false), 3000)
+      if (res.queued) {
+        setCommentError(t.queue.queuedToast)
+      } else {
+        setCommentSent(true)
+        setTimeout(() => setCommentSent(false), 3000)
+      }
     } catch (err) {
       setCommentError(err instanceof IpcError ? err.message : t.common.error)
     } finally {
@@ -620,6 +679,43 @@ function IssueDetailDrawer({
         {timerError && (
           <div className="border-b border-zinc-800 bg-zinc-950 px-4 py-2">
             <p className="text-sm text-amber-400 light:text-amber-600">{timerError}</p>
+          </div>
+        )}
+        {pendingActionsOnIssue.length > 0 && (
+          <div className="border-b border-amber-500/40 bg-amber-950/30 px-4 py-2 light:bg-amber-50">
+            <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-amber-400 light:text-amber-700">
+              <AlertTriangle size={12} />
+              {t.queue.pendingOnIssue}
+            </p>
+            <div className="space-y-1">
+              {pendingActionsOnIssue.map((action) => (
+                <div key={action.id} className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 flex-1 truncate text-xs text-amber-200/90 light:text-amber-800">
+                    {action.summary}
+                  </span>
+                  <span
+                    className="shrink-0"
+                    title={action.status === 'failed' ? (action.lastError ?? undefined) : undefined}
+                  >
+                    <MiniBadge
+                      tone={
+                        action.status === 'failed'
+                          ? 'red'
+                          : action.status === 'inflight'
+                            ? 'amber'
+                            : 'zinc'
+                      }
+                    >
+                      {action.status === 'failed'
+                        ? t.queue.statusFailed
+                        : action.status === 'inflight'
+                          ? t.queue.statusInflight
+                          : t.queue.statusPending}
+                    </MiniBadge>
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -883,6 +979,35 @@ function IssueDetailDrawer({
               <section>
                 <button
                   className="flex w-full items-center gap-1 text-xs font-semibold tracking-wide text-zinc-500 uppercase hover:text-zinc-300"
+                  onClick={() => setChangelogOpen((v) => !v)}
+                >
+                  {changelogOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  {t.changelog.title}
+                </button>
+                {changelogOpen && (
+                  <div className="mt-2">
+                    {changelogLoading ? (
+                      <Spinner className="text-zinc-500" />
+                    ) : changelogFailed ? (
+                      <p className="text-sm text-amber-400 light:text-amber-600">
+                        {t.changelog.error}
+                      </p>
+                    ) : !changelogData || changelogData.entries.length === 0 ? (
+                      <p className="text-sm text-zinc-500">{t.changelog.empty}</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {changelogData.entries.map((entry) => (
+                          <ChangelogEntryRow key={entry.id} entry={entry} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </section>
+
+              <section>
+                <button
+                  className="flex w-full items-center gap-1 text-xs font-semibold tracking-wide text-zinc-500 uppercase hover:text-zinc-300"
                   onClick={() => setTimelineOpen((v) => !v)}
                 >
                   {timelineOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -910,6 +1035,17 @@ function IssueDetailDrawer({
                 <h3 className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
                   {t.detail.commentTitle}
                 </h3>
+                {draftRestored && (
+                  <div className="flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-1 text-xs text-zinc-400">
+                    <span>{t.drafts.restored}</span>
+                    <button
+                      className="text-indigo-400 hover:underline light:text-indigo-600"
+                      onClick={discardDraft}
+                    >
+                      {t.drafts.discard}
+                    </button>
+                  </div>
+                )}
                 {aiOpen && (
                   <div className="space-y-2 rounded-md border border-zinc-800 bg-zinc-900/60 p-2.5">
                     <textarea
@@ -1156,9 +1292,13 @@ function EditPanel({
       })
       setRegistered(res.totalTimeSpent)
       setTimeSpentInput('')
-      setLogSaved(true)
       void queryClient.invalidateQueries({ queryKey: ['issue-editmeta', issueKey] })
-      setTimeout(() => setLogSaved(false), 3000)
+      if (res.queued) {
+        setLogError(t.queue.queuedToast)
+      } else {
+        setLogSaved(true)
+        setTimeout(() => setLogSaved(false), 3000)
+      }
     } catch (err) {
       setLogError(err instanceof IpcError ? err.message : t.common.error)
     } finally {
@@ -1992,6 +2132,26 @@ function ActivityLine({ activity }: { activity: IssueActivity }): React.JSX.Elem
   )
 }
 
+/** Uma entrada do histórico (changelog) do Jira: autor + data relativa, uma linha por campo alterado. */
+function ChangelogEntryRow({ entry }: { entry: ChangelogEntry }): React.JSX.Element {
+  return (
+    <div className="rounded-md border border-zinc-800 bg-zinc-900/60 p-2.5">
+      <div className="mb-1 flex items-baseline justify-between gap-2">
+        <span className="text-sm font-medium text-zinc-300">{entry.authorName ?? '—'}</span>
+        <span className="shrink-0 text-xs text-zinc-600">{compactAgo(entry.createdAt)}</span>
+      </div>
+      <div className="space-y-0.5">
+        {entry.items.map((item, i) => (
+          <p key={i} className="text-xs text-zinc-400">
+            <span className="text-zinc-300">{item.field}</span>: {item.from ?? t.changelog.cleared}{' '}
+            → {item.to ?? t.changelog.cleared}
+          </p>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 interface StatusSegment {
   status: string
   durationMs: number
@@ -2053,7 +2213,7 @@ function TimerControl({
     setBusy(true)
     onError(null)
     try {
-      await invoke('issues:logWork', {
+      const res = await invoke('issues:logWork', {
         key: issueKey,
         timeSpent: formatJiraDuration(timer.seconds),
         comment: 'Registrado pelo timer do Jiraiya'
@@ -2061,6 +2221,7 @@ function TimerControl({
       timer.reset()
       void queryClient.invalidateQueries({ queryKey: ['issue-editmeta', issueKey] })
       void queryClient.invalidateQueries({ queryKey: ['worklogs', issueKey] })
+      if (res.queued) onError(t.queue.queuedToast)
     } catch (err) {
       onError(err instanceof IpcError ? err.message : t.common.error)
     } finally {

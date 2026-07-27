@@ -259,6 +259,30 @@ export interface AskAction {
   storyPoints?: number
 }
 
+/** Tipos de ação que a fila offline sabe reenviar. */
+export type PendingActionType = 'comment' | 'transition' | 'worklog' | 'update'
+
+/** Visão de uma ação enfileirada (fila offline) para o renderer. */
+export interface PendingAction {
+  id: number
+  issueKey: string
+  type: PendingActionType
+  /** resumo humano da ação (ex.: 'Mover para Em andamento', 'Comentar: "…"') */
+  summary: string
+  status: 'pending' | 'inflight' | 'failed'
+  attempts: number
+  lastError: string | null
+  createdAt: string
+}
+
+/** Entrada do histórico (changelog) de um card. */
+export interface ChangelogEntry {
+  id: string
+  authorName: string | null
+  createdAt: string
+  items: Array<{ field: string; from: string | null; to: string | null }>
+}
+
 export const DEFAULT_PREFS: Prefs = {
   syncIntervalMinutes: 15,
   backfillDays: 30,

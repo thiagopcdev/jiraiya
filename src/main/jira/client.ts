@@ -36,6 +36,9 @@ function toCategoryKey(key: string | undefined): 'new' | 'indeterminate' | 'done
   return key === 'indeterminate' || key === 'done' ? key : 'new'
 }
 
+/** Teto de entradas de changelog buscadas por issue (as mais recentes). */
+const CHANGELOG_MAX_ENTRIES = 300
+
 const BASE_FIELDS = [
   'summary',
   'description',
@@ -116,17 +119,32 @@ export class JiraClient {
     return result
   }
 
-  /** Fallback por issue quando o bulk não cobre (changelogs muito grandes). */
+  /**
+   * Changelog de uma issue (fallback por issue quando o bulk não cobre, e fonte
+   * do histórico exibido no card). Cards antigos têm changelog gigante, então há
+   * teto de CHANGELOG_MAX_ENTRIES: como a API pagina do mais ANTIGO para o mais
+   * novo, quando o total passa do teto a paginação é reposicionada na janela
+   * final para trazer as entradas mais recentes.
+   */
   async issueChangelog(issueKey: string): Promise<JiraChangelogHistory[]> {
     const all: JiraChangelogHistory[] = []
     let startAt = 0
+    let rebased = false
     for (;;) {
       const res = await this.http.get<JiraChangelogPageResponse>(
         `/rest/api/3/issue/${encodeURIComponent(issueKey)}/changelog?startAt=${startAt}&maxResults=100`
       )
+      if (!rebased) {
+        rebased = true
+        if (res.total > CHANGELOG_MAX_ENTRIES) {
+          startAt = res.total - CHANGELOG_MAX_ENTRIES
+          continue
+        }
+      }
       all.push(...(res.values ?? []))
-      startAt += res.maxResults
-      if (startAt >= res.total) return all
+      // maxResults 0 travaria o loop — cai no tamanho pedido
+      startAt += res.maxResults > 0 ? res.maxResults : 100
+      if (startAt >= res.total || all.length >= CHANGELOG_MAX_ENTRIES) return all
     }
   }
 
