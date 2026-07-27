@@ -38,8 +38,11 @@ export function BurndownChart({
   const lastY = y(last.remaining)
   // perto da borda direita o rótulo não cabe — espelha para a esquerda do ponto
   const labelFlips = lastX > W - padR - 56
-  // rótulo acima do topo do plot também corta — empurra para baixo do ponto
-  const labelY = lastY - 6 < padT + 10 ? lastY + 16 : lastY - 6
+  // espelhado, a linha real chega por cima-esquerda (colide com rótulo acima):
+  // prefere abaixo do ponto quando há espaço; senão acima, respeitando o topo do plot
+  const fitsBelow = lastY + 16 <= y(0) - 2
+  const labelY =
+    labelFlips && fitsBelow ? lastY + 16 : lastY - 6 < padT + 10 ? lastY + 16 : lastY - 6
 
   return (
     <svg
@@ -82,6 +85,10 @@ export function BurndownChart({
         fontSize="11"
         fill="var(--chart-accent)"
         textAnchor={labelFlips ? 'end' : 'start'}
+        // halo da cor do fundo: legível mesmo cruzando a linha ideal tracejada
+        stroke="var(--tone-950)"
+        strokeWidth="3"
+        paintOrder="stroke"
       >
         {last.remaining} pts
       </text>
