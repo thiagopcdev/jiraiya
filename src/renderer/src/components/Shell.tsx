@@ -8,6 +8,7 @@ import {
   Columns3,
   Filter,
   FileText,
+  Keyboard,
   Layers,
   LayoutDashboard,
   MessageCircleQuestion,
@@ -159,7 +160,17 @@ export default function Shell(): React.JSX.Element {
           ) : (
             <p className="mt-1 px-2 text-xs leading-tight text-zinc-500">{t.sync.never}</p>
           )}
-          <p className="mt-2 px-2 text-xs leading-tight text-zinc-600">{t.app.paletteHint}</p>
+          <button
+            className="mt-2 flex w-full items-center gap-2 rounded-md px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
+            onClick={() => window.dispatchEvent(new Event('jiraiya:show-shortcuts'))}
+          >
+            <Keyboard size={13} />
+            <span>Atalhos do teclado</span>
+            <kbd className="ml-auto rounded border border-zinc-700 px-1 font-sans text-[10px] text-zinc-500">
+              ?
+            </kbd>
+          </button>
+          <p className="mt-1 px-2 text-xs leading-tight text-zinc-600">{t.app.paletteHint}</p>
         </div>
       </aside>
       <main className="min-w-0 flex-1 overflow-y-auto">

@@ -50,6 +50,14 @@ export default function KeyboardShortcuts(): React.JSX.Element | null {
   const location = useLocation()
   const [helpOpen, setHelpOpen] = useState(false)
   const pendingGRef = useRef(false)
+
+  // ponte para o indicador da sidebar (e qualquer outro gatilho de UI)
+  useEffect(() => {
+    const open = (): void => setHelpOpen(true)
+    window.addEventListener('jiraiya:show-shortcuts', open)
+    return () => window.removeEventListener('jiraiya:show-shortcuts', open)
+  }, [])
+
   const pendingGTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const rowIndexRef = useRef(-1)
 
