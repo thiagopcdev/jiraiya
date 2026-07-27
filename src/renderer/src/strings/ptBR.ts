@@ -267,6 +267,15 @@ export const t = {
     hintOpen: '↵ abrir · ⌘↵ abrir no Jira',
     actionHint:
       'ações: mover KEY status · atribuir KEY nome|mim · apontar 1h30m KEY · comentar KEY texto',
+    actionUsage: {
+      mover: { syntax: 'mover KEY status', example: 'ex.: mover BT-806 review' },
+      atribuir: { syntax: 'atribuir KEY nome ou mim', example: 'ex.: atribuir BT-806 mim' },
+      apontar: {
+        syntax: 'apontar tempo KEY comentário (opcional)',
+        example: 'ex.: apontar 1h30m BT-806 revisão de código'
+      },
+      comentar: { syntax: 'comentar KEY texto', example: 'ex.: comentar BT-806 subiu para homolog' }
+    } as Record<string, { syntax: string; example: string }>,
     actionMove: 'Mover',
     actionAssign: 'Atribuir',
     actionAssignMe: 'Atribuir a mim',

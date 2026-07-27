@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { parseQuickAction } from './quickActions'
+import { parseQuickAction, quickActionVerb } from './quickActions'
+
+describe('quickActionVerb', () => {
+  it('verbo sozinho é reconhecido (comando ainda incompleto)', () => {
+    expect(quickActionVerb('mover')).toBe('mover')
+    expect(quickActionVerb('APONTAR')).toBe('apontar')
+    expect(quickActionVerb('  atribuir BT-8')).toBe('atribuir')
+    expect(quickActionVerb('comentar BT-9')).toBe('comentar')
+  })
+
+  it('texto comum e criar → null', () => {
+    expect(quickActionVerb('busca qualquer')).toBeNull()
+    expect(quickActionVerb('criar nova ideia')).toBeNull()
+    expect(quickActionVerb('')).toBeNull()
+  })
+})
 
 describe('parseQuickAction', () => {
   describe('mover', () => {

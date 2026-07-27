@@ -11,6 +11,20 @@ export type QuickAction =
   | { kind: 'worklog'; key: string; timeSpent: string; comment: string | null }
   | { kind: 'comment'; key: string; body: string }
 
+export const QUICK_ACTION_VERBS = ['mover', 'atribuir', 'apontar', 'comentar'] as const
+export type QuickActionVerb = (typeof QUICK_ACTION_VERBS)[number]
+
+/**
+ * Verbo de ação já digitado, mas comando ainda incompleto/inválido —
+ * a palette usa isso para mostrar a sintaxe em vez de cair na busca comum.
+ */
+export function quickActionVerb(raw: string): QuickActionVerb | null {
+  const first = raw.trim().split(/\s+/)[0]?.toLowerCase()
+  return (QUICK_ACTION_VERBS as readonly string[]).includes(first)
+    ? (first as QuickActionVerb)
+    : null
+}
+
 const KEY_RE = /^[a-z][a-z0-9]*-\d+$/i
 const TIME_TOKEN_RE = /^(\d+[wdhm])+$/i
 const TIME_PART_RE = /\d+[wdhm]/gi

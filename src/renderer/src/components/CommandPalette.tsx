@@ -7,7 +7,7 @@ import { useAuthStatus, useGlobalSearch } from '../api/hooks'
 import { Badge, Spinner } from './ui'
 import { statusColor } from './statusColor'
 import { useIssueDetail } from './issueDetail'
-import { parseQuickAction, type QuickAction } from '../lib/quickActions'
+import { parseQuickAction, quickActionVerb, type QuickAction } from '../lib/quickActions'
 import { t } from '../strings/ptBR'
 
 /** Dono do estado aberto/fechado + listener global do atalho. O conteúdo (busca,
@@ -483,10 +483,13 @@ function PaletteModal({ onClose }: { onClose: () => void }): React.JSX.Element {
   const navigate = useNavigate()
 
   const quickAction = parseQuickAction(query)
+  // verbo digitado mas comando incompleto ("mover", "mover BT-8…") → mostra a
+  // sintaxe em vez de cair na busca comum, como o "criar " já faz
+  const partialVerb = quickAction === null ? quickActionVerb(query) : null
 
-  // Com uma ação rápida reconhecida, a busca global não roda (nem os resultados
-  // dela aparecem) — o painel de ação toma o lugar da lista.
-  const { data, isFetching } = useGlobalSearch(quickAction ? '' : query)
+  // Com uma ação rápida reconhecida (ou em digitação), a busca global não roda
+  // (nem os resultados dela aparecem) — o painel de ação toma o lugar da lista.
+  const { data, isFetching } = useGlobalSearch(quickAction || partialVerb ? '' : query)
   const results = data?.results ?? []
   const activeIndex = Math.min(rawActiveIndex, Math.max(results.length - 1, 0))
 
@@ -592,6 +595,13 @@ function PaletteModal({ onClose }: { onClose: () => void }): React.JSX.Element {
             )
           ) : quickAction !== null ? (
             <ActionMode action={quickAction} onClose={onClose} />
+          ) : partialVerb !== null ? (
+            <div className="px-3 py-6 text-center">
+              <p className="text-sm text-zinc-400">{t.palette.actionUsage[partialVerb].syntax}</p>
+              <p className="mt-1 text-xs text-zinc-600">
+                {t.palette.actionUsage[partialVerb].example}
+              </p>
+            </div>
           ) : trimmed.length === 0 ? (
             <div className="px-3 py-6 text-center">
               <p className="text-sm text-zinc-500">{t.palette.emptyHint}</p>
