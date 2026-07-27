@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Download, ExternalLink, FileImage, Paperclip, X } from 'lucide-react'
 import type { IpcResponse } from '@shared/ipc-contract'
@@ -149,7 +150,10 @@ function AttachmentLightbox({
     }
   }
 
-  return (
+  // Portal no body: a gaveta tem transform (slide-in), o que faria o `fixed`
+  // deste overlay ser relativo à GAVETA em vez do viewport (imagem estourando
+  // para fora e centralização quebrada).
+  return createPortal(
     <div
       className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-4 bg-black/80 p-6"
       onClick={onClose}
@@ -200,7 +204,8 @@ function AttachmentLightbox({
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
