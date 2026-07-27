@@ -23,6 +23,7 @@ import { useAlerts, useMentions, usePushInvalidation, useSyncStatus } from '../a
 import { Spinner } from './ui'
 import { compactAgo } from '../lib/relativeTime'
 import { t } from '../strings/ptBR'
+import KeyboardShortcuts from './KeyboardShortcuts'
 import TimerWidget from './TimerWidget'
 
 const navItems = [
@@ -165,6 +166,7 @@ export default function Shell(): React.JSX.Element {
         <Outlet />
       </main>
       <TimerWidget />
+      <KeyboardShortcuts />
     </div>
   )
 }

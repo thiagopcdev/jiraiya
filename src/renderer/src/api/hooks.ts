@@ -207,6 +207,14 @@ export function usePrsForIssue(
   })
 }
 
+export function useTrends(sprintCount?: number): UseQueryResult<IpcResponse<'team:trends'>> {
+  return useQuery({
+    queryKey: ['team-trends', sprintCount],
+    queryFn: () => invoke('team:trends', sprintCount ? { sprintCount } : {}),
+    staleTime: 60_000
+  })
+}
+
 /** Assina os canais push uma única vez e invalida os caches relevantes. */
 export function usePushInvalidation(): void {
   const queryClient = useQueryClient()

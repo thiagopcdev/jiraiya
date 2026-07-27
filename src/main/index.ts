@@ -6,7 +6,8 @@ import {
   Tray,
   Menu,
   nativeImage,
-  nativeTheme
+  nativeTheme,
+  screen
 } from 'electron'
 import type Database from 'better-sqlite3'
 import { join } from 'path'
@@ -39,9 +40,12 @@ import { registerSearchHandlers } from './ipc/handlers/search'
 import { registerEpicHandlers } from './ipc/handlers/epics'
 import { registerPrHandlers } from './ipc/handlers/prs'
 import { registerPolishHandlers } from './ipc/handlers/polish'
+import { registerTrendHandlers } from './ipc/handlers/trends'
 import { registerWatchHandlers } from './ipc/handlers/watch'
 import { registerNotesHandlers } from './ipc/handlers/notes'
 import { registerWorklogExportHandlers } from './ipc/handlers/worklogExport'
+import { registerTrayPanelHandlers } from './ipc/handlers/trayPanel'
+import { startWorklogReminder } from './worklogReminder'
 import { clearTempDir } from './attachments/store'
 import { runAlertEngine } from './alerts/engine'
 import { runWatchEngine } from './watch/engine'
@@ -53,12 +57,21 @@ import { checkForUpdate } from './update'
 import { claudeStatus } from './summaries/claude'
 
 const UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000
+const TRAY_PANEL_WIDTH = 360
+const TRAY_PANEL_HEIGHT = 460
 
 let ctx: AppContext
 // referência global: sem isso o GC destrói o Tray e o ícone some da barra
 let tray: Tray | null = null
+// menu do tray guardado à mão: sem setContextMenu (senão o clique esquerdo no
+// macOS abriria o menu em vez do popover), abrimos só no right-click
+let trayMenu: Menu | null = null
+// popover do tray (singleton, criado sob demanda)
+let trayPanel: BrowserWindow | null = null
 // referência global do timer de verificação de atualização (evita GC/duplicidade)
 let updateTimer: NodeJS.Timeout | null = null
+// cleanup do lembrete de worklog
+let stopWorklogReminder: (() => void) | null = null
 
 /** Dispara a geração do briefing matinal (idempotente pela data local). */
 function triggerMorningBriefing(db: Database.Database): void {
@@ -80,30 +93,88 @@ function showMainWindow(): void {
   }
 }
 
+/** Cria (sob demanda) a janela do popover do tray, sem exibir. */
+function createTrayPanel(): BrowserWindow {
+  const panel = new BrowserWindow({
+    width: TRAY_PANEL_WIDTH,
+    height: TRAY_PANEL_HEIGHT,
+    show: false,
+    frame: false,
+    resizable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    backgroundColor: themeBackgroundColor(getPrefs(ctx.db).theme),
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  })
+
+  panel.on('blur', () => panel.hide())
+  panel.on('closed', () => {
+    if (trayPanel === panel) trayPanel = null
+  })
+
+  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+    void panel.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#/tray`)
+  } else {
+    void panel.loadFile(join(__dirname, '../renderer/index.html'), { hash: 'tray' })
+  }
+
+  return panel
+}
+
+/** Abre/fecha o popover, posicionado junto ao ícone do tray. */
+function toggleTrayPanel(trayRef: Tray): void {
+  if (!trayPanel) trayPanel = createTrayPanel()
+  const panel = trayPanel
+
+  if (panel.isVisible()) {
+    panel.hide()
+    return
+  }
+
+  const bounds = trayRef.getBounds()
+  const { workArea } = screen.getDisplayNearestPoint({ x: bounds.x, y: bounds.y })
+
+  const rawX = Math.round(bounds.x + bounds.width / 2 - TRAY_PANEL_WIDTH / 2)
+  const x = Math.max(workArea.x, Math.min(rawX, workArea.x + workArea.width - TRAY_PANEL_WIDTH))
+  const rawY = Math.round(bounds.y + bounds.height + 4)
+  const y = Math.max(workArea.y, Math.min(rawY, workArea.y + workArea.height - TRAY_PANEL_HEIGHT))
+
+  panel.setPosition(x, y, false)
+  panel.show()
+  panel.focus()
+}
+
 /**
  * Atualiza tooltip, menu e badge do tray com as contagens atuais de menções não
  * lidas e alertas ativos. Sem workspace conectado → contagens zeradas.
  */
 function updateTray(db: Database.Database): void {
   if (!tray) return
+  const trayRef = tray
   const workspace = getWorkspaceRow(db)
   const unread = workspace ? unreadCount(db, workspace.id) : 0
   const alerts = workspace ? listActiveAlerts(db, workspace.id).length : 0
 
-  tray.setToolTip('Jiraiya')
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: 'Abrir Jiraiya', click: () => showMainWindow() },
-      { type: 'separator' },
-      { label: `${unread} menções não lidas`, enabled: false },
-      { label: `${alerts} alertas ativos`, enabled: false },
-      { type: 'separator' },
-      { label: 'Sincronizar agora', click: () => void ctx.scheduler?.trigger({}) },
-      { type: 'separator' },
-      { label: 'Sair', click: () => app.quit() }
-    ])
-  )
-  tray.setTitle(unread > 0 ? String(unread) : '')
+  trayRef.setToolTip('Jiraiya')
+  // NÃO usar setContextMenu: no macOS ele intercepta o clique esquerdo e o
+  // popover nunca abriria. O menu fica guardado e sai só no right-click.
+  trayMenu = Menu.buildFromTemplate([
+    { label: 'Abrir Jiraiya', click: () => showMainWindow() },
+    { label: 'Abrir painel rápido', click: () => toggleTrayPanel(trayRef) },
+    { type: 'separator' },
+    { label: `${unread} menções não lidas`, enabled: false },
+    { label: `${alerts} alertas ativos`, enabled: false },
+    { type: 'separator' },
+    { label: 'Sincronizar agora', click: () => void ctx.scheduler?.trigger({}) },
+    { type: 'separator' },
+    { label: 'Sair', click: () => app.quit() }
+  ])
+  trayRef.setTitle(unread > 0 ? String(unread) : '')
 }
 
 /**
@@ -290,16 +361,29 @@ app.whenReady().then(() => {
   registerEpicHandlers(ctx)
   registerPrHandlers(ctx)
   registerPolishHandlers(ctx)
+  registerTrendHandlers(ctx)
   registerWatchHandlers(ctx)
   registerNotesHandlers(ctx)
   registerWorklogExportHandlers(ctx)
+  registerTrayPanelHandlers(ctx, { showWindow: showMainWindow })
 
   createWindow()
 
   tray = new Tray(nativeImage.createFromPath(icon).resize({ width: 18, height: 18 }))
+  const trayRef = tray
+  trayRef.on('click', () => toggleTrayPanel(trayRef))
+  trayRef.on('right-click', () => {
+    if (trayMenu) trayRef.popUpContextMenu(trayMenu)
+  })
   updateTray(db)
 
   ctx.scheduler.start()
+
+  stopWorklogReminder = startWorklogReminder({
+    db,
+    getClient: () => ctx.getClient(),
+    showWindow: showMainWindow
+  })
 
   // briefing matinal: deixa o primeiro sync andar antes de gerar a daily de ontem
   setTimeout(() => triggerMorningBriefing(db), 15_000)
@@ -339,6 +423,10 @@ app.on('will-quit', () => {
   if (updateTimer) {
     clearInterval(updateTimer)
     updateTimer = null
+  }
+  if (stopWorklogReminder) {
+    stopWorklogReminder()
+    stopWorklogReminder = null
   }
   clearTempDir()
 })

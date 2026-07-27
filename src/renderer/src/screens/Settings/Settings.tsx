@@ -13,6 +13,7 @@ export default function Settings(): React.JSX.Element {
       <h2 className="text-xl font-semibold text-zinc-100">Configurações</h2>
       <AccountSection />
       <AppearanceSection />
+      <WorklogReminderSection />
       <ProjectsSection />
       <SyncSection />
       <PullRequestsSection />
@@ -90,6 +91,49 @@ function AppearanceSection(): React.JSX.Element {
           onChange={(v) => void update({ theme: v as Prefs['theme'] })}
         />
         <p className="text-xs text-zinc-500">Sistema segue o modo claro/escuro do macOS/Windows.</p>
+      </div>
+    </Card>
+  )
+}
+
+function WorklogReminderSection(): React.JSX.Element {
+  const queryClient = useQueryClient()
+  const { data: prefs } = usePrefs()
+
+  const update = async (patch: Partial<Prefs>): Promise<void> => {
+    await invoke('prefs:set', patch)
+    void queryClient.invalidateQueries({ queryKey: ['prefs'] })
+  }
+
+  if (!prefs) return <Card title="Lembrete de tempo">{<Spinner className="text-zinc-500" />}</Card>
+
+  return (
+    <Card title="Lembrete de tempo">
+      <div className="space-y-3">
+        <label className="flex cursor-pointer items-center justify-between text-sm text-zinc-300">
+          <span>
+            Lembrar de registrar tempo
+            <span className="mt-0.5 block text-xs text-zinc-500">
+              Notifica em dias úteis quando nenhum worklog foi lançado no dia.
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            className="ml-4 shrink-0 accent-indigo-600"
+            checked={prefs.worklogReminder}
+            onChange={(e) => void update({ worklogReminder: e.target.checked })}
+          />
+        </label>
+        <label className="flex items-center justify-between gap-4 text-sm text-zinc-300">
+          Horário do lembrete
+          <input
+            type="time"
+            disabled={!prefs.worklogReminder}
+            className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200 disabled:cursor-not-allowed disabled:text-zinc-600"
+            value={prefs.worklogReminderTime}
+            onChange={(e) => void update({ worklogReminderTime: e.target.value })}
+          />
+        </label>
       </div>
     </Card>
   )

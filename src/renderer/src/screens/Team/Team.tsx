@@ -2,9 +2,9 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, ExternalLink, Info, Sparkles } from 'lucide-react'
 import type { Period } from '@shared/periods'
-import type { Issue, TeamMemberSummary } from '@shared/domain'
+import type { Issue, SprintTrend, TeamMemberSummary } from '@shared/domain'
 import { invoke } from '../../api/client'
-import { useTeam, useVelocity } from '../../api/hooks'
+import { useTeam, useTrends, useVelocity } from '../../api/hooks'
 import { Badge, Button, Card, EmptyState, Spinner } from '../../components/ui'
 import { statusColor } from '../../components/statusColor'
 import { IssuesByStatus } from '../../components/IssuesByStatus'
@@ -128,6 +128,8 @@ export default function Team(): React.JSX.Element {
         </Card>
       )}
 
+      <TrendsCard />
+
       <RiskRadar />
 
       {narrative && (
@@ -237,6 +239,113 @@ function RiskRadar(): React.JSX.Element | null {
         <pre className="mt-3 border-t border-zinc-800 pt-3 whitespace-pre-wrap font-sans text-sm text-zinc-300">
           {explain}
         </pre>
+      )}
+    </Card>
+  )
+}
+
+function formatLeadDays(days: number): string {
+  return days.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+}
+
+function sparklinePoints(values: number[], w: number, h: number): string {
+  if (values.length === 0) return ''
+  const max = Math.max(...values, 0)
+  const min = Math.min(...values, 0)
+  const range = max - min || 1
+  const stepX = values.length > 1 ? w / (values.length - 1) : 0
+  return values
+    .map((v, i) => {
+      const x = values.length > 1 ? i * stepX : w / 2
+      const y = h - ((v - min) / range) * h
+      return `${x.toFixed(1)},${y.toFixed(1)}`
+    })
+    .join(' ')
+}
+
+function Sparkline({ title, values }: { title: string; values: number[] }): React.JSX.Element {
+  const W = 120
+  const H = 28
+  return (
+    <div>
+      <div className="mb-1 text-xs text-zinc-500">{title}</div>
+      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="overflow-visible">
+        <polyline
+          points={sparklinePoints(values, W, H)}
+          fill="none"
+          stroke="var(--chart-accent)"
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      </svg>
+    </div>
+  )
+}
+
+/**
+ * Tendências por sprint fechada — janela temporal da sprint (não associação
+ * sprint_jira_id, infiel para histórico). Precisa de pelo menos 2 sprints
+ * pra fazer sentido comparar.
+ */
+function TrendsCard(): React.JSX.Element | null {
+  const { data, isLoading } = useTrends()
+  const sprints: SprintTrend[] = data?.sprints ?? []
+
+  if (!isLoading && sprints.length < 2) {
+    return (
+      <Card title="Tendências (últimas sprints)" className="mb-4">
+        <EmptyState message="Poucas sprints fechadas para tendências." />
+      </Card>
+    )
+  }
+
+  return (
+    <Card title="Tendências (últimas sprints)" className="mb-4">
+      {isLoading ? (
+        <Spinner className="text-zinc-500" />
+      ) : (
+        <>
+          <div className="mb-1 flex items-center gap-3 px-2 text-xs text-zinc-500">
+            <span className="min-w-0 flex-1">Sprint</span>
+            <span className="w-16 text-right">SP</span>
+            <span className="w-16 text-right">Cards</span>
+            <span className="w-20 text-right">Lead</span>
+            <span className="w-24 text-right">Criados</span>
+          </div>
+          <div className="space-y-0.5">
+            {sprints.map((s) => (
+              <div
+                key={s.jiraId}
+                className="flex items-center gap-3 rounded px-2 py-1.5 text-sm text-zinc-300 odd:bg-zinc-800/40"
+              >
+                <span className="min-w-0 flex-1 truncate font-medium text-zinc-200">
+                  {s.name ?? `Sprint ${s.jiraId}`}
+                </span>
+                <span className="w-16 text-right tabular-nums">{s.deliveredSp} SP</span>
+                <span className="w-16 text-right tabular-nums text-zinc-400">
+                  {s.deliveredCount}
+                </span>
+                <span className="w-20 text-right tabular-nums text-zinc-400">
+                  {s.avgLeadDays != null ? `${formatLeadDays(s.avgLeadDays)}d` : '—'}
+                </span>
+                <span className="w-24 text-right tabular-nums text-zinc-500">
+                  {s.createdDuringCount}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-3 grid grid-cols-3 gap-4 border-t border-zinc-800 pt-3">
+            <Sparkline title="SP entregues" values={sprints.map((s) => s.deliveredSp)} />
+            <Sparkline title="Lead médio (dias)" values={sprints.map((s) => s.avgLeadDays ?? 0)} />
+            <Sparkline title="Criados durante" values={sprints.map((s) => s.createdDuringCount)} />
+          </div>
+
+          <p className="mt-3 text-xs text-zinc-500">
+            Janela temporal por sprint fechada; lead = criação→resolução.
+          </p>
+        </>
       )}
     </Card>
   )

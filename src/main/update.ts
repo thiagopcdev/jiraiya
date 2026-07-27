@@ -1,3 +1,6 @@
+import { createWriteStream, mkdirSync } from 'node:fs'
+import { once } from 'node:events'
+import { basename, join } from 'node:path'
 import { app, Notification, shell } from 'electron'
 import type Database from 'better-sqlite3'
 import { getWorkspaceRow } from './db/repos/workspace'
@@ -31,6 +34,31 @@ export function compareVersions(a: string, b: string): number {
 interface GithubRelease {
   tag_name?: string
   html_url?: string
+  assets?: Array<{ id?: number; name?: string }>
+}
+
+/** Headers da API do GitHub; Authorization só quando há token configurado. */
+function githubHeaders(token: string | null, accept: string): Record<string, string> {
+  const headers: Record<string, string> = { Accept: accept }
+  if (token) headers.Authorization = `Bearer ${token}`
+  return headers
+}
+
+/**
+ * GET /releases/latest cru. Lança Error com mensagem legível em 404/erros — os
+ * chamadores (checkForUpdate / downloadUpdate) decidem se propagam.
+ */
+async function fetchLatestReleaseRaw(token: string | null): Promise<GithubRelease> {
+  const res = await fetch(`https://api.github.com/repos/${RELEASES_REPO}/releases/latest`, {
+    headers: githubHeaders(token, 'application/vnd.github+json')
+  })
+  if (res.status === 404) {
+    throw new Error('release não encontrada — repo privado exige token')
+  }
+  if (!res.ok) {
+    throw new Error(`GitHub respondeu ${res.status}`)
+  }
+  return (await res.json()) as GithubRelease
 }
 
 /**
@@ -40,21 +68,26 @@ interface GithubRelease {
 export async function fetchLatestRelease(
   token: string | null
 ): Promise<{ version: string; url: string } | null> {
-  const headers: Record<string, string> = { Accept: 'application/vnd.github+json' }
-  if (token) headers.Authorization = `Bearer ${token}`
-
-  const res = await fetch(`https://api.github.com/repos/${RELEASES_REPO}/releases/latest`, {
-    headers
-  })
-  if (res.status === 404) {
-    throw new Error('release não encontrada — repo privado exige token')
-  }
-  if (!res.ok) {
-    throw new Error(`GitHub respondeu ${res.status}`)
-  }
-  const body = (await res.json()) as GithubRelease
+  const body = await fetchLatestReleaseRaw(token)
   if (!body.tag_name) return null
   return { version: body.tag_name.replace(/^v/i, ''), url: body.html_url ?? '' }
+}
+
+/**
+ * Escolhe o asset do instalador para a plataforma: darwin → primeiro nome
+ * terminando em `.dmg`; win32 → primeiro terminando em `-setup.exe` (fallback:
+ * qualquer `.exe`); outras plataformas → null. Função pura.
+ */
+export function pickUpdateAsset(
+  assets: Array<{ name: string; apiUrl: string }>,
+  platform: NodeJS.Platform
+): { name: string; apiUrl: string } | null {
+  const endsWith = (suffix: string): { name: string; apiUrl: string } | null =>
+    assets.find((a) => a.name.toLowerCase().endsWith(suffix)) ?? null
+
+  if (platform === 'darwin') return endsWith('.dmg')
+  if (platform === 'win32') return endsWith('-setup.exe') ?? endsWith('.exe')
+  return null
 }
 
 export interface UpdateStatus {
@@ -137,4 +170,84 @@ export async function checkForUpdate(
     tokenConfigured,
     error: null
   }
+}
+
+/**
+ * Baixa o instalador da release mais nova para a pasta temp e devolve o path.
+ * Streaming com contagem de bytes: `onProgress` é chamado a cada ~1% quando a
+ * resposta traz `content-length`; sem content-length chama `onProgress(-1)` uma
+ * vez (indeterminado) e segue sem progresso. Lança Error legível quando não há
+ * versão mais nova, quando a release não tem instalador para a plataforma ou
+ * quando o download falha.
+ */
+export async function downloadUpdate(
+  db: Database.Database,
+  onProgress: (percent: number) => void
+): Promise<string> {
+  const current = app.getVersion()
+  const workspace = getWorkspaceRow(db)
+  const token = workspace ? getCredential(db, workspace.id, 'github_token') : null
+
+  const release = await fetchLatestReleaseRaw(token)
+  const version = release.tag_name?.replace(/^v/i, '') ?? null
+  if (!version) throw new Error('release sem versão (tag) — nada para baixar')
+  if (compareVersions(version, current) <= 0) {
+    throw new Error(`você já está na versão mais recente (v${current})`)
+  }
+
+  const assets = (release.assets ?? [])
+    .filter((a): a is { id: number; name: string } => Boolean(a.name) && typeof a.id === 'number')
+    .map((a) => ({
+      name: a.name,
+      apiUrl: `https://api.github.com/repos/${RELEASES_REPO}/releases/assets/${a.id}`
+    }))
+
+  const asset = pickUpdateAsset(assets, process.platform)
+  if (!asset) throw new Error('instalador para esta plataforma não encontrado na release')
+
+  const res = await fetch(asset.apiUrl, {
+    headers: githubHeaders(token, 'application/octet-stream'),
+    redirect: 'follow'
+  })
+  if (!res.ok) throw new Error(`falha ao baixar o instalador (HTTP ${res.status})`)
+  if (!res.body) throw new Error('resposta do download sem corpo')
+
+  const dir = join(app.getPath('temp'), 'jiraiya-update')
+  mkdirSync(dir, { recursive: true })
+  const dest = join(dir, basename(asset.name))
+
+  const totalRaw = Number.parseInt(res.headers.get('content-length') ?? '', 10)
+  const total = Number.isFinite(totalRaw) && totalRaw > 0 ? totalRaw : 0
+  if (total === 0) onProgress(-1)
+
+  const file = createWriteStream(dest)
+  let lastPercent = -1
+  try {
+    const reader = res.body.getReader()
+    let received = 0
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      received += value.byteLength
+      if (!file.write(value)) await once(file, 'drain')
+      if (total > 0) {
+        const percent = Math.min(100, Math.floor((received / total) * 100))
+        if (percent > lastPercent) {
+          lastPercent = percent
+          onProgress(percent)
+        }
+      }
+    }
+    await new Promise<void>((resolve, reject) => {
+      file.on('error', reject)
+      file.end(() => resolve())
+    })
+  } catch (err) {
+    file.destroy()
+    throw err instanceof Error ? err : new Error('falha ao gravar o instalador')
+  }
+
+  // garante o 100% final mesmo se content-length subestimar o corpo
+  if (total > 0 && lastPercent < 100) onProgress(100)
+  return dest
 }

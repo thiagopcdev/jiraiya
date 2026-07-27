@@ -7,6 +7,7 @@ import { Spinner } from './components/ui'
 import Shell from './components/Shell'
 import { IssueDetailProvider } from './components/IssueDetailProvider'
 import CommandPalette from './components/CommandPalette'
+import UpdateBanner from './components/UpdateBanner'
 import Onboarding from './screens/Onboarding/Onboarding'
 import Dashboard from './screens/Dashboard/Dashboard'
 import Board from './screens/Board/Board'
@@ -21,6 +22,7 @@ import Summaries from './screens/Summaries/Summaries'
 import Team from './screens/Team/Team'
 import Alerts from './screens/Alerts/Alerts'
 import Settings from './screens/Settings/Settings'
+import TrayPanel from './screens/Tray/TrayPanel'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -55,8 +57,10 @@ export default function App(): React.JSX.Element {
     <QueryClientProvider client={queryClient}>
       <ThemeSync />
       <HashRouter>
+        <UpdateBanner />
         <Routes>
           <Route path="/onboarding" element={<Onboarding />} />
+          <Route path="/tray" element={<TrayPanel />} />
           <Route
             element={
               <AuthGate>

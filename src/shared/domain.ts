@@ -222,6 +222,24 @@ export interface Prefs {
   /** escopo extra da busca de PRs (ex. 'org:biudtech'); vazio = busca global */
   prSearchScope: string
   theme: ThemePref
+  /** lembra de registrar tempo em dias úteis quando nenhum worklog foi lançado no dia */
+  worklogReminder: boolean
+  /** horário local do lembrete, formato HH:MM */
+  worklogReminderTime: string
+}
+
+/** Tendências por sprint fechada (janela temporal — sprint_jira_id não é confiável p/ histórico). */
+export interface SprintTrend {
+  jiraId: number
+  name: string | null
+  endDate: string | null
+  /** SP entregues pelo TIME na janela da sprint */
+  deliveredSp: number
+  deliveredCount: number
+  /** média em dias de (resolved_at - created_at) dos entregues; null sem amostras */
+  avgLeadDays: number | null
+  /** cards criados durante a janela (proxy de scope creep) */
+  createdDuringCount: number
 }
 
 /** Tema visual do app; 'system' segue o modo claro/escuro do SO. */
@@ -261,5 +279,7 @@ export const DEFAULT_PREFS: Prefs = {
   updateCheck: true,
   prIntegration: false,
   prSearchScope: '',
-  theme: 'dark'
+  theme: 'dark',
+  worklogReminder: true,
+  worklogReminderTime: '17:30'
 }

@@ -32,6 +32,14 @@ function load(): TimerMap {
 let state: TimerMap = load()
 const listeners = new Set<() => void>()
 
+// o popover do tray é OUTRA janela compartilhando o mesmo localStorage:
+// o evento 'storage' sincroniza o timer entre as janelas
+window.addEventListener('storage', (e) => {
+  if (e.key !== STORAGE_KEY) return
+  state = load()
+  listeners.forEach((l) => l())
+})
+
 function persist(next: TimerMap): void {
   state = next
   localStorage.setItem(STORAGE_KEY, JSON.stringify(next))

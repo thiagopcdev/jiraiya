@@ -10,7 +10,9 @@ export function IssueRow({ issue }: { issue: Issue }): React.JSX.Element {
 
   return (
     <button
-      className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-zinc-800/70"
+      data-kb-row
+      tabIndex={-1}
+      className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-zinc-800/70 focus:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500"
       onClick={() => openIssue(issue.key)}
       title={issue.key}
     >

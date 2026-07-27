@@ -12,6 +12,7 @@ import type {
   Project,
   Sprint,
   SprintListItem,
+  SprintTrend,
   StatusCategory,
   Summary,
   SummaryTemplate,
@@ -169,7 +170,12 @@ export const ipcContract = {
       updateCheck: z.boolean().optional(),
       prIntegration: z.boolean().optional(),
       prSearchScope: z.string().trim().max(200).optional(),
-      theme: z.enum(['dark', 'light', 'system']).optional()
+      theme: z.enum(['dark', 'light', 'system']).optional(),
+      worklogReminder: z.boolean().optional(),
+      worklogReminderTime: z
+        .string()
+        .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Formato: HH:MM')
+        .optional()
     }),
     res: undefined as unknown as Prefs
   },
@@ -270,6 +276,24 @@ export const ipcContract = {
       content: z.string().max(20000)
     }),
     res: undefined as unknown as { ok: true }
+  },
+  'team:trends': {
+    req: z.object({ sprintCount: z.number().int().min(2).max(12).optional() }),
+    res: undefined as unknown as { sprints: SprintTrend[] }
+  },
+  'app:focusIssue': {
+    /** mostra a janela principal e abre o card na gaveta (usado pelo popover do tray) */
+    req: z.object({ key: z.string().trim().min(1).max(64) }),
+    res: undefined as unknown as { ok: true }
+  },
+  'app:show': {
+    req: z.object({}),
+    res: undefined as unknown as { ok: true }
+  },
+  'update:download': {
+    /** baixa o instalador (DMG/exe) da release mais nova e abre; progresso via push:update-progress */
+    req: z.object({}),
+    res: undefined as unknown as { ok: true; path: string }
   },
   'text:polish': {
     req: z.object({
@@ -826,6 +850,7 @@ export interface PushEvents {
   'push:briefing-ready': { summaryId: number }
   /** abrir um card na gaveta (ex.: clique em notificação de card seguido) */
   'push:open-issue': { key: string }
+  'push:update-progress': { percent: number }
 }
 export type PushChannel = keyof PushEvents
 
@@ -837,7 +862,8 @@ export const PUSH_CHANNELS: PushChannel[] = [
   'push:auth-invalid',
   'push:update-available',
   'push:briefing-ready',
-  'push:open-issue'
+  'push:open-issue',
+  'push:update-progress'
 ]
 
 /** Superfície exposta no preload como window.api */
