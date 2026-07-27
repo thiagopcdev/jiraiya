@@ -213,6 +213,28 @@ const lineButtons: ToolbarButton[] = [
 const buttonClass = 'rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200'
 
 /**
+ * Tooltip instantâneo no hover (o title nativo demora ~1s). Posicionado ABAIXO
+ * do botão: a barra fica no topo dos editores e a gaveta rola — para cima seria
+ * cortado pelo container de scroll.
+ */
+function ToolbarTip({
+  label,
+  children
+}: {
+  label: string
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <span className="group relative inline-flex">
+      {children}
+      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 -translate-x-1/2 whitespace-nowrap rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-200 opacity-0 shadow-sm transition-opacity delay-150 group-hover:opacity-100">
+        {label}
+      </span>
+    </span>
+  )
+}
+
+/**
  * Barra de formatação markdown reutilizável para textareas controlados. Opera direto sobre
  * o DOM do textarea (via ref) para ler a seleção atual, delega a transformação a helpers
  * puros e restaura foco+seleção depois do onChange (o value é controlado, então a seleção
@@ -284,17 +306,17 @@ export function MarkdownToolbar({
   const renderButton = (btn: ToolbarButton): React.JSX.Element => {
     const Icon = btn.icon
     return (
-      <button
-        key={btn.key}
-        type="button"
-        className={buttonClass}
-        title={btn.title}
-        aria-label={btn.title}
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={() => runButton(btn)}
-      >
-        <Icon size={14} />
-      </button>
+      <ToolbarTip key={btn.key} label={btn.title}>
+        <button
+          type="button"
+          className={buttonClass}
+          aria-label={btn.title}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => runButton(btn)}
+        >
+          <Icon size={14} />
+        </button>
+      </ToolbarTip>
     )
   }
 
@@ -308,21 +330,24 @@ export function MarkdownToolbar({
       {showPolish && (
         <>
           <div className="mx-1 h-4 border-l border-zinc-700" />
-          <button
-            type="button"
-            className={`rounded p-1 disabled:opacity-60 ${
-              polishError
-                ? 'text-amber-400 light:text-amber-600'
-                : 'text-indigo-400 hover:bg-zinc-800 hover:text-indigo-300 light:hover:bg-zinc-200'
-            }`}
-            title={polishError ?? 'Formatar com IA — reescreve com formatação profissional'}
-            aria-label="Formatar com IA"
-            disabled={polishBusy}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => void runPolish()}
+          <ToolbarTip
+            label={polishError ?? 'Formatar com IA — reescreve com formatação profissional'}
           >
-            {polishBusy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-          </button>
+            <button
+              type="button"
+              className={`rounded p-1 disabled:opacity-60 ${
+                polishError
+                  ? 'text-amber-400 light:text-amber-600'
+                  : 'text-indigo-400 hover:bg-zinc-800 hover:text-indigo-300 light:hover:bg-zinc-200'
+              }`}
+              aria-label="Formatar com IA"
+              disabled={polishBusy}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => void runPolish()}
+            >
+              {polishBusy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+            </button>
+          </ToolbarTip>
           {previous !== null && (
             <button
               type="button"
