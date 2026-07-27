@@ -379,13 +379,15 @@ function AssigneeChips({
       {people.map((p) => (
         <button
           key={p.accountId}
-          title={p.name}
+          title={p.accountId === myAccountId ? `${p.name} (você)` : p.name}
           onClick={() => onToggle(p.accountId)}
-          className={`${chipClass(filter.has(p.accountId))} ${
-            p.accountId === myAccountId ? 'ring-1 ring-indigo-500' : ''
-          }`}
+          className={chipClass(filter.has(p.accountId))}
         >
-          <span className="flex size-4 items-center justify-center rounded-full bg-zinc-700 text-[9px] font-semibold text-zinc-200">
+          <span
+            className={`flex size-4 items-center justify-center rounded-full text-[9px] font-semibold ${
+              p.accountId === myAccountId ? 'bg-indigo-600 text-white' : 'bg-zinc-700 text-zinc-200'
+            }`}
+          >
             {initials(p.name)}
           </span>
           {shortName(p.name)}
