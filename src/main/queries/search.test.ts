@@ -163,4 +163,41 @@ describe('searchGlobal', () => {
 
     expect(searchGlobal(db, 1, SITE_URL, '   ')).toEqual([])
   })
+
+  it('busca pela key acha o próprio card mesmo sem a key no texto', () => {
+    insertIssue(db, 1, { key: 'BT-806', summary: 'Endpoint público permite trocar telefone' })
+    // outro card que CITA a key na descrição não pode ganhar do próprio card
+    insertIssue(db, 1, {
+      key: 'BT-808',
+      summary: 'Card derivado',
+      descriptionText: 'Dividido a partir de BT-806'
+    })
+
+    const results = searchGlobal(db, 1, SITE_URL, 'BT-806')
+
+    expect(results[0]).toMatchObject({ key: 'BT-806', match: 'title', snippet: null })
+    expect(results.map((r) => r.key)).toContain('BT-808')
+  })
+
+  it('key em minúsculas e por prefixo também acham o card', () => {
+    insertIssue(db, 1, { key: 'BT-806', summary: 'Card de segurança' })
+
+    expect(searchGlobal(db, 1, SITE_URL, 'bt-806')[0]?.key).toBe('BT-806')
+    expect(searchGlobal(db, 1, SITE_URL, 'BT-80').map((r) => r.key)).toContain('BT-806')
+  })
+
+  it('query só numérica acha a key pela parte numérica', () => {
+    insertIssue(db, 1, { key: 'BT-806', summary: 'Card de segurança' })
+
+    expect(searchGlobal(db, 1, SITE_URL, '806').map((r) => r.key)).toContain('BT-806')
+  })
+
+  it('key exata vem antes de key mais longa com mesmo prefixo', () => {
+    insertIssue(db, 1, { key: 'BT-80', summary: 'Card antigo' })
+    insertIssue(db, 1, { key: 'BT-800', summary: 'Card novo' })
+
+    const results = searchGlobal(db, 1, SITE_URL, 'BT-80')
+
+    expect(results[0]?.key).toBe('BT-80')
+  })
 })

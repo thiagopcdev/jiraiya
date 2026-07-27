@@ -41,10 +41,11 @@ interface Row {
 }
 
 /**
- * Busca full-text em 3 fontes, por prioridade: (1) título da issue, (2) descrição
- * da issue, (3) comentários. Dedupe por key mantendo a maior prioridade
- * (title > description > comment). Ordem final: títulos, depois descrições, depois
- * comentários; dentro de cada grupo por rank. `limit` vale no total.
+ * Busca em 4 fontes, por prioridade: (0) key da issue (LIKE, fora do FTS),
+ * (1) título da issue, (2) descrição da issue, (3) comentários. Dedupe por key
+ * mantendo a maior prioridade (key/title > description > comment). Ordem final:
+ * keys, títulos, descrições, comentários; dentro de cada grupo por rank.
+ * `limit` vale no total.
  */
 export function searchGlobal(
   db: Database.Database,
@@ -55,6 +56,24 @@ export function searchGlobal(
 ): GlobalSearchResult[] {
   const fts = buildFtsQuery(query)
   if (!fts) return []
+
+  // Busca por KEY (o FTS não indexa a key e o título raramente a contém):
+  // sem whitespace → prefixo da key ('BT-8' acha BT-806); só dígitos → parte
+  // numérica ('806' acha BT-806). Prioridade máxima, acima do título.
+  const trimmed = query.trim()
+  let keyRows: Row[] = []
+  if (/^\S+$/.test(trimmed)) {
+    const pattern = /^\d+$/.test(trimmed) ? `%-${trimmed}%` : `${trimmed.toUpperCase()}%`
+    keyRows = db
+      .prepare(
+        `SELECT key, summary, status, status_category, NULL AS snippet
+         FROM issue
+         WHERE workspace_id = ? AND UPPER(key) LIKE ?
+         ORDER BY (UPPER(key) = UPPER(?)) DESC, LENGTH(key), key
+         LIMIT ?`
+      )
+      .all(workspaceId, pattern, trimmed, limit) as Row[]
+  }
 
   const titleRows = db
     .prepare(
@@ -99,6 +118,7 @@ export function searchGlobal(
   const results: GlobalSearchResult[] = []
 
   const groups: Array<{ rows: Row[]; match: GlobalSearchResult['match'] }> = [
+    { rows: keyRows, match: 'title' },
     { rows: titleRows, match: 'title' },
     { rows: descRows, match: 'description' },
     { rows: commentRows, match: 'comment' }
