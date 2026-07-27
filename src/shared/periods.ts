@@ -77,3 +77,21 @@ export function resolvePeriod(
       }
   }
 }
+
+/**
+ * Período de referência da visão de standup: o último dia ÚTIL antes de hoje.
+ * "Ontem" literal deixa a visão vazia em domingos e segundas (ninguém trabalha
+ * no fim de semana) — segunda a daily fala da sexta.
+ */
+export function standupReference(now: Date = new Date()): { period: Period; label: string } {
+  const today = startOfDay(now)
+  let ref = addDays(today, -1)
+  while (ref.getDay() === 0 || ref.getDay() === 6) ref = addDays(ref, -1)
+  const isYesterday = ref.getTime() === addDays(today, -1).getTime()
+  return {
+    period: isYesterday
+      ? { type: 'yesterday' }
+      : { type: 'custom', start: ref.toISOString(), end: addDays(ref, 1).toISOString() },
+    label: isYesterday ? 'ontem' : 'na sexta-feira'
+  }
+}

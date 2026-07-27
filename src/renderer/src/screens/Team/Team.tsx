@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, ExternalLink, Info, Sparkles } from 'lucide-react'
-import type { Period } from '@shared/periods'
+import { standupReference, type Period } from '@shared/periods'
 import type { Issue, SprintTrend, TeamMemberSummary } from '@shared/domain'
-import { invoke } from '../../api/client'
+import { invoke, IpcError } from '../../api/client'
+import { t } from '../../strings/ptBR'
 import { useTeam, useTrends, useVelocity } from '../../api/hooks'
 import { Badge, Button, Card, EmptyState, Spinner } from '../../components/ui'
 import { statusColor } from '../../components/statusColor'
@@ -84,7 +85,7 @@ export default function Team(): React.JSX.Element {
               : 'border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'
           }`}
           onClick={() => setStandup((s) => !s)}
-          title="Visão compacta pra acompanhar a daily (dados de ontem)"
+          title="Visão compacta pra acompanhar a daily (dados do último dia útil)"
         >
           Standup
         </button>
@@ -352,9 +353,14 @@ function TrendsCard(): React.JSX.Element | null {
 }
 
 function StandupView(): React.JSX.Element {
-  const { data, isLoading } = useQuery({
-    queryKey: ['team-standup'],
-    queryFn: () => invoke('team:summary', { period: { type: 'yesterday' } })
+  const { data, isLoading, error } = useQuery({
+    // queryFn roda fora do render, então new Date() é permitido aqui
+    queryFn: async () => {
+      const ref = standupReference(new Date())
+      const res = await invoke('team:summary', { period: ref.period })
+      return { ...res, standupLabel: ref.label }
+    },
+    queryKey: ['team-standup']
   })
 
   const members = useMemo(() => {
@@ -362,21 +368,32 @@ function StandupView(): React.JSX.Element {
     return [...list].sort((a, b) => Number(b.isMe) - Number(a.isMe))
   }, [data])
 
+  const label = data?.standupLabel ?? 'ontem'
+
   if (isLoading) return <Spinner className="text-zinc-500" />
+  if (error) {
+    return <EmptyState message={error instanceof IpcError ? error.message : t.common.error} />
+  }
   if (members.length === 0) {
-    return <EmptyState message="Ninguém com atividade ontem." />
+    return <EmptyState message={`Ninguém com atividade ${label}.`} />
   }
 
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
       {members.map((m) => (
-        <StandupCard key={m.accountId} member={m} />
+        <StandupCard key={m.accountId} member={m} label={label} />
       ))}
     </div>
   )
 }
 
-function StandupCard({ member }: { member: TeamMemberSummary }): React.JSX.Element {
+function StandupCard({
+  member,
+  label
+}: {
+  member: TeamMemberSummary
+  label: string
+}): React.JSX.Element {
   const shown = member.inProgress.slice(0, 3)
   const extra = member.inProgress.length - shown.length
 
@@ -393,7 +410,8 @@ function StandupCard({ member }: { member: TeamMemberSummary }): React.JSX.Eleme
       }
     >
       <p className="mb-3 text-xs text-zinc-400">
-        Ontem: moveu {member.movedCount} · comentou {member.commentedCount}
+        {label.charAt(0).toUpperCase() + label.slice(1)}: moveu {member.movedCount} · comentou{' '}
+        {member.commentedCount}
       </p>
 
       {member.done.length > 0 && (
