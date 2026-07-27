@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, ExternalLink, Sparkles } from 'lucide-react'
 import { invoke, IpcError } from '../../api/client'
 import { useIssueTypes, useProjects } from '../../api/hooks'
 import { Button, Card, EmptyState, Input, Spinner } from '../../components/ui'
+import { MarkdownToolbar } from '../../components/MarkdownToolbar'
 import { t } from '../../strings/ptBR'
 import { useIssueDetail } from '../../components/issueDetail'
 
@@ -51,6 +52,7 @@ export default function Create(): React.JSX.Element {
 
   const [summary, setSummary] = useState('')
   const [description, setDescription] = useState('')
+  const descriptionRef = useRef<HTMLTextAreaElement | null>(null)
   const [assignToMe, setAssignToMe] = useState(true)
   const [addToActiveSprint, setAddToActiveSprint] = useState(false)
   const [storyPoints, setStoryPoints] = useState('')
@@ -250,7 +252,13 @@ export default function Create(): React.JSX.Element {
                 <span className="mb-1 block text-sm font-medium text-zinc-300">
                   {t.create.description}
                 </span>
+                <MarkdownToolbar
+                  textareaRef={descriptionRef}
+                  value={description}
+                  onChange={setDescription}
+                />
                 <textarea
+                  ref={descriptionRef}
                   className="h-64 w-full resize-y rounded-md border border-zinc-700 bg-zinc-900 p-3 font-mono text-sm text-zinc-100 outline-none focus:border-indigo-500"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}

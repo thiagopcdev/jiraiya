@@ -44,6 +44,7 @@ import {
 } from '../api/hooks'
 import { Badge, Button, EmptyState, Input, Spinner } from './ui'
 import { AdfView } from './AdfView'
+import { MarkdownToolbar } from './MarkdownToolbar'
 import { AttachmentsSection, useMediaResolver } from './attachments'
 import { statusColor } from './statusColor'
 import { IssueDetailContext, useIssueDetail } from './issueDetail'
@@ -348,6 +349,7 @@ function IssueDetailDrawer({
 
   const [descExpanded, setDescExpanded] = useState(false)
   const [comment, setComment] = useState('')
+  const commentRef = useRef<HTMLTextAreaElement>(null)
   const [commentBusy, setCommentBusy] = useState(false)
   const [commentError, setCommentError] = useState<string | null>(null)
   const [commentSent, setCommentSent] = useState(false)
@@ -897,14 +899,18 @@ function IssueDetailDrawer({
                     )}
                   </div>
                 )}
+                <MarkdownToolbar textareaRef={commentRef} value={comment} onChange={setComment} />
                 <textarea
+                  ref={commentRef}
                   className="h-24 w-full resize-y rounded-md border border-zinc-700 bg-zinc-900 p-2.5 text-sm text-zinc-100 outline-none focus:border-indigo-500"
                   placeholder={t.detail.commentPlaceholder}
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
                   onPaste={(e) => void handleCommentPaste(e)}
                 />
-                <p className="-mt-1 text-xs text-zinc-600">Cole uma imagem para anexar</p>
+                <p className="-mt-1 text-xs text-zinc-600">
+                  Markdown: **negrito**, listas, `código` — cole imagem para anexar
+                </p>
                 <div className="flex items-center gap-2">
                   <Button
                     disabled={commentBusy || !comment.trim()}
@@ -1356,6 +1362,7 @@ function CommentItem({
 
   const [mode, setMode] = useState<'view' | 'edit' | 'confirmDelete'>('view')
   const [body, setBody] = useState(comment.bodyText)
+  const bodyRef = useRef<HTMLTextAreaElement>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -1456,7 +1463,9 @@ function CommentItem({
       </div>
       {mode === 'edit' ? (
         <div className="space-y-1.5">
+          <MarkdownToolbar textareaRef={bodyRef} value={body} onChange={setBody} />
           <textarea
+            ref={bodyRef}
             className="h-20 w-full resize-y rounded-md border border-zinc-700 bg-zinc-950 p-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
             value={body}
             onChange={(e) => setBody(e.target.value)}
@@ -1504,6 +1513,7 @@ function DescriptionSection({
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(issue.descriptionText ?? '')
+  const descriptionRef = useRef<HTMLTextAreaElement>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -1538,7 +1548,9 @@ function DescriptionSection({
           Editar substitui a formatação atual — o texto será salvo como markdown (títulos #, listas
           -, **negrito**, `código`).
         </p>
+        <MarkdownToolbar textareaRef={descriptionRef} value={value} onChange={setValue} />
         <textarea
+          ref={descriptionRef}
           className="min-h-40 w-full resize-y rounded-md border border-zinc-700 bg-zinc-900 p-2.5 font-mono text-xs text-zinc-100 outline-none focus:border-indigo-500"
           value={value}
           onChange={(e) => setValue(e.target.value)}

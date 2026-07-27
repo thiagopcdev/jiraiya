@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, ExternalLink, PanelRight, Sparkles, Trash2 } from 'lucide-react'
 import { invoke, IpcError } from '../../api/client'
 import { useIssueTypes, useIssues } from '../../api/hooks'
 import { Badge, Button, Card, Input, Spinner } from '../../components/ui'
+import { MarkdownToolbar } from '../../components/MarkdownToolbar'
 import { statusColor } from '../../components/statusColor'
 import { t } from '../../strings/ptBR'
 import type { Issue } from '@shared/domain'
@@ -19,6 +20,54 @@ const DESCRIPTION_PREVIEW_LIMIT = 600
 
 function truncateSummary(summary: string, max = 60): string {
   return summary.length > max ? `${summary.slice(0, max)}…` : summary
+}
+
+function SplitItemCard({
+  item,
+  index,
+  onChange,
+  onRemove
+}: {
+  item: EditableItem
+  index: number
+  onChange: (patch: Partial<Pick<EditableItem, 'title' | 'description'>>) => void
+  onRemove: () => void
+}): React.JSX.Element {
+  const descriptionRef = useRef<HTMLTextAreaElement | null>(null)
+
+  return (
+    <div className="space-y-2 rounded-md border border-zinc-800 p-3">
+      <div className="flex items-start gap-2">
+        <div className="flex-1 space-y-2">
+          <Input
+            label={`${t.split.itemTitleLabel} ${index + 1}`}
+            value={item.title}
+            maxLength={255}
+            onChange={(e) => onChange({ title: e.target.value })}
+          />
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium text-zinc-300">
+              {t.split.itemDescriptionLabel}
+            </span>
+            <MarkdownToolbar
+              textareaRef={descriptionRef}
+              value={item.description}
+              onChange={(next) => onChange({ description: next })}
+            />
+            <textarea
+              ref={descriptionRef}
+              className="h-40 w-full resize-y rounded-md border border-zinc-700 bg-zinc-900 p-3 font-mono text-sm text-zinc-100 outline-none focus:border-indigo-500"
+              value={item.description}
+              onChange={(e) => onChange({ description: e.target.value })}
+            />
+          </label>
+        </div>
+        <Button variant="ghost" aria-label={t.split.removeItem} onClick={onRemove}>
+          <Trash2 size={14} />
+        </Button>
+      </div>
+    </div>
+  )
 }
 
 export default function Split(): React.JSX.Element {
@@ -356,35 +405,13 @@ export default function Split(): React.JSX.Element {
               <Card title={t.split.itemsTitle}>
                 <div className="space-y-4">
                   {items.map((item, idx) => (
-                    <div key={item.id} className="space-y-2 rounded-md border border-zinc-800 p-3">
-                      <div className="flex items-start gap-2">
-                        <div className="flex-1 space-y-2">
-                          <Input
-                            label={`${t.split.itemTitleLabel} ${idx + 1}`}
-                            value={item.title}
-                            maxLength={255}
-                            onChange={(e) => updateItem(item.id, { title: e.target.value })}
-                          />
-                          <label className="block">
-                            <span className="mb-1 block text-sm font-medium text-zinc-300">
-                              {t.split.itemDescriptionLabel}
-                            </span>
-                            <textarea
-                              className="h-40 w-full resize-y rounded-md border border-zinc-700 bg-zinc-900 p-3 font-mono text-sm text-zinc-100 outline-none focus:border-indigo-500"
-                              value={item.description}
-                              onChange={(e) => updateItem(item.id, { description: e.target.value })}
-                            />
-                          </label>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          aria-label={t.split.removeItem}
-                          onClick={() => removeItem(item.id)}
-                        >
-                          <Trash2 size={14} />
-                        </Button>
-                      </div>
-                    </div>
+                    <SplitItemCard
+                      key={item.id}
+                      item={item}
+                      index={idx}
+                      onChange={(patch) => updateItem(item.id, patch)}
+                      onRemove={() => removeItem(item.id)}
+                    />
                   ))}
                   <Button variant="secondary" onClick={addItem}>
                     {t.split.addItem}

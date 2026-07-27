@@ -7,12 +7,17 @@ import type { AdfNode } from '../jira/types'
  *
  * Suporta: headings, parágrafos (linhas contíguas unidas por espaço), listas
  * (bullet/ordered com UM nível de aninhamento por indentação de 2+ espaços),
- * code fence, blockquote, régua (`---`/`***`) e marcas inline
+ * task lists (`- [ ]` / `- [x]`), code fence, blockquote, régua (`---`/`***`)
+ * e marcas inline
  * (**negrito**, *itálico* ou _itálico_, `código`, ~~riscado~~, [link](url)).
  */
 export function markdownToAdf(markdown: string): AdfNode {
   if (markdown.trim() === '') return { type: 'doc', version: 1, content: [] }
-  return { type: 'doc', version: 1, content: parseBlocks(markdown.split('\n')) }
+  return {
+    type: 'doc',
+    version: 1,
+    content: parseBlocks(markdown.split('\n'), { next: 1 })
+  }
 }
 
 const HEADING_RE = /^(#{1,6})\s+(.*)$/
@@ -20,6 +25,13 @@ const FENCE_RE = /^```(.*)$/
 const RULE_RE = /^(-{3,}|\*{3,})$/
 const BULLET_RE = /^(\s*)[-*]\s+(.*)$/
 const ORDERED_RE = /^(\s*)\d+\.\s+(.*)$/
+// `- [ ] texto` / `* [x] texto` (x case-insensitive); texto opcional
+const TASK_RE = /^\s*[-*]\s+\[([ xX])\](?:\s+(.*))?$/
+
+/** Contador de localId do documento (taskList/taskItem), incremental a partir de 1. */
+interface IdCounter {
+  next: number
+}
 
 interface ListItemMatch {
   indent: number
@@ -27,7 +39,20 @@ interface ListItemMatch {
   text: string
 }
 
+interface TaskItemMatch {
+  state: 'TODO' | 'DONE'
+  text: string
+}
+
+function matchTaskItem(line: string): TaskItemMatch | null {
+  const m = TASK_RE.exec(line)
+  if (!m) return null
+  return { state: m[1] === ' ' ? 'TODO' : 'DONE', text: m[2] ?? '' }
+}
+
 function matchListItem(line: string): ListItemMatch | null {
+  // taskItems têm prioridade — não absorvê-los como bullets
+  if (matchTaskItem(line)) return null
   const b = BULLET_RE.exec(line)
   if (b) return { indent: b[1].length, type: 'bullet', text: b[2] }
   const o = ORDERED_RE.exec(line)
@@ -42,11 +67,12 @@ function isBlockStart(line: string): boolean {
     FENCE_RE.test(line) ||
     RULE_RE.test(line.trim()) ||
     /^>/.test(line) ||
+    matchTaskItem(line) !== null ||
     matchListItem(line) !== null
   )
 }
 
-function parseBlocks(lines: string[]): AdfNode[] {
+function parseBlocks(lines: string[], ids: IdCounter): AdfNode[] {
   const content: AdfNode[] = []
   let i = 0
 
@@ -103,6 +129,13 @@ function parseBlocks(lines: string[]): AdfNode[] {
       continue
     }
 
+    if (matchTaskItem(line)) {
+      const { node, next } = parseTaskList(lines, i, ids)
+      content.push(node)
+      i = next
+      continue
+    }
+
     if (matchListItem(line)) {
       const { node, next } = parseList(lines, i)
       content.push(node)
@@ -139,6 +172,34 @@ function paragraphsFrom(lines: string[]): AdfNode[] {
     paras.push({ type: 'paragraph', content: parseInline(buf.join(' ')) })
   }
   return paras
+}
+
+/**
+ * Task list a partir de `start`: itens `- [ ]`/`- [x]` consecutivos num único
+ * taskList. localId é o contador do documento — o taskList recebe o id primeiro,
+ * depois os itens em ordem. Sem aninhamento.
+ */
+function parseTaskList(
+  lines: string[],
+  start: number,
+  ids: IdCounter
+): { node: AdfNode; next: number } {
+  const listId = String(ids.next++)
+  const items: AdfNode[] = []
+  let i = start
+
+  while (i < lines.length) {
+    const m = matchTaskItem(lines[i])
+    if (!m) break
+    items.push({
+      type: 'taskItem',
+      attrs: { localId: String(ids.next++), state: m.state },
+      content: parseInline(m.text)
+    })
+    i++
+  }
+
+  return { node: { type: 'taskList', attrs: { localId: listId }, content: items }, next: i }
 }
 
 /**

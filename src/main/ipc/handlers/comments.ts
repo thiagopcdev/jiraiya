@@ -3,7 +3,8 @@ import type { AppContext } from '../../appContext'
 import { getWorkspaceRow } from '../../db/repos/workspace'
 import { getPrefs } from '../../db/repos/misc'
 import { getIssueByKey } from '../../db/repos/issue'
-import { adfToText, textToAdf } from '../../jira/adf'
+import { adfToText } from '../../jira/adf'
+import { markdownToAdf } from '../../issues/markdownToAdf'
 import { JiraHttpError } from '../../jira/http'
 import { claudeStatus, ClaudeUnavailableError } from '../../summaries/claude'
 import { draftCommentWithClaude } from '../../issues/commentDraft'
@@ -89,7 +90,7 @@ export function registerCommentHandlers(ctx: AppContext): void {
         'Card não encontrado localmente — sincronize ou confira a key'
       )
     }
-    await client.addComment(issue.key, textToAdf(body))
+    await client.addComment(issue.key, markdownToAdf(body))
     return { ok: true as const }
   })
 
@@ -104,7 +105,7 @@ export function registerCommentHandlers(ctx: AppContext): void {
       )
     }
     try {
-      await client.updateComment(issue.key, commentId, textToAdf(body))
+      await client.updateComment(issue.key, commentId, markdownToAdf(body))
     } catch (err) {
       if (err instanceof JiraHttpError) {
         throw new AppError('COMMENT_FAILED', 'O Jira recusou a edição: ' + parseCreateError(err))

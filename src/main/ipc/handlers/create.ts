@@ -4,7 +4,7 @@ import type { CreateIssueType } from '@shared/domain'
 import { getWorkspaceRow } from '../../db/repos/workspace'
 import { getPrefs } from '../../db/repos/misc'
 import { getActiveSprint } from '../../db/repos/catalog'
-import { textToAdf } from '../../jira/adf'
+import { markdownToAdf } from '../../issues/markdownToAdf'
 import { JiraHttpError } from '../../jira/http'
 import { claudeStatus, ClaudeUnavailableError } from '../../summaries/claude'
 import { draftIssueWithClaude } from '../../issues/draft'
@@ -79,7 +79,7 @@ export function registerCreateHandlers(ctx: AppContext): void {
         summary
       }
       if (parentKey) fields.parent = { key: parentKey.trim().toUpperCase() }
-      if (description.trim()) fields.description = textToAdf(description)
+      if (description.trim()) fields.description = markdownToAdf(description)
       if (assignToMe !== false) fields.assignee = { id: workspace.account_id }
       if (addToActiveSprint && workspace.sprint_field_id && workspace.sprint_field_id !== 'none') {
         const sprint = getActiveSprint(ctx.db, workspace.id)

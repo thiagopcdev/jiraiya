@@ -185,3 +185,157 @@ describe('markdownToAdf', () => {
     ])
   })
 })
+
+describe('task lists', () => {
+  it('"- [ ] a" vira taskList com um taskItem em estado TODO', () => {
+    const result = markdownToAdf('- [ ] a')
+    expect(result.content).toEqual([
+      {
+        type: 'taskList',
+        attrs: { localId: '1' },
+        content: [
+          {
+            type: 'taskItem',
+            attrs: { localId: '2', state: 'TODO' },
+            content: [{ type: 'text', text: 'a' }]
+          }
+        ]
+      }
+    ])
+  })
+
+  it('"- [x] a" e "- [X] b" viram taskItem em estado DONE (minúsculo e maiúsculo)', () => {
+    const result = markdownToAdf('- [x] a\n- [X] b')
+    expect(result.content).toEqual([
+      {
+        type: 'taskList',
+        attrs: { localId: '1' },
+        content: [
+          {
+            type: 'taskItem',
+            attrs: { localId: '2', state: 'DONE' },
+            content: [{ type: 'text', text: 'a' }]
+          },
+          {
+            type: 'taskItem',
+            attrs: { localId: '3', state: 'DONE' },
+            content: [{ type: 'text', text: 'b' }]
+          }
+        ]
+      }
+    ])
+  })
+
+  it("itens consecutivos agrupam num único taskList com localIds '1', '2', '3'", () => {
+    const result = markdownToAdf('- [ ] a\n- [x] b')
+    expect(result.content).toEqual([
+      {
+        type: 'taskList',
+        attrs: { localId: '1' },
+        content: [
+          {
+            type: 'taskItem',
+            attrs: { localId: '2', state: 'TODO' },
+            content: [{ type: 'text', text: 'a' }]
+          },
+          {
+            type: 'taskItem',
+            attrs: { localId: '3', state: 'DONE' },
+            content: [{ type: 'text', text: 'b' }]
+          }
+        ]
+      }
+    ])
+  })
+
+  it('texto do item passa pelo parser inline ("fazer **agora**" gera mark strong)', () => {
+    const result = markdownToAdf('- [ ] fazer **agora**')
+    expect(result.content).toEqual([
+      {
+        type: 'taskList',
+        attrs: { localId: '1' },
+        content: [
+          {
+            type: 'taskItem',
+            attrs: { localId: '2', state: 'TODO' },
+            content: [
+              { type: 'text', text: 'fazer ' },
+              { type: 'text', text: 'agora', marks: [{ type: 'strong' }] }
+            ]
+          }
+        ]
+      }
+    ])
+  })
+
+  it('"- [ ] a" seguido de "- b" gera dois nós separados: taskList e bulletList', () => {
+    const result = markdownToAdf('- [ ] a\n- b')
+    expect(result.content).toEqual([
+      {
+        type: 'taskList',
+        attrs: { localId: '1' },
+        content: [
+          {
+            type: 'taskItem',
+            attrs: { localId: '2', state: 'TODO' },
+            content: [{ type: 'text', text: 'a' }]
+          }
+        ]
+      },
+      {
+        type: 'bulletList',
+        content: [
+          {
+            type: 'listItem',
+            content: [{ type: 'paragraph', content: [{ type: 'text', text: 'b' }] }]
+          }
+        ]
+      }
+    ])
+  })
+
+  it('"* [ ] a" (marcador asterisco) também vira taskItem TODO', () => {
+    const result = markdownToAdf('* [ ] a')
+    expect(result.content).toEqual([
+      {
+        type: 'taskList',
+        attrs: { localId: '1' },
+        content: [
+          {
+            type: 'taskItem',
+            attrs: { localId: '2', state: 'TODO' },
+            content: [{ type: 'text', text: 'a' }]
+          }
+        ]
+      }
+    ])
+  })
+
+  it('documento misto (heading + taskList + parágrafo) mantém a ordem dos blocos', () => {
+    const result = markdownToAdf('## Título\n- [ ] a\n- [x] b\n\nDepois')
+    expect(result.content).toEqual([
+      {
+        type: 'heading',
+        attrs: { level: 2 },
+        content: [{ type: 'text', text: 'Título' }]
+      },
+      {
+        type: 'taskList',
+        attrs: { localId: '1' },
+        content: [
+          {
+            type: 'taskItem',
+            attrs: { localId: '2', state: 'TODO' },
+            content: [{ type: 'text', text: 'a' }]
+          },
+          {
+            type: 'taskItem',
+            attrs: { localId: '3', state: 'DONE' },
+            content: [{ type: 'text', text: 'b' }]
+          }
+        ]
+      },
+      { type: 'paragraph', content: [{ type: 'text', text: 'Depois' }] }
+    ])
+  })
+})

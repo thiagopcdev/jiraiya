@@ -4,7 +4,7 @@ import type { AppContext } from '../../appContext'
 import { getWorkspaceRow } from '../../db/repos/workspace'
 import { getPrefs } from '../../db/repos/misc'
 import { updateIssueFields, updateIssueStatus } from '../../db/repos/issue'
-import { textToAdf } from '../../jira/adf'
+import { markdownToAdf } from '../../issues/markdownToAdf'
 import { JiraHttpError } from '../../jira/http'
 import { claudeStatus } from '../../summaries/claude'
 import { buildAskContext } from '../../ask/context'
@@ -148,7 +148,7 @@ async function executeAction(
         throw new AppError('VALIDATION', 'Ação de comentário sem texto')
       }
       try {
-        await client.addComment(key, textToAdf(text))
+        await client.addComment(key, markdownToAdf(text))
       } catch (err) {
         rejectJira(err, 'COMMENT_FAILED', 'O Jira recusou o comentário')
       }

@@ -4,6 +4,7 @@ import { getWorkspaceRow } from '../../db/repos/workspace'
 import { getPrefs } from '../../db/repos/misc'
 import { getIssueByKey } from '../../db/repos/issue'
 import { textToAdf } from '../../jira/adf'
+import { markdownToAdf } from '../../issues/markdownToAdf'
 import { JiraHttpError } from '../../jira/http'
 import { claudeStatus } from '../../summaries/claude'
 import { splitIssueWithClaude } from '../../issues/split'
@@ -74,7 +75,7 @@ export function registerSplitHandlers(ctx: AppContext): void {
         summary: item.title
       }
       if (mode === 'subtask') fields.parent = { key: parent.key }
-      if (item.description.trim()) fields.description = textToAdf(item.description)
+      if (item.description.trim()) fields.description = markdownToAdf(item.description)
       if (assignToMe) fields.assignee = { id: workspace.account_id }
       try {
         keys.push((await client.createIssue(fields)).key)
