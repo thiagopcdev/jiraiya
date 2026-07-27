@@ -1,4 +1,13 @@
-import { app, shell, BrowserWindow, Notification, Tray, Menu, nativeImage } from 'electron'
+import {
+  app,
+  shell,
+  BrowserWindow,
+  Notification,
+  Tray,
+  Menu,
+  nativeImage,
+  nativeTheme
+} from 'electron'
 import type Database from 'better-sqlite3'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -9,7 +18,7 @@ import { SyncScheduler } from './sync/scheduler'
 import { registerAuthHandlers } from './ipc/handlers/auth'
 import { registerProjectHandlers } from './ipc/handlers/projects'
 import { registerSyncHandlers } from './ipc/handlers/sync'
-import { registerPrefsHandlers } from './ipc/handlers/prefs'
+import { registerPrefsHandlers, themeBackgroundColor } from './ipc/handlers/prefs'
 import { registerAlertHandlers } from './ipc/handlers/alerts'
 import { registerIssueHandlers } from './ipc/handlers/issues'
 import { registerSummaryHandlers } from './ipc/handlers/summaries'
@@ -114,6 +123,11 @@ function seedMentionsOnce(db: Database.Database): void {
 }
 
 function createWindow(): void {
+  // createWindow() só roda depois de `ctx = new AppContext(db)` no whenReady
+  // (e via activate/showMainWindow, ambos posteriores); ainda assim, sem db
+  // cai no escuro — que é o DEFAULT_PREFS.theme.
+  const theme = ctx?.db ? getPrefs(ctx.db).theme : 'dark'
+
   const mainWindow = new BrowserWindow({
     title: 'Jiraiya',
     width: 1200,
@@ -121,6 +135,7 @@ function createWindow(): void {
     minWidth: 900,
     minHeight: 600,
     show: false,
+    backgroundColor: themeBackgroundColor(theme),
     autoHideMenuBar: true,
     titleBarStyle: 'hiddenInset',
     ...(process.platform === 'linux' ? { icon } : {}),
@@ -168,6 +183,9 @@ app.whenReady().then(() => {
   const db = openDb()
   seedMentionsOnce(db)
   ctx = new AppContext(db)
+
+  // alinha menus de contexto, scrollbars nativas e diálogos com a pref de tema
+  nativeTheme.themeSource = getPrefs(db).theme
   ctx.scheduler = new SyncScheduler({
     db,
     getClient: () => ctx.getClient(),

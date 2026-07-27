@@ -1,6 +1,8 @@
+import { useEffect } from 'react'
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { useAuthStatus } from './api/hooks'
+import { useAuthStatus, usePrefs } from './api/hooks'
+import { applyThemePref } from './lib/theme'
 import { Spinner } from './components/ui'
 import Shell from './components/Shell'
 import { IssueDetailProvider } from './components/IssueDetailProvider'
@@ -26,6 +28,15 @@ const queryClient = new QueryClient({
   }
 })
 
+/** Mantém o data-theme do <html> em dia com a pref do banco (o boot usa o espelho local). */
+function ThemeSync(): null {
+  const { data } = usePrefs()
+  useEffect(() => {
+    if (data) applyThemePref(data.theme)
+  }, [data])
+  return null
+}
+
 function AuthGate({ children }: { children: React.JSX.Element }): React.JSX.Element {
   const { data, isLoading } = useAuthStatus()
   if (isLoading) {
@@ -42,6 +53,7 @@ function AuthGate({ children }: { children: React.JSX.Element }): React.JSX.Elem
 export default function App(): React.JSX.Element {
   return (
     <QueryClientProvider client={queryClient}>
+      <ThemeSync />
       <HashRouter>
         <Routes>
           <Route path="/onboarding" element={<Onboarding />} />

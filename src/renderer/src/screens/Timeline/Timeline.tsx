@@ -28,13 +28,37 @@ const periodOptions: Array<{ key: string; label: string; period: Period }> = [
 
 const kindMeta: Record<ActivityKind, { icon: typeof Zap; label: string; color: string }> = {
   created: { icon: Plus, label: 'criou', color: 'text-zinc-400' },
-  status_change: { icon: ArrowRightLeft, label: 'moveu', color: 'text-blue-400' },
-  resolved: { icon: CheckCircle2, label: 'resolveu', color: 'text-green-400' },
-  assignment: { icon: UserRound, label: 'atribuiu', color: 'text-amber-400' },
-  comment: { icon: MessageSquare, label: 'comentou', color: 'text-indigo-400' },
-  sprint_change: { icon: Zap, label: 'mudou sprint', color: 'text-purple-400' },
-  priority_change: { icon: Flag, label: 'mudou prioridade', color: 'text-red-400' },
-  estimate_change: { icon: Ruler, label: 'estimou', color: 'text-teal-400' }
+  status_change: {
+    icon: ArrowRightLeft,
+    label: 'moveu',
+    color: 'text-blue-400 light:text-blue-600'
+  },
+  resolved: {
+    icon: CheckCircle2,
+    label: 'resolveu',
+    color: 'text-green-400 light:text-green-600'
+  },
+  assignment: {
+    icon: UserRound,
+    label: 'atribuiu',
+    color: 'text-amber-400 light:text-amber-600'
+  },
+  comment: {
+    icon: MessageSquare,
+    label: 'comentou',
+    color: 'text-indigo-400 light:text-indigo-600'
+  },
+  sprint_change: {
+    icon: Zap,
+    label: 'mudou sprint',
+    color: 'text-purple-400 light:text-purple-600'
+  },
+  priority_change: {
+    icon: Flag,
+    label: 'mudou prioridade',
+    color: 'text-red-400 light:text-red-600'
+  },
+  estimate_change: { icon: Ruler, label: 'estimou', color: 'text-teal-400 light:text-teal-600' }
 }
 
 export default function Timeline(): React.JSX.Element {

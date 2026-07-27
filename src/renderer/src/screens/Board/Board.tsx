@@ -224,7 +224,7 @@ export default function Board(): React.JSX.Element {
   if (error) {
     return (
       <div className="p-6">
-        <p className="text-sm text-red-400">
+        <p className="text-sm text-red-400 light:text-red-600">
           {error instanceof IpcError ? error.message : t.common.error}
         </p>
       </div>
@@ -302,7 +302,7 @@ export default function Board(): React.JSX.Element {
       )}
 
       {moveError && (
-        <div className="mb-3 rounded-md border border-red-900/50 bg-red-950/30 px-3 py-2 text-sm text-red-300">
+        <div className="mb-3 rounded-md border border-red-900/50 bg-red-950/30 px-3 py-2 text-sm text-red-300 light:border-red-300 light:bg-red-50 light:text-red-700">
           {moveError}
         </div>
       )}
@@ -370,7 +370,7 @@ function AssigneeChips({
   const chipClass = (selected: boolean): string =>
     `flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs font-medium transition-colors ${
       selected
-        ? 'border-indigo-600 bg-indigo-950/60 text-indigo-200'
+        ? 'border-indigo-600 bg-indigo-950/60 text-indigo-200 light:bg-indigo-50 light:text-indigo-700'
         : 'border-zinc-700 text-zinc-300 hover:border-zinc-600'
     }`
 

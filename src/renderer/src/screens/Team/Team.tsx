@@ -52,7 +52,11 @@ export default function Team(): React.JSX.Element {
           disabled={narrativeBusy || members.length === 0}
           onClick={() => void generateNarrative()}
         >
-          {narrativeBusy ? <Spinner /> : <Sparkles size={14} className="text-indigo-400" />}
+          {narrativeBusy ? (
+            <Spinner />
+          ) : (
+            <Sparkles size={14} className="text-indigo-400 light:text-indigo-600" />
+          )}
           {narrativeBusy ? 'Resumindo…' : 'Resumir time'}
         </Button>
         <div className="flex rounded-lg border border-zinc-800 bg-zinc-900 p-0.5">
@@ -76,7 +80,7 @@ export default function Team(): React.JSX.Element {
         <button
           className={`rounded-md border px-2.5 py-1 text-sm font-medium transition-colors ${
             standup
-              ? 'border-indigo-600 bg-indigo-950/60 text-indigo-200'
+              ? 'border-indigo-600 bg-indigo-950/60 text-indigo-200 light:bg-indigo-50 light:text-indigo-700'
               : 'border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'
           }`}
           onClick={() => setStandup((s) => !s)}
@@ -87,7 +91,7 @@ export default function Team(): React.JSX.Element {
       </div>
 
       {data?.syncMode === 'personal' && (
-        <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-sm text-amber-200">
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-sm text-amber-200 light:border-amber-300 light:bg-amber-50 light:text-amber-800">
           <Info size={15} className="mt-0.5 shrink-0" />
           <span>
             O sync está em modo pessoal, então esta visão só mostra quem aparece no seu próprio
@@ -130,7 +134,8 @@ export default function Team(): React.JSX.Element {
         <Card
           title={
             <span className="flex items-center gap-2">
-              <Sparkles size={13} className="text-indigo-400" /> Panorama do time (Claude)
+              <Sparkles size={13} className="text-indigo-400 light:text-indigo-600" /> Panorama do
+              time (Claude)
             </span>
           }
           className="mb-4"
@@ -185,7 +190,7 @@ function RiskRadar(): React.JSX.Element | null {
     <Card
       title={
         <span className="flex items-center gap-2">
-          <AlertTriangle size={13} className="text-amber-400" /> Radar de risco
+          <AlertTriangle size={13} className="text-amber-400 light:text-amber-600" /> Radar de risco
           <span className="font-normal text-zinc-500">{data.sprint.name}</span>
         </span>
       }
@@ -207,7 +212,7 @@ function RiskRadar(): React.JSX.Element | null {
               {signals.map((s) => (
                 <span
                   key={s}
-                  className="rounded-full bg-amber-950/60 px-2 text-xs whitespace-nowrap text-amber-300"
+                  className="rounded-full bg-amber-950/60 px-2 text-xs whitespace-nowrap text-amber-300 light:bg-amber-100 light:text-amber-700"
                 >
                   {s}
                 </span>
@@ -219,7 +224,11 @@ function RiskRadar(): React.JSX.Element | null {
 
       <div className="mt-3">
         <Button variant="secondary" disabled={explainBusy} onClick={() => void explainRisk()}>
-          {explainBusy ? <Spinner /> : <Sparkles size={14} className="text-indigo-400" />}
+          {explainBusy ? (
+            <Spinner />
+          ) : (
+            <Sparkles size={14} className="text-indigo-400 light:text-indigo-600" />
+          )}
           {explainBusy ? 'Analisando…' : 'Explicar com Claude'}
         </Button>
       </div>
@@ -280,7 +289,9 @@ function StandupCard({ member }: { member: TeamMemberSummary }): React.JSX.Eleme
 
       {member.done.length > 0 && (
         <div className="mb-2">
-          <div className="mb-1 text-xs font-semibold text-green-400">Concluiu</div>
+          <div className="mb-1 text-xs font-semibold text-green-400 light:text-green-600">
+            Concluiu
+          </div>
           <div className="space-y-0.5">
             {member.done.map((i) => (
               <MiniIssue key={i.key} issueKey={i.key} summary={i.summary} trailing={null} />
@@ -305,14 +316,20 @@ function StandupCard({ member }: { member: TeamMemberSummary }): React.JSX.Eleme
 
       {member.stalled.length > 0 && (
         <div>
-          <div className="mb-1 text-xs font-semibold text-amber-400">Atenção</div>
+          <div className="mb-1 text-xs font-semibold text-amber-400 light:text-amber-600">
+            Atenção
+          </div>
           <div className="space-y-0.5">
             {member.stalled.map((i) => (
               <MiniIssue
                 key={i.key}
                 issueKey={i.key}
                 summary={i.summary}
-                trailing={<span className="text-xs text-amber-500">{i.stalledDays}d</span>}
+                trailing={
+                  <span className="text-xs text-amber-500 light:text-amber-700">
+                    {i.stalledDays}d
+                  </span>
+                }
               />
             ))}
           </div>
@@ -356,7 +373,7 @@ function MemberCard({ member }: { member: TeamMemberSummary }): React.JSX.Elemen
 
       {blocked.length > 0 && (
         <div className="mb-2">
-          <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-red-400">
+          <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-red-400 light:text-red-600">
             <AlertTriangle size={12} /> Bloqueado
           </div>
           <IssueList issues={blocked} />
@@ -365,14 +382,20 @@ function MemberCard({ member }: { member: TeamMemberSummary }): React.JSX.Elemen
 
       {member.stalled.length > 0 && (
         <div className="mb-2">
-          <div className="mb-1 text-xs font-semibold text-amber-400">Parado</div>
+          <div className="mb-1 text-xs font-semibold text-amber-400 light:text-amber-600">
+            Parado
+          </div>
           <div className="space-y-0.5">
             {member.stalled.map((i) => (
               <MiniIssue
                 key={i.key}
                 issueKey={i.key}
                 summary={i.summary}
-                trailing={<span className="text-xs text-amber-500">{i.stalledDays}d</span>}
+                trailing={
+                  <span className="text-xs text-amber-500 light:text-amber-700">
+                    {i.stalledDays}d
+                  </span>
+                }
               />
             ))}
           </div>

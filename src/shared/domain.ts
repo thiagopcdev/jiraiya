@@ -221,7 +221,11 @@ export interface Prefs {
   prIntegration: boolean
   /** escopo extra da busca de PRs (ex. 'org:biudtech'); vazio = busca global */
   prSearchScope: string
+  theme: ThemePref
 }
+
+/** Tema visual do app; 'system' segue o modo claro/escuro do SO. */
+export type ThemePref = 'dark' | 'light' | 'system'
 
 export const DEFAULT_PREFS: Prefs = {
   syncIntervalMinutes: 15,
@@ -242,5 +246,6 @@ export const DEFAULT_PREFS: Prefs = {
   morningBriefing: true,
   updateCheck: true,
   prIntegration: false,
-  prSearchScope: ''
+  prSearchScope: '',
+  theme: 'dark'
 }

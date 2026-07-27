@@ -40,7 +40,10 @@ function renderSnippet(snippet: string): React.ReactNode[] {
       nodes.push(snippet.slice(lastIndex, match.index))
     }
     nodes.push(
-      <mark key={idx} className="rounded bg-indigo-900/50 text-indigo-200">
+      <mark
+        key={idx}
+        className="rounded bg-indigo-900/50 text-indigo-200 light:bg-indigo-200 light:text-indigo-700"
+      >
         {match[1]}
       </mark>
     )

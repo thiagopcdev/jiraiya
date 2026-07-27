@@ -12,6 +12,7 @@ export default function Settings(): React.JSX.Element {
     <div className="max-w-2xl space-y-5 p-6">
       <h2 className="text-xl font-semibold text-zinc-100">Configurações</h2>
       <AccountSection />
+      <AppearanceSection />
       <ProjectsSection />
       <SyncSection />
       <PullRequestsSection />
@@ -60,6 +61,36 @@ function AccountSection(): React.JSX.Element {
       ) : (
         <p className="text-sm text-zinc-500">Nenhuma conta conectada.</p>
       )}
+    </Card>
+  )
+}
+
+function AppearanceSection(): React.JSX.Element {
+  const queryClient = useQueryClient()
+  const { data: prefs } = usePrefs()
+
+  const update = async (patch: Partial<Prefs>): Promise<void> => {
+    await invoke('prefs:set', patch)
+    void queryClient.invalidateQueries({ queryKey: ['prefs'] })
+  }
+
+  if (!prefs) return <Card title="Aparência">{<Spinner className="text-zinc-500" />}</Card>
+
+  return (
+    <Card title="Aparência">
+      <div className="space-y-2">
+        <SelectRow
+          label="Tema"
+          value={prefs.theme}
+          options={[
+            ['dark', 'Escuro'],
+            ['light', 'Claro'],
+            ['system', 'Sistema']
+          ]}
+          onChange={(v) => void update({ theme: v as Prefs['theme'] })}
+        />
+        <p className="text-xs text-zinc-500">Sistema segue o modo claro/escuro do macOS/Windows.</p>
+      </div>
     </Card>
   )
 }

@@ -19,7 +19,7 @@ function EpicCard({ epic }: { epic: Epic }): React.JSX.Element {
           <span className="shrink-0 font-mono text-xs text-zinc-500">{epic.key}</span>
           {epic.status && <Badge color={statusColor(epic.statusCategory)}>{epic.status}</Badge>}
         </div>
-        <div className="mt-1 truncate text-sm font-medium text-indigo-400 hover:underline">
+        <div className="mt-1 truncate text-sm font-medium text-indigo-400 hover:underline light:text-indigo-600">
           {epic.summary}
         </div>
       </button>

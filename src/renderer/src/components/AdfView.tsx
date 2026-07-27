@@ -143,7 +143,7 @@ function AdfInline({ node }: { node: AdfNode }): React.JSX.Element | null {
       return <br />
     case 'mention':
       return (
-        <span className="rounded bg-indigo-950/70 px-1 py-0.5 text-indigo-300">
+        <span className="rounded bg-indigo-950/70 px-1 py-0.5 text-indigo-300 light:bg-indigo-100 light:text-indigo-700">
           {String(node.attrs?.text ?? '@?')}
         </span>
       )
@@ -152,7 +152,7 @@ function AdfInline({ node }: { node: AdfNode }): React.JSX.Element | null {
     case 'inlineCard':
       return (
         <a
-          className="text-indigo-400 hover:underline"
+          className="text-indigo-400 hover:underline light:text-indigo-700"
           href={String(node.attrs?.url ?? '#')}
           target="_blank"
           rel="noreferrer"
@@ -195,7 +195,7 @@ function applyMarks(text: string, marks?: AdfNode['marks']): ReactNode {
         break
       case 'code':
         out = (
-          <code className="rounded bg-zinc-900 px-1 py-0.5 font-mono text-xs text-amber-200">
+          <code className="rounded bg-zinc-900 px-1 py-0.5 font-mono text-xs text-amber-200 light:text-amber-700">
             {out}
           </code>
         )
@@ -203,7 +203,7 @@ function applyMarks(text: string, marks?: AdfNode['marks']): ReactNode {
       case 'link':
         out = (
           <a
-            className="text-indigo-400 hover:underline"
+            className="text-indigo-400 hover:underline light:text-indigo-700"
             href={String(mark.attrs?.href ?? '#')}
             target="_blank"
             rel="noreferrer"
@@ -213,7 +213,8 @@ function applyMarks(text: string, marks?: AdfNode['marks']): ReactNode {
         )
         break
       case 'textColor':
-        // cor customizada do Jira: mantém legível no tema escuro, só destaca
+        // cor customizada do Jira: ignora a cor original e usa zinc (já
+        // theme-aware) só pra destacar, mantendo legível nos dois temas
         out = <span className="text-zinc-100">{out}</span>
         break
     }

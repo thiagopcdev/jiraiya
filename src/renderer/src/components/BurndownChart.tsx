@@ -48,41 +48,54 @@ export function BurndownChart({
       role="img"
       aria-label={`Burndown da sprint: ${last.remaining} de ${scope} pontos restantes`}
     >
-      <line x1={padL} y1={y(0)} x2={W - padR} y2={y(0)} stroke="#3f3f46" strokeWidth="1" />
-      <line x1={padL} y1={padT} x2={padL} y2={y(0)} stroke="#3f3f46" strokeWidth="1" />
+      <line
+        x1={padL}
+        y1={y(0)}
+        x2={W - padR}
+        y2={y(0)}
+        className="stroke-zinc-700"
+        strokeWidth="1"
+      />
+      <line x1={padL} y1={padT} x2={padL} y2={y(0)} className="stroke-zinc-700" strokeWidth="1" />
 
       <line
         x1={x(0)}
         y1={y(scope)}
         x2={x(totalDays)}
         y2={y(0)}
-        stroke="#52525b"
+        className="stroke-zinc-600"
         strokeWidth="1.5"
         strokeDasharray="5 4"
       />
 
-      <path d={actualPath} fill="none" stroke="#818cf8" strokeWidth="2.5" strokeLinejoin="round" />
-      <circle cx={lastX} cy={lastY} r="4" fill="#818cf8" />
+      <path
+        d={actualPath}
+        fill="none"
+        stroke="var(--chart-accent)"
+        strokeWidth="2.5"
+        strokeLinejoin="round"
+      />
+      <circle cx={lastX} cy={lastY} r="4" fill="var(--chart-accent)" />
       <text
         x={labelFlips ? lastX - 8 : lastX + 8}
         y={labelY}
         fontSize="11"
-        fill="#a5b4fc"
+        fill="var(--chart-accent)"
         textAnchor={labelFlips ? 'end' : 'start'}
       >
         {last.remaining} pts
       </text>
 
-      <text x={padL - 6} y={y(scope) + 4} fontSize="10" fill="#71717a" textAnchor="end">
+      <text x={padL - 6} y={y(scope) + 4} fontSize="10" className="fill-zinc-500" textAnchor="end">
         {scope}
       </text>
-      <text x={padL - 6} y={y(0) + 4} fontSize="10" fill="#71717a" textAnchor="end">
+      <text x={padL - 6} y={y(0) + 4} fontSize="10" className="fill-zinc-500" textAnchor="end">
         0
       </text>
-      <text x={padL} y={H - 6} fontSize="10" fill="#71717a">
+      <text x={padL} y={H - 6} fontSize="10" className="fill-zinc-500">
         {format(new Date(sprintStart), 'dd/MM')}
       </text>
-      <text x={W - padR} y={H - 6} fontSize="10" fill="#71717a" textAnchor="end">
+      <text x={W - padR} y={H - 6} fontSize="10" className="fill-zinc-500" textAnchor="end">
         {format(new Date(sprintEnd), 'dd/MM')}
       </text>
     </svg>

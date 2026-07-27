@@ -82,7 +82,7 @@ function ConnectStep({ onDone }: { onDone: () => void }): React.JSX.Element {
             <>
               {t.onboarding.tokenHelp}{' '}
               <a
-                className="text-indigo-400 hover:underline"
+                className="text-indigo-400 hover:underline light:text-indigo-600"
                 href="https://id.atlassian.com/manage-profile/security/api-tokens"
                 target="_blank"
                 rel="noreferrer"
@@ -92,7 +92,7 @@ function ConnectStep({ onDone }: { onDone: () => void }): React.JSX.Element {
             </>
           }
         />
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {error && <p className="text-sm text-red-400 light:text-red-600">{error}</p>}
         <Button
           className="w-full"
           disabled={busy || !siteUrl || !email || !apiToken}
@@ -145,7 +145,7 @@ function ProjectsStep({
           <Spinner /> {t.onboarding.loadingProjects}
         </p>
       )}
-      {isError && <p className="text-sm text-red-400">{t.common.error}</p>}
+      {isError && <p className="text-sm text-red-400 light:text-red-600">{t.common.error}</p>}
       {data && data.projects.length === 0 && (
         <p className="text-sm text-zinc-500">{t.onboarding.noProjects}</p>
       )}
@@ -203,12 +203,12 @@ function SyncStep(): React.JSX.Element {
       <div className="flex items-center gap-3 py-4">
         {finished ? (
           <>
-            <CheckCircle2 className="text-green-400" size={20} />
+            <CheckCircle2 className="text-green-400 light:text-green-600" size={20} />
             <span className="text-sm text-zinc-200">{t.onboarding.syncDone}</span>
           </>
         ) : (
           <>
-            <Spinner className="text-indigo-400" />
+            <Spinner className="text-indigo-400 light:text-indigo-600" />
             <span className="text-sm text-zinc-300">
               {phaseLabel ?? t.sync.syncing}
               {progress && progress.done > 0 && (
@@ -222,7 +222,9 @@ function SyncStep(): React.JSX.Element {
           </>
         )}
       </div>
-      {status?.lastError && <p className="mb-2 text-sm text-red-400">{status.lastError}</p>}
+      {status?.lastError && (
+        <p className="mb-2 text-sm text-red-400 light:text-red-600">{status.lastError}</p>
+      )}
       <Button
         className="w-full"
         disabled={!finished && !status?.lastError}

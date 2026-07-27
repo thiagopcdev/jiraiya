@@ -76,11 +76,11 @@ export function Badge({
 }): React.JSX.Element {
   const styles = {
     zinc: 'bg-zinc-800 text-zinc-300',
-    green: 'bg-green-900/50 text-green-300',
-    blue: 'bg-blue-900/50 text-blue-300',
-    amber: 'bg-amber-900/50 text-amber-300',
-    red: 'bg-red-900/50 text-red-300',
-    indigo: 'bg-indigo-900/50 text-indigo-300'
+    green: 'bg-green-900/50 text-green-300 light:bg-green-100 light:text-green-700',
+    blue: 'bg-blue-900/50 text-blue-300 light:bg-blue-100 light:text-blue-700',
+    amber: 'bg-amber-900/50 text-amber-300 light:bg-amber-100 light:text-amber-700',
+    red: 'bg-red-900/50 text-red-300 light:bg-red-100 light:text-red-700',
+    indigo: 'bg-indigo-900/50 text-indigo-300 light:bg-indigo-100 light:text-indigo-700'
   }[color]
   return (
     <span

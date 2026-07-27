@@ -10,9 +10,9 @@ import { t } from '../../strings/ptBR'
 import { useIssueDetail } from '../../components/issueDetail'
 
 const severityMeta: Record<AlertSeverity, { label: string; icon: typeof Info; color: string }> = {
-  critical: { label: 'Críticos', icon: AlertOctagon, color: 'text-red-400' },
-  warning: { label: 'Atenção', icon: AlertTriangle, color: 'text-amber-400' },
-  info: { label: 'Informativos', icon: Info, color: 'text-blue-400' }
+  critical: { label: 'Críticos', icon: AlertOctagon, color: 'text-red-400 light:text-red-600' },
+  warning: { label: 'Atenção', icon: AlertTriangle, color: 'text-amber-400 light:text-amber-600' },
+  info: { label: 'Informativos', icon: Info, color: 'text-blue-400 light:text-blue-600' }
 }
 
 export default function Alerts(): React.JSX.Element {

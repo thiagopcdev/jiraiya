@@ -27,8 +27,9 @@ function sprintLabel(sprint: VelocitySprint, prefix: string): string {
  * Entregas por sprint (velocity): barra EMPILHADA por sprint — sua fatia
  * (índigo, na base) + o restante do time (neutro) somam o total da sprint.
  * Uma escala só (SP), total rotulado no topo de cada barra, sua fatia
- * rotulada quando cabe. Paleta validada p/ CVD/contraste no tema escuro
- * (#818cf8 você · #71717a resto neutro), gap de 2px entre segmentos.
+ * rotulada quando cabe. Paleta validada p/ CVD/contraste via
+ * var(--chart-accent) você · var(--chart-muted) resto neutro (ajustam sozinhas
+ * por tema), gap de 2px entre segmentos.
  */
 export function VelocityChart({
   velocity
@@ -63,7 +64,7 @@ export function VelocityChart({
     <div>
       <div className="mb-1 flex items-center gap-3 text-xs text-zinc-500">
         <span className="inline-flex items-center gap-1">
-          <span className="inline-block size-2 rounded-sm bg-indigo-400" /> Você
+          <span className="inline-block size-2 rounded-sm bg-indigo-400 light:bg-indigo-600" /> Você
         </span>
         <span className="inline-flex items-center gap-1">
           <span className="inline-block size-2 rounded-sm bg-zinc-500" /> Restante do time
@@ -75,7 +76,14 @@ export function VelocityChart({
         role="img"
         aria-label="Entregas por sprint: sua fatia e o total do time em story points"
       >
-        <line x1={padL} y1={y(0)} x2={W - padR} y2={y(0)} stroke="#3f3f46" strokeWidth="1" />
+        <line
+          x1={padL}
+          y1={y(0)}
+          x2={W - padR}
+          y2={y(0)}
+          className="stroke-zinc-700"
+          strokeWidth="1"
+        />
 
         {sprints.map((s, i) => {
           const x0 = cx(i) - barW / 2
@@ -95,24 +103,33 @@ export function VelocityChart({
             <g key={s.sprintJiraId}>
               <title>{title}</title>
               {rest > 0 && (
-                <rect x={x0} y={totalTop} width={barW} height={restH} rx="4" fill="#71717a" />
+                <rect
+                  x={x0}
+                  y={totalTop}
+                  width={barW}
+                  height={restH}
+                  rx="4"
+                  fill="var(--chart-muted)"
+                />
               )}
-              {mine > 0 && <rect x={x0} y={mineTop} width={barW} height={mineH} fill="#818cf8" />}
+              {mine > 0 && (
+                <rect x={x0} y={mineTop} width={barW} height={mineH} fill="var(--chart-accent)" />
+              )}
               {total > 0 && (
                 // sempre visível: seus pontos / total da sprint
                 <text x={cx(i)} y={totalTop - 5} fontSize="10" textAnchor="middle">
-                  <tspan fill="#a5b4fc" fontWeight="600">
+                  <tspan fill="var(--chart-accent)" fontWeight="600">
                     {s.myPoints}
                   </tspan>
-                  <tspan fill="#71717a">/</tspan>
-                  <tspan fill="#a1a1aa">{total}</tspan>
+                  <tspan className="fill-zinc-500">/</tspan>
+                  <tspan className="fill-zinc-400">{total}</tspan>
                 </text>
               )}
               <text
                 x={cx(i)}
                 y={H - 6}
                 fontSize="10"
-                fill={isActive ? '#e4e4e7' : '#71717a'}
+                className={isActive ? 'fill-zinc-200' : 'fill-zinc-500'}
                 textAnchor="middle"
               >
                 {sprintLabel(s, prefix)}
@@ -123,7 +140,7 @@ export function VelocityChart({
         })}
       </svg>
       <p className="mt-1 text-xs text-zinc-600">
-        Rótulo: <span className="font-semibold text-indigo-300">seus SP</span>
+        Rótulo: <span className="font-semibold text-indigo-300 light:text-indigo-600">seus SP</span>
         <span> / total da sprint</span> — a base índigo da barra é a sua parte. • = sprint ativa.
       </p>
     </div>

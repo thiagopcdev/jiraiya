@@ -1,9 +1,20 @@
-import { app, clipboard, dialog, shell } from 'electron'
+import { app, clipboard, dialog, nativeTheme, shell } from 'electron'
 import { writeFile } from 'fs/promises'
 import { AppError, handle } from '../registry'
 import type { AppContext } from '../../appContext'
+import type { ThemePref } from '@shared/domain'
 import { getPrefs, setPrefs } from '../../db/repos/misc'
 import { getWorkspaceRow } from '../../db/repos/workspace'
+
+/**
+ * Cor de fundo nativa da janela para o tema informado. Usada na criação da
+ * BrowserWindow (evita flash escuro no boot com tema claro) e quando a pref
+ * muda em runtime. 'system' resolve pelo tema do OS.
+ */
+export function themeBackgroundColor(theme: ThemePref): string {
+  const dark = theme === 'system' ? nativeTheme.shouldUseDarkColors : theme === 'dark'
+  return dark ? '#09090b' : '#f4f4f5'
+}
 
 export function registerPrefsHandlers(ctx: AppContext): void {
   handle('prefs:get', () => getPrefs(ctx.db))
@@ -13,6 +24,12 @@ export function registerPrefsHandlers(ctx: AppContext): void {
   handle('prefs:set', (patch) => {
     const prefs = setPrefs(ctx.db, patch)
     ctx.scheduler?.reschedule()
+    if (patch.theme !== undefined) {
+      // themeSource ajusta o chrome nativo (menus, scrollbars, diálogos);
+      // o backgroundColor evita flash da cor antiga em reloads/resizes
+      nativeTheme.themeSource = prefs.theme
+      ctx.mainWindow?.setBackgroundColor(themeBackgroundColor(prefs.theme))
+    }
     return prefs
   })
 

@@ -23,7 +23,7 @@ function linkifyIssueKeys(
       <button
         key={`${keyPrefix}-key-${idx}`}
         type="button"
-        className="text-indigo-400 hover:underline"
+        className="text-indigo-400 hover:underline light:text-indigo-600"
         onClick={() => openIssue(key)}
       >
         {key}

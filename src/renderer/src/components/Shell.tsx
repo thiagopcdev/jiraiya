@@ -97,12 +97,12 @@ export default function Shell(): React.JSX.Element {
               <Icon size={16} />
               <span className="flex-1">{label}</span>
               {to === '/alertas' && alertCount > 0 && (
-                <span className="rounded-full bg-red-900/70 px-1.5 text-xs font-semibold text-red-200">
+                <span className="rounded-full bg-red-900/70 px-1.5 text-xs font-semibold text-red-200 light:bg-red-200 light:text-red-700">
                   {alertCount}
                 </span>
               )}
               {to === '/mencoes' && mentionsUnreadCount > 0 && (
-                <span className="rounded-full bg-indigo-900/70 px-1.5 text-xs font-semibold text-indigo-200">
+                <span className="rounded-full bg-indigo-900/70 px-1.5 text-xs font-semibold text-indigo-200 light:bg-indigo-200 light:text-indigo-700">
                   {mentionsUnreadCount}
                 </span>
               )}
@@ -116,7 +116,7 @@ export default function Shell(): React.JSX.Element {
                 href={update.url}
                 target="_blank"
                 rel="noreferrer"
-                className="min-w-0 flex-1 truncate text-xs text-indigo-400 hover:underline"
+                className="min-w-0 flex-1 truncate text-xs text-indigo-400 hover:underline light:text-indigo-600"
               >
                 {t.app.updateAvailable(update.version)}
               </a>
@@ -142,7 +142,10 @@ export default function Shell(): React.JSX.Element {
               {t.sync.phases[sync.progress?.phase ?? ''] ?? ''}
             </p>
           ) : sync?.lastError ? (
-            <p className="mt-1 px-2 text-xs leading-tight text-red-400" title={sync.lastError}>
+            <p
+              className="mt-1 px-2 text-xs leading-tight text-red-400 light:text-red-600"
+              title={sync.lastError}
+            >
               {t.sync.error}
             </p>
           ) : sync?.lastSuccessAt ? (

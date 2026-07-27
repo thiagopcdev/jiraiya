@@ -1,9 +1,72 @@
 @import 'tailwindcss';
 
-@theme {
+/* variante para ajustes pontuais que só valem no tema claro (ex. light:text-indigo-600) */
+@custom-variant light (&:where([data-theme='light'], [data-theme='light'] *));
+
+/*
+ * Tema: o app foi construído dark-only com classes zinc-* literais. Em vez de
+ * trocar ~700 usos por tokens semânticos, a escala zinc é redefinida sobre
+ * variáveis (--tone-N) e o tema claro INVERTE a escala (950↔50, 900↔100, …,
+ * com superfícies ajustadas à mão). Assim bg-zinc-900 é "superfície" nos dois
+ * temas. `inline` faz as utilities emitirem var(--tone-N) em vez do valor.
+ */
+@theme inline {
   --font-sans:
     ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
     sans-serif;
+
+  --color-zinc-50: var(--tone-50);
+  --color-zinc-100: var(--tone-100);
+  --color-zinc-200: var(--tone-200);
+  --color-zinc-300: var(--tone-300);
+  --color-zinc-400: var(--tone-400);
+  --color-zinc-500: var(--tone-500);
+  --color-zinc-600: var(--tone-600);
+  --color-zinc-700: var(--tone-700);
+  --color-zinc-800: var(--tone-800);
+  --color-zinc-900: var(--tone-900);
+  --color-zinc-950: var(--tone-950);
+}
+
+/* escuro (default): escala zinc original do Tailwind */
+:root {
+  --tone-50: #fafafa;
+  --tone-100: #f4f4f5;
+  --tone-200: #e4e4e7;
+  --tone-300: #d4d4d8;
+  --tone-400: #a1a1aa;
+  --tone-500: #71717a;
+  --tone-600: #52525b;
+  --tone-700: #3f3f46;
+  --tone-800: #27272a;
+  --tone-900: #18181b;
+  --tone-950: #09090b;
+
+  /* cores fixas dos gráficos (SVG usa hex, não classes) */
+  --chart-accent: #818cf8;
+  --chart-muted: #71717a;
+
+  color-scheme: dark;
+}
+
+/* claro: escala invertida; 950 (fundo) e 900 (superfície) ajustados à mão */
+:root[data-theme='light'] {
+  --tone-50: #09090b;
+  --tone-100: #18181b;
+  --tone-200: #27272a;
+  --tone-300: #3f3f46;
+  --tone-400: #52525b;
+  --tone-500: #71717a;
+  --tone-600: #a1a1aa;
+  --tone-700: #d4d4d8;
+  --tone-800: #e4e4e7;
+  --tone-900: #ffffff;
+  --tone-950: #f4f4f5;
+
+  --chart-accent: #4f46e5;
+  --chart-muted: #a1a1aa;
+
+  color-scheme: light;
 }
 
 html,

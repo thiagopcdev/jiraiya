@@ -47,13 +47,37 @@ import { formatJiraDuration, formatTimer, useIssueTimer } from '../lib/timer'
 
 const kindMeta: Record<ActivityKind, { icon: typeof Zap; label: string; color: string }> = {
   created: { icon: Plus, label: 'criou', color: 'text-zinc-400' },
-  status_change: { icon: ArrowRightLeft, label: 'moveu', color: 'text-blue-400' },
-  resolved: { icon: CheckCircle2, label: 'resolveu', color: 'text-green-400' },
-  assignment: { icon: UserRound, label: 'atribuiu', color: 'text-amber-400' },
-  comment: { icon: MessageSquare, label: 'comentou', color: 'text-indigo-400' },
-  sprint_change: { icon: Zap, label: 'mudou sprint', color: 'text-purple-400' },
-  priority_change: { icon: Flag, label: 'mudou prioridade', color: 'text-red-400' },
-  estimate_change: { icon: Ruler, label: 'estimou', color: 'text-teal-400' }
+  status_change: {
+    icon: ArrowRightLeft,
+    label: 'moveu',
+    color: 'text-blue-400 light:text-blue-600'
+  },
+  resolved: {
+    icon: CheckCircle2,
+    label: 'resolveu',
+    color: 'text-green-400 light:text-green-600'
+  },
+  assignment: {
+    icon: UserRound,
+    label: 'atribuiu',
+    color: 'text-amber-400 light:text-amber-600'
+  },
+  comment: {
+    icon: MessageSquare,
+    label: 'comentou',
+    color: 'text-indigo-400 light:text-indigo-600'
+  },
+  sprint_change: {
+    icon: Zap,
+    label: 'mudou sprint',
+    color: 'text-purple-400 light:text-purple-600'
+  },
+  priority_change: {
+    icon: Flag,
+    label: 'mudou prioridade',
+    color: 'text-red-400 light:text-red-600'
+  },
+  estimate_change: { icon: Ruler, label: 'estimou', color: 'text-teal-400 light:text-teal-600' }
 }
 
 const DESCRIPTION_LINE_LIMIT = 50
@@ -391,7 +415,7 @@ function IssueDetailDrawer({
               aria-label={t.detail.share}
             >
               {shareCopied ? (
-                <CheckCircle2 size={15} className="text-green-400" />
+                <CheckCircle2 size={15} className="text-green-400 light:text-green-600" />
               ) : (
                 <Link2 size={15} />
               )}
@@ -436,7 +460,7 @@ function IssueDetailDrawer({
               {moveBusy && <Spinner className="text-zinc-500" />}
               {!moveBusy && moveSuccess && (
                 <span title={t.detail.moved}>
-                  <CheckCircle2 size={14} className="text-green-400" />
+                  <CheckCircle2 size={14} className="text-green-400 light:text-green-600" />
                 </span>
               )}
             </div>
@@ -444,12 +468,12 @@ function IssueDetailDrawer({
         </div>
         {moveError && (
           <div className="border-b border-zinc-800 bg-zinc-950 px-4 py-2">
-            <p className="text-sm text-amber-400">{moveError}</p>
+            <p className="text-sm text-amber-400 light:text-amber-600">{moveError}</p>
           </div>
         )}
         {timerError && (
           <div className="border-b border-zinc-800 bg-zinc-950 px-4 py-2">
-            <p className="text-sm text-amber-400">{timerError}</p>
+            <p className="text-sm text-amber-400 light:text-amber-600">{timerError}</p>
           </div>
         )}
 
@@ -548,7 +572,7 @@ function IssueDetailDrawer({
                   <div className="space-y-3">
                     {issue.parentKey && (
                       <button
-                        className="block text-left text-sm text-indigo-400 hover:underline"
+                        className="block text-left text-sm text-indigo-400 hover:underline light:text-indigo-600"
                         onClick={() => openIssue(issue.parentKey!)}
                       >
                         {t.detail.parentLabel}: {issue.parentKey}
@@ -562,7 +586,7 @@ function IssueDetailDrawer({
                           </p>
                           {subtaskType && !subtaskFormOpen && (
                             <button
-                              className="text-xs text-indigo-400 hover:underline"
+                              className="text-xs text-indigo-400 hover:underline light:text-indigo-600"
                               onClick={() => setSubtaskFormOpen(true)}
                             >
                               {t.detail.addSubtask}
@@ -610,7 +634,7 @@ function IssueDetailDrawer({
                         <p className="text-xs text-zinc-500">{t.detail.linksTitle}</p>
                         {!linkFormOpen && (
                           <button
-                            className="text-xs text-indigo-400 hover:underline"
+                            className="text-xs text-indigo-400 hover:underline light:text-indigo-600"
                             onClick={() => setLinkFormOpen(true)}
                           >
                             + Vincular
@@ -759,7 +783,9 @@ function IssueDetailDrawer({
                         {t.common.cancel}
                       </Button>
                     </div>
-                    {aiError && <p className="text-sm text-amber-400">{aiError}</p>}
+                    {aiError && (
+                      <p className="text-sm text-amber-400 light:text-amber-600">{aiError}</p>
+                    )}
                   </div>
                 )}
                 <textarea
@@ -788,7 +814,9 @@ function IssueDetailDrawer({
                     </Button>
                   )}
                 </div>
-                {commentError && <p className="text-sm text-amber-400">{commentError}</p>}
+                {commentError && (
+                  <p className="text-sm text-amber-400 light:text-amber-600">{commentError}</p>
+                )}
                 {!claudeInfo?.available && (
                   <p className="text-xs text-zinc-600">{t.detail.claudeUnavailableHint}</p>
                 )}
@@ -1067,12 +1095,12 @@ function EditPanel({
             {saveBusy ? (
               <Spinner />
             ) : saved ? (
-              <CheckCircle2 size={14} className="text-green-400" />
+              <CheckCircle2 size={14} className="text-green-400 light:text-green-600" />
             ) : null}
             {saveBusy ? t.detail.saving : t.detail.save}
           </Button>
         </div>
-        {saveError && <p className="text-sm text-amber-400">{saveError}</p>}
+        {saveError && <p className="text-sm text-amber-400 light:text-amber-600">{saveError}</p>}
       </div>
 
       <div className="space-y-2 border-t border-zinc-800 pt-3">
@@ -1096,13 +1124,13 @@ function EditPanel({
             {logBusy ? (
               <Spinner />
             ) : logSaved ? (
-              <CheckCircle2 size={14} className="text-green-400" />
+              <CheckCircle2 size={14} className="text-green-400 light:text-green-600" />
             ) : null}
             {logBusy ? t.detail.logging : t.detail.logWork}
           </Button>
         </div>
         <p className="text-xs text-zinc-600">{t.detail.timeSpentHint}</p>
-        {logError && <p className="text-sm text-amber-400">{logError}</p>}
+        {logError && <p className="text-sm text-amber-400 light:text-amber-600">{logError}</p>}
       </div>
 
       <div className="border-t border-zinc-800 pt-2">
@@ -1188,7 +1216,7 @@ function SubtaskCreateForm({
           {t.common.cancel}
         </Button>
       </div>
-      {error && <p className="text-sm text-amber-400">{error}</p>}
+      {error && <p className="text-sm text-amber-400 light:text-amber-600">{error}</p>}
     </div>
   )
 }
@@ -1296,11 +1324,11 @@ function CommentItem({
             <div className="flex items-center gap-1.5 text-xs">
               <span className="text-zinc-500">{t.detail.deleteConfirm}</span>
               <button
-                className="font-medium text-red-400 hover:underline disabled:opacity-50"
+                className="font-medium text-red-400 hover:underline disabled:opacity-50 light:text-red-600"
                 disabled={busy}
                 onClick={() => void handleDelete()}
               >
-                {busy ? <Spinner className="text-red-400" /> : t.detail.yes}
+                {busy ? <Spinner className="text-red-400 light:text-red-600" /> : t.detail.yes}
               </button>
               <button
                 className="text-zinc-500 hover:underline disabled:opacity-50"
@@ -1334,7 +1362,7 @@ function CommentItem({
       ) : (
         <AdfView doc={comment.body} mediaResolver={mediaResolver} />
       )}
-      {error && <p className="mt-1 text-sm text-amber-400">{error}</p>}
+      {error && <p className="mt-1 text-sm text-amber-400 light:text-amber-600">{error}</p>}
     </div>
   )
 }
@@ -1412,7 +1440,7 @@ function DescriptionSection({
             {t.common.cancel}
           </Button>
         </div>
-        {error && <p className="mt-1 text-sm text-amber-400">{error}</p>}
+        {error && <p className="mt-1 text-sm text-amber-400 light:text-amber-600">{error}</p>}
       </section>
     )
   }
@@ -1423,7 +1451,10 @@ function DescriptionSection({
         <h3 className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
           {t.detail.description}
         </h3>
-        <button className="text-xs text-indigo-400 hover:underline" onClick={startEdit}>
+        <button
+          className="text-xs text-indigo-400 hover:underline light:text-indigo-600"
+          onClick={startEdit}
+        >
           Editar
         </button>
       </div>
@@ -1466,7 +1497,10 @@ function AdfDescriptionBody({
         )}
       </div>
       {collapsed && (
-        <button className="mt-1 text-xs text-indigo-400 hover:underline" onClick={onExpand}>
+        <button
+          className="mt-1 text-xs text-indigo-400 hover:underline light:text-indigo-600"
+          onClick={onExpand}
+        >
           {t.detail.showAll}
         </button>
       )}
@@ -1493,7 +1527,10 @@ function DescriptionBody({
         {truncated && '…'}
       </p>
       {truncated && (
-        <button className="mt-1 text-xs text-indigo-400 hover:text-indigo-300" onClick={onExpand}>
+        <button
+          className="mt-1 text-xs text-indigo-400 hover:text-indigo-300 light:text-indigo-600 light:hover:text-indigo-700"
+          onClick={onExpand}
+        >
           {t.detail.showAll}
         </button>
       )}
@@ -1664,7 +1701,7 @@ function TimerControl({
         <Play size={15} />
       </button>
       <button
-        className="rounded-md p-1 text-xs font-medium text-indigo-400 hover:underline disabled:opacity-50"
+        className="rounded-md p-1 text-xs font-medium text-indigo-400 hover:underline disabled:opacity-50 light:text-indigo-600"
         disabled={busy}
         onClick={() => void handleLog()}
       >
@@ -1743,7 +1780,7 @@ function EditableTitle({ issue, issueKey }: { issue: Issue; issueKey: string }):
             }}
           />
           <button
-            className="shrink-0 rounded-md p-1 text-green-400 hover:bg-zinc-800 disabled:opacity-50"
+            className="shrink-0 rounded-md p-1 text-green-400 hover:bg-zinc-800 disabled:opacity-50 light:text-green-600"
             disabled={busy || !value.trim()}
             onClick={() => void save()}
             aria-label="Salvar título"
@@ -1759,7 +1796,7 @@ function EditableTitle({ issue, issueKey }: { issue: Issue; issueKey: string }):
             <X size={16} />
           </button>
         </div>
-        {error && <p className="text-sm text-amber-400">{error}</p>}
+        {error && <p className="text-sm text-amber-400 light:text-amber-600">{error}</p>}
       </div>
     )
   }
@@ -1929,11 +1966,11 @@ function WorklogItem({
             <div className="flex items-center gap-1.5 text-xs">
               <span className="text-zinc-500">{t.detail.deleteConfirm}</span>
               <button
-                className="font-medium text-red-400 hover:underline disabled:opacity-50"
+                className="font-medium text-red-400 hover:underline disabled:opacity-50 light:text-red-600"
                 disabled={busy}
                 onClick={() => void handleDelete()}
               >
-                {busy ? <Spinner className="text-red-400" /> : t.detail.yes}
+                {busy ? <Spinner className="text-red-400 light:text-red-600" /> : t.detail.yes}
               </button>
               <button
                 className="text-zinc-500 hover:underline disabled:opacity-50"
@@ -1976,7 +2013,7 @@ function WorklogItem({
           {worklog.comment && <p className="mt-0.5 text-xs text-zinc-500">{worklog.comment}</p>}
         </>
       )}
-      {error && <p className="mt-1 text-sm text-amber-400">{error}</p>}
+      {error && <p className="mt-1 text-sm text-amber-400 light:text-amber-600">{error}</p>}
     </div>
   )
 }
@@ -2093,7 +2130,7 @@ function LinkCreateForm({
           {t.common.cancel}
         </Button>
       </div>
-      {error && <p className="text-sm text-amber-400">{error}</p>}
+      {error && <p className="text-sm text-amber-400 light:text-amber-600">{error}</p>}
     </div>
   )
 }
@@ -2107,12 +2144,12 @@ function MiniBadge({
   tone: 'emerald' | 'purple' | 'zinc' | 'amber' | 'green' | 'red'
 }): React.JSX.Element {
   const styles: Record<'emerald' | 'purple' | 'zinc' | 'amber' | 'green' | 'red', string> = {
-    emerald: 'bg-emerald-900/50 text-emerald-300',
-    purple: 'bg-purple-900/50 text-purple-300',
+    emerald: 'bg-emerald-900/50 text-emerald-300 light:bg-emerald-100 light:text-emerald-700',
+    purple: 'bg-purple-900/50 text-purple-300 light:bg-purple-100 light:text-purple-700',
     zinc: 'bg-zinc-800 text-zinc-300',
-    amber: 'bg-amber-900/50 text-amber-300',
-    green: 'bg-green-900/50 text-green-300',
-    red: 'bg-red-900/50 text-red-300'
+    amber: 'bg-amber-900/50 text-amber-300 light:bg-amber-100 light:text-amber-700',
+    green: 'bg-green-900/50 text-green-300 light:bg-green-100 light:text-green-700',
+    red: 'bg-red-900/50 text-red-300 light:bg-red-100 light:text-red-700'
   }
   return (
     <span

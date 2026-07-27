@@ -120,9 +120,12 @@ export default function Create(): React.JSX.Element {
       <h2 className="text-xl font-semibold text-zinc-100">{t.create.title}</h2>
 
       {createdKey ? (
-        <Card className="border-green-900 bg-green-950/30">
+        <Card className="border-green-900 bg-green-950/30 light:border-green-300 light:bg-green-50">
           <div className="flex items-start gap-3">
-            <CheckCircle2 className="mt-0.5 shrink-0 text-green-400" size={20} />
+            <CheckCircle2
+              className="mt-0.5 shrink-0 text-green-400 light:text-green-600"
+              size={20}
+            />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-zinc-100">
                 {t.create.createdTitle(createdKey)}
@@ -219,10 +222,14 @@ export default function Create(): React.JSX.Element {
                 {draftBusy ? t.create.generating : t.create.generate}
               </Button>
               {!claudeInfo?.available && (
-                <span className="text-xs text-amber-400">{t.create.claudeUnavailableHint}</span>
+                <span className="text-xs text-amber-400 light:text-amber-600">
+                  {t.create.claudeUnavailableHint}
+                </span>
               )}
             </div>
-            {draftError && <p className="mt-2 text-sm text-amber-400">{draftError}</p>}
+            {draftError && (
+              <p className="mt-2 text-sm text-amber-400 light:text-amber-600">{draftError}</p>
+            )}
           </Card>
 
           <Card title={t.create.cardTitle}>
@@ -278,7 +285,7 @@ export default function Create(): React.JSX.Element {
             </div>
           </Card>
 
-          {createError && <p className="text-sm text-red-400">{createError}</p>}
+          {createError && <p className="text-sm text-red-400 light:text-red-600">{createError}</p>}
 
           <Button className="w-full" disabled={submitDisabled} onClick={() => void submit()}>
             {createBusy && <Spinner />}

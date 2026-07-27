@@ -209,9 +209,12 @@ export default function Split(): React.JSX.Element {
       <h2 className="text-xl font-semibold text-zinc-100">{t.split.title}</h2>
 
       {createdKeys ? (
-        <Card className="border-green-900 bg-green-950/30">
+        <Card className="border-green-900 bg-green-950/30 light:border-green-300 light:bg-green-50">
           <div className="flex items-start gap-3">
-            <CheckCircle2 className="mt-0.5 shrink-0 text-green-400" size={20} />
+            <CheckCircle2
+              className="mt-0.5 shrink-0 text-green-400 light:text-green-600"
+              size={20}
+            />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-zinc-100">
                 {t.split.createdTitle(createdKeys.length, parent?.key ?? '')}
@@ -234,7 +237,9 @@ export default function Split(): React.JSX.Element {
                 ))}
               </div>
               {!commentPosted && (
-                <p className="mt-3 text-sm text-amber-400">{t.split.commentFailedHint}</p>
+                <p className="mt-3 text-sm text-amber-400 light:text-amber-600">
+                  {t.split.commentFailedHint}
+                </p>
               )}
               <div className="mt-3 flex items-stretch gap-2">
                 <Button variant="secondary" onClick={() => parent && openIssue(parent.key)}>
@@ -299,7 +304,7 @@ export default function Split(): React.JSX.Element {
                   {getBusy ? t.split.searching : t.split.search}
                 </Button>
               </div>
-              {getError && <p className="text-sm text-red-400">{getError}</p>}
+              {getError && <p className="text-sm text-red-400 light:text-red-600">{getError}</p>}
             </div>
           </Card>
 
@@ -319,7 +324,9 @@ export default function Split(): React.JSX.Element {
                     {descriptionPreview}
                   </p>
                 ) : (
-                  <p className="text-sm text-amber-400">{t.split.noDescription}</p>
+                  <p className="text-sm text-amber-400 light:text-amber-600">
+                    {t.split.noDescription}
+                  </p>
                 )}
               </div>
             </Card>
@@ -331,10 +338,14 @@ export default function Split(): React.JSX.Element {
               {analyzeBusy ? t.split.analyzing : t.split.analyze}
             </Button>
             {!claudeInfo?.available && (
-              <span className="text-xs text-amber-400">{t.split.claudeUnavailableHint}</span>
+              <span className="text-xs text-amber-400 light:text-amber-600">
+                {t.split.claudeUnavailableHint}
+              </span>
             )}
           </div>
-          {analyzeError && <p className="text-sm text-red-400">{analyzeError}</p>}
+          {analyzeError && (
+            <p className="text-sm text-red-400 light:text-red-600">{analyzeError}</p>
+          )}
 
           {items.length > 0 && (
             <>
@@ -422,7 +433,9 @@ export default function Split(): React.JSX.Element {
                       {t.split.modeSubtask}
                     </label>
                     {subtaskTypes.length === 0 && (
-                      <p className="pl-6 text-xs text-amber-400">{t.split.noSubtaskType}</p>
+                      <p className="pl-6 text-xs text-amber-400 light:text-amber-600">
+                        {t.split.noSubtaskType}
+                      </p>
                     )}
                     <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-300">
                       <input
@@ -467,7 +480,9 @@ export default function Split(): React.JSX.Element {
                 </div>
               </Card>
 
-              {createError && <p className="text-sm text-red-400">{createError}</p>}
+              {createError && (
+                <p className="text-sm text-red-400 light:text-red-600">{createError}</p>
+              )}
 
               <Button className="w-full" disabled={submitDisabled} onClick={() => void submit()}>
                 {createBusy && <Spinner />}

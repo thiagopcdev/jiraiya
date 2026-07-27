@@ -93,14 +93,14 @@ export default function Ask(): React.JSX.Element {
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-4">
             <div className="flex size-12 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900">
-              <Sparkles size={20} className="text-indigo-400" />
+              <Sparkles size={20} className="text-indigo-400 light:text-indigo-600" />
             </div>
             <p className="text-sm text-zinc-500">{t.ask.emptyTitle}</p>
             <div className="flex max-w-lg flex-col items-center gap-2">
               {t.ask.suggestions.map((suggestion) => (
                 <button
                   key={suggestion}
-                  className="rounded-full border border-zinc-800 bg-zinc-900 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-indigo-700 hover:text-indigo-300"
+                  className="rounded-full border border-zinc-800 bg-zinc-900 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-indigo-700 hover:text-indigo-300 light:hover:text-indigo-600"
                   onClick={() => void send(suggestion)}
                 >
                   {suggestion}
@@ -121,7 +121,7 @@ export default function Ask(): React.JSX.Element {
                 <div
                   className={`max-w-[85%] rounded-lg border px-3 py-2 ${
                     message.error
-                      ? 'border-amber-900 bg-amber-950/30 text-amber-300'
+                      ? 'border-amber-900 bg-amber-950/30 text-amber-300 light:border-amber-300 light:bg-amber-50 light:text-amber-700'
                       : 'border-zinc-800 bg-zinc-900'
                   }`}
                 >

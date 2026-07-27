@@ -110,10 +110,10 @@ function BriefingBanner(): React.JSX.Element | null {
 
   return (
     <div className="mb-4 flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm text-zinc-300">
-      <FileText size={15} className="shrink-0 text-indigo-400" />
+      <FileText size={15} className="shrink-0 text-indigo-400 light:text-indigo-600" />
       <span className="flex-1">Sua daily de hoje está pronta.</span>
       <button
-        className="rounded-md px-2 py-1 text-sm font-medium text-indigo-400 hover:bg-zinc-800"
+        className="rounded-md px-2 py-1 text-sm font-medium text-indigo-400 hover:bg-zinc-800 light:text-indigo-600"
         onClick={() => void navigate('/resumos')}
       >
         Ver
@@ -156,7 +156,7 @@ function LeadTimeCard(): React.JSX.Element | null {
             <div className="w-32 shrink-0 truncate text-sm text-zinc-300">{s.status}</div>
             <div className="h-2 flex-1 overflow-hidden rounded-full bg-zinc-800">
               <div
-                className="h-full rounded-full bg-indigo-900/60"
+                className="h-full rounded-full bg-indigo-900/60 light:bg-indigo-500"
                 style={{ width: `${max > 0 ? (s.avgDays / max) * 100 : 0}%` }}
               />
             </div>
@@ -224,13 +224,15 @@ function RejectedBanner(): React.JSX.Element {
   const has = issues.length > 0
   return (
     <Card
-      className={`mb-4 ${has ? 'border-red-900/50 bg-red-950/20' : ''}`}
+      className={`mb-4 ${has ? 'border-red-900/50 bg-red-950/20 light:border-red-300 light:bg-red-50' : ''}`}
       title={
-        <span className={`flex items-center gap-2 ${has ? 'text-red-300' : 'text-zinc-300'}`}>
+        <span
+          className={`flex items-center gap-2 ${has ? 'text-red-300 light:text-red-700' : 'text-zinc-300'}`}
+        >
           <AlertTriangle size={15} className={has ? '' : 'text-zinc-500'} />
           Reprovados
           <span
-            className={`rounded px-1.5 text-xs ${has ? 'bg-red-900/50' : 'bg-zinc-800 text-zinc-400'}`}
+            className={`rounded px-1.5 text-xs ${has ? 'bg-red-900/50 light:bg-red-200' : 'bg-zinc-800 text-zinc-400'}`}
           >
             {issues.length}
           </span>
@@ -282,7 +284,9 @@ function SprintHeader(): React.JSX.Element {
             {sprint?.name ?? 'Sem sprint ativa'}
           </div>
           {daysLeft !== null && (
-            <div className={`text-xs ${daysLeft <= 2 ? 'text-amber-400' : 'text-zinc-500'}`}>
+            <div
+              className={`text-xs ${daysLeft <= 2 ? 'text-amber-400 light:text-amber-600' : 'text-zinc-500'}`}
+            >
               {daysLeft < 0
                 ? 'encerrada'
                 : daysLeft === 0

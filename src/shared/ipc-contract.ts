@@ -167,7 +167,8 @@ export const ipcContract = {
       morningBriefing: z.boolean().optional(),
       updateCheck: z.boolean().optional(),
       prIntegration: z.boolean().optional(),
-      prSearchScope: z.string().trim().max(200).optional()
+      prSearchScope: z.string().trim().max(200).optional(),
+      theme: z.enum(['dark', 'light', 'system']).optional()
     }),
     res: undefined as unknown as Prefs
   },

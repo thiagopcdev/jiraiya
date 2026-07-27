@@ -181,7 +181,7 @@ export default function Summaries(): React.JSX.Element {
               checked={useClaude && (claudeInfo?.available ?? false)}
               onChange={(e) => setUseClaude(e.target.checked)}
             />
-            <Sparkles size={14} className="text-indigo-400" />
+            <Sparkles size={14} className="text-indigo-400 light:text-indigo-600" />
             Aprimorar com Claude
           </label>
           <Button
@@ -201,12 +201,12 @@ export default function Summaries(): React.JSX.Element {
             <span className="flex items-center gap-2">
               Prévia (editável)
               {generatedBy === 'claude' && (
-                <span className="flex items-center gap-1 text-xs font-normal text-indigo-400">
+                <span className="flex items-center gap-1 text-xs font-normal text-indigo-400 light:text-indigo-600">
                   <Sparkles size={12} /> gerado com Claude
                 </span>
               )}
               {claudeFellBack && (
-                <span className="text-xs font-normal text-amber-400">
+                <span className="text-xs font-normal text-amber-400 light:text-amber-600">
                   Gerado por template — Claude indisponível
                 </span>
               )}
@@ -264,7 +264,7 @@ export default function Summaries(): React.JSX.Element {
                   </div>
                 </button>
                 <button
-                  className="shrink-0 rounded p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-red-400"
+                  className="shrink-0 rounded p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-red-400 light:hover:text-red-600"
                   onClick={() => void remove(s.id)}
                   title={t.common.delete}
                 >
@@ -293,7 +293,7 @@ function CitedIssueChips({ content }: { content: string }): React.JSX.Element | 
       {keys.map((key) => (
         <button
           key={key}
-          className="rounded bg-zinc-800 px-1.5 py-0.5 text-xs font-medium text-indigo-400 hover:bg-zinc-700 hover:text-indigo-300"
+          className="rounded bg-zinc-800 px-1.5 py-0.5 text-xs font-medium text-indigo-400 hover:bg-zinc-700 hover:text-indigo-300 light:text-indigo-600 light:hover:text-indigo-700"
           onClick={() => openIssue(key)}
         >
           {key}

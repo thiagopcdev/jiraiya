@@ -85,6 +85,8 @@ function AttachmentImage({
  * Overlay em tela cheia com a imagem em tamanho real. Registra o Escape em
  * capture + stopPropagation pra fechar só o lightbox — a gaveta também escuta
  * Escape (em bubble, sem capture) pra navegar/fechar, e não deve reagir aqui.
+ * Fica sempre escuro (fundo/textos em preto/neutral fixos, não zinc) — é um
+ * modal sobre a imagem, mesmo padrão nos dois temas do app.
  */
 function AttachmentLightbox({
   attachmentId,
@@ -153,7 +155,7 @@ function AttachmentLightbox({
       onClick={onClose}
     >
       <button
-        className="absolute top-4 right-4 rounded-md p-1.5 text-zinc-300 hover:bg-white/10"
+        className="absolute top-4 right-4 rounded-md p-1.5 text-neutral-300 hover:bg-white/10"
         onClick={onClose}
         aria-label="Fechar"
       >
@@ -161,9 +163,9 @@ function AttachmentLightbox({
       </button>
 
       {isLoading ? (
-        <Spinner className="text-zinc-300" />
+        <Spinner className="text-neutral-300" />
       ) : data?.tooLarge ? (
-        <p className="text-sm text-zinc-300">Arquivo grande demais para exibir.</p>
+        <p className="text-sm text-neutral-300">Arquivo grande demais para exibir.</p>
       ) : data?.dataUri ? (
         <img
           src={data.dataUri}
@@ -176,12 +178,12 @@ function AttachmentLightbox({
       )}
 
       <div
-        className="flex w-full max-w-2xl items-center justify-between gap-3 rounded-md bg-zinc-900/90 px-3 py-2"
+        className="flex w-full max-w-2xl items-center justify-between gap-3 rounded-md bg-neutral-900/90 px-3 py-2"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="min-w-0">
-          <p className="truncate text-sm text-zinc-200">{filename}</p>
-          <p className="text-xs text-zinc-500">
+          <p className="truncate text-sm text-neutral-200">{filename}</p>
+          <p className="text-xs text-neutral-500">
             {formatSize(size)}
             {savedMsg && <span className="ml-2 text-green-400">{savedMsg}</span>}
             {error && <span className="ml-2 text-amber-400">{error}</span>}

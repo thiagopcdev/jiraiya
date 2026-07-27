@@ -142,7 +142,7 @@ export default function Filters(): React.JSX.Element {
                   <span className="flex shrink-0 items-center gap-1 text-xs">
                     <span className="text-zinc-500">{t.filters.deleteConfirm}</span>
                     <button
-                      className="text-red-400 hover:underline"
+                      className="text-red-400 hover:underline light:text-red-600"
                       onClick={() => void removeFilter(filter.id)}
                     >
                       {t.filters.yes}
@@ -164,7 +164,7 @@ export default function Filters(): React.JSX.Element {
                       <Pencil size={12} />
                     </button>
                     <button
-                      className="rounded p-1 text-zinc-500 hover:text-red-400"
+                      className="rounded p-1 text-zinc-500 hover:text-red-400 light:hover:text-red-600"
                       title={t.filters.delete}
                       onClick={() => setDeleteConfirmId(filter.id)}
                     >
@@ -216,13 +216,13 @@ export default function Filters(): React.JSX.Element {
                 {saveBusy ? t.filters.saving : t.filters.save}
               </Button>
             </div>
-            {saveError && <p className="text-sm text-red-400">{saveError}</p>}
+            {saveError && <p className="text-sm text-red-400 light:text-red-600">{saveError}</p>}
           </div>
         </Card>
 
         <Card>
           {runError ? (
-            <p className="text-sm text-red-400">{runError}</p>
+            <p className="text-sm text-red-400 light:text-red-600">{runError}</p>
           ) : results === null ? (
             <p className="text-sm text-zinc-500">{t.filters.runToSeeResults}</p>
           ) : results.length === 0 ? (
@@ -234,7 +234,9 @@ export default function Filters(): React.JSX.Element {
                 <IssueRow key={issue.key} issue={issue} />
               ))}
               {truncated && (
-                <p className="mt-2 text-xs text-amber-400">{t.filters.truncatedHint}</p>
+                <p className="mt-2 text-xs text-amber-400 light:text-amber-600">
+                  {t.filters.truncatedHint}
+                </p>
               )}
             </div>
           )}
