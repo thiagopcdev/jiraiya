@@ -271,6 +271,14 @@ export const ipcContract = {
     }),
     res: undefined as unknown as { ok: true }
   },
+  'text:polish': {
+    req: z.object({
+      text: z.string().trim().min(1).max(20000),
+      /** ajusta o tom do prompt (descrição de card × comentário) e o modelo (modelDraft × modelComment) */
+      context: z.enum(['description', 'comment'])
+    }),
+    res: undefined as unknown as { text: string; generatedBy: 'claude' }
+  },
   'filters:list': {
     req: z.object({}),
     res: undefined as unknown as {

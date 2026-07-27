@@ -38,6 +38,7 @@ import { registerSprintMoveHandlers } from './ipc/handlers/sprintMove'
 import { registerSearchHandlers } from './ipc/handlers/search'
 import { registerEpicHandlers } from './ipc/handlers/epics'
 import { registerPrHandlers } from './ipc/handlers/prs'
+import { registerPolishHandlers } from './ipc/handlers/polish'
 import { registerWatchHandlers } from './ipc/handlers/watch'
 import { registerNotesHandlers } from './ipc/handlers/notes'
 import { registerWorklogExportHandlers } from './ipc/handlers/worklogExport'
@@ -288,6 +289,7 @@ app.whenReady().then(() => {
   registerSearchHandlers(ctx)
   registerEpicHandlers(ctx)
   registerPrHandlers(ctx)
+  registerPolishHandlers(ctx)
   registerWatchHandlers(ctx)
   registerNotesHandlers(ctx)
   registerWorklogExportHandlers(ctx)

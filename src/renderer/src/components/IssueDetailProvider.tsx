@@ -942,6 +942,7 @@ function IssueDetailDrawer({
                       textareaRef={commentRef}
                       value={comment}
                       onChange={setComment}
+                      aiContext="comment"
                     />
                   )}
                 </div>
@@ -1519,7 +1520,12 @@ function CommentItem({
           <div className="flex items-center justify-between gap-2">
             <EditPreviewTabs mode={editViewMode} onChange={setEditViewMode} />
             {editViewMode === 'edit' && (
-              <MarkdownToolbar textareaRef={bodyRef} value={body} onChange={setBody} />
+              <MarkdownToolbar
+                textareaRef={bodyRef}
+                value={body}
+                onChange={setBody}
+                aiContext="comment"
+              />
             )}
           </div>
           {editViewMode === 'edit' ? (
@@ -1621,7 +1627,12 @@ function DescriptionSection({
         <div className="mb-1.5 flex items-center justify-between gap-2">
           <EditPreviewTabs mode={viewMode} onChange={setViewMode} />
           {viewMode === 'edit' && (
-            <MarkdownToolbar textareaRef={descriptionRef} value={value} onChange={setValue} />
+            <MarkdownToolbar
+              textareaRef={descriptionRef}
+              value={value}
+              onChange={setValue}
+              aiContext="description"
+            />
           )}
         </div>
         {viewMode === 'edit' ? (

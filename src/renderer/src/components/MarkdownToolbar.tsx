@@ -1,4 +1,5 @@
-import type { RefObject } from 'react'
+import { useEffect, useState, type RefObject } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   Bold,
   Italic,
@@ -10,8 +11,12 @@ import {
   ListOrdered,
   ListChecks,
   Quote,
-  SquareCode
+  SquareCode,
+  Sparkles,
+  Loader2
 } from 'lucide-react'
+import { invoke, IpcError } from '../api/client'
+import { t } from '../strings/ptBR'
 
 interface EditResult {
   next: string
@@ -216,12 +221,31 @@ const buttonClass = 'rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc
 export function MarkdownToolbar({
   textareaRef,
   value,
-  onChange
+  onChange,
+  aiContext
 }: {
   textareaRef: RefObject<HTMLTextAreaElement | null>
   value: string
   onChange: (next: string) => void
+  /** habilita o botão "Formatar com IA"; define o tom (descrição × comentário) */
+  aiContext?: 'description' | 'comment'
 }): React.JSX.Element {
+  const { data: claudeStatus } = useQuery({
+    queryKey: ['claude-status'],
+    queryFn: () => invoke('claude:status', {}),
+    staleTime: 5 * 60_000
+  })
+  const [polishBusy, setPolishBusy] = useState(false)
+  const [polishError, setPolishError] = useState<string | null>(null)
+  const [previous, setPrevious] = useState<string | null>(null)
+
+  // Some sozinho após alguns segundos, sem exigir interação do usuário.
+  useEffect(() => {
+    if (!polishError) return
+    const timer = setTimeout(() => setPolishError(null), 5000)
+    return () => clearTimeout(timer)
+  }, [polishError])
+
   const runButton = (btn: ToolbarButton): void => {
     const el = textareaRef.current
     const start = el?.selectionStart ?? value.length
@@ -234,6 +258,27 @@ export function MarkdownToolbar({
       node.focus()
       node.setSelectionRange(result.selStart, result.selEnd)
     })
+  }
+
+  const runPolish = async (): Promise<void> => {
+    if (!aiContext || polishBusy || !value.trim()) return
+    setPolishBusy(true)
+    setPolishError(null)
+    try {
+      const res = await invoke('text:polish', { text: value, context: aiContext })
+      setPrevious(value)
+      onChange(res.text)
+    } catch (err) {
+      setPolishError(err instanceof IpcError ? err.message : t.common.error)
+    } finally {
+      setPolishBusy(false)
+    }
+  }
+
+  const undoPolish = (): void => {
+    if (previous === null) return
+    onChange(previous)
+    setPrevious(null)
   }
 
   const renderButton = (btn: ToolbarButton): React.JSX.Element => {
@@ -253,11 +298,46 @@ export function MarkdownToolbar({
     )
   }
 
+  const showPolish = Boolean(aiContext) && claudeStatus?.available
+
   return (
     <div className="mb-1 flex items-center gap-0.5">
       {buttons.map(renderButton)}
       <div className="mx-1 h-4 border-l border-zinc-700" />
       {lineButtons.map(renderButton)}
+      {showPolish && (
+        <>
+          <div className="mx-1 h-4 border-l border-zinc-700" />
+          <button
+            type="button"
+            className={`rounded p-1 disabled:opacity-60 ${
+              polishError
+                ? 'text-amber-400 light:text-amber-600'
+                : 'text-indigo-400 hover:bg-zinc-800 hover:text-indigo-300 light:hover:bg-zinc-200'
+            }`}
+            title={polishError ?? 'Formatar com IA — reescreve com formatação profissional'}
+            aria-label="Formatar com IA"
+            disabled={polishBusy}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => void runPolish()}
+          >
+            {polishBusy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+          </button>
+          {previous !== null && (
+            <button
+              type="button"
+              className="text-xs text-zinc-500 hover:underline"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={undoPolish}
+            >
+              Desfazer
+            </button>
+          )}
+          {polishError && (
+            <span className="text-xs text-amber-400 light:text-amber-600">{polishError}</span>
+          )}
+        </>
+      )}
     </div>
   )
 }

@@ -53,6 +53,7 @@ function SplitItemCard({
               textareaRef={descriptionRef}
               value={item.description}
               onChange={(next) => onChange({ description: next })}
+              aiContext="description"
             />
             <textarea
               ref={descriptionRef}

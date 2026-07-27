@@ -256,6 +256,7 @@ export default function Create(): React.JSX.Element {
                   textareaRef={descriptionRef}
                   value={description}
                   onChange={setDescription}
+                  aiContext="description"
                 />
                 <textarea
                   ref={descriptionRef}
