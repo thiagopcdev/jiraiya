@@ -44,6 +44,7 @@ import {
 } from '../api/hooks'
 import { Badge, Button, EmptyState, Input, Spinner } from './ui'
 import { AdfView } from './AdfView'
+import { MarkdownLite } from './MarkdownLite'
 import { MarkdownToolbar } from './MarkdownToolbar'
 import { AttachmentsSection, useMediaResolver } from './attachments'
 import { statusColor } from './statusColor'
@@ -161,6 +162,38 @@ function buildAssigneeOptions(
   return options
 }
 
+/** Par de abas "Editar | Prévia" usado nos editores de descrição e comentário. */
+function EditPreviewTabs({
+  mode,
+  onChange
+}: {
+  mode: 'edit' | 'preview'
+  onChange: (mode: 'edit' | 'preview') => void
+}): React.JSX.Element {
+  return (
+    <div className="flex items-center gap-1 text-xs">
+      <button
+        type="button"
+        className={`rounded px-2 py-0.5 ${
+          mode === 'edit' ? 'bg-zinc-800 text-zinc-200' : 'text-zinc-500 hover:text-zinc-300'
+        }`}
+        onClick={() => onChange('edit')}
+      >
+        Editar
+      </button>
+      <button
+        type="button"
+        className={`rounded px-2 py-0.5 ${
+          mode === 'preview' ? 'bg-zinc-800 text-zinc-200' : 'text-zinc-500 hover:text-zinc-300'
+        }`}
+        onClick={() => onChange('preview')}
+      >
+        Prévia
+      </button>
+    </div>
+  )
+}
+
 export function IssueDetailProvider({ children }: { children: ReactNode }): React.JSX.Element {
   // pilha de navegação interna do drawer: abrir um pai/subtarefa/vínculo empilha por
   // cima do card atual; "voltar" desempilha; fechar limpa tudo de uma vez.
@@ -249,8 +282,8 @@ function IssueDetailDrawer({
   })
   const localComments = activities.filter((a) => a.kind === 'comment' && a.bodyText)
 
-  // descrição ao vivo (ADF formatado); erro/carregando → fallback pro texto local
-  const { data: liveDescription } = useQuery({
+  // descrição ao vivo (ADF formatado + markdown); erro/carregando → fallback pro texto local
+  const { data: liveDescription, isLoading: liveDescriptionLoading } = useQuery({
     queryKey: ['issue-description', issueKey],
     queryFn: () => invoke('issues:description', { key: issueKey }),
     staleTime: 30_000,
@@ -349,6 +382,7 @@ function IssueDetailDrawer({
 
   const [descExpanded, setDescExpanded] = useState(false)
   const [comment, setComment] = useState('')
+  const [commentViewMode, setCommentViewMode] = useState<'edit' | 'preview'>('edit')
   const commentRef = useRef<HTMLTextAreaElement>(null)
   const [commentBusy, setCommentBusy] = useState(false)
   const [commentError, setCommentError] = useState<string | null>(null)
@@ -655,6 +689,8 @@ function IssueDetailDrawer({
                 issue={issue}
                 issueKey={issueKey}
                 liveDescription={liveDescription?.description ?? null}
+                liveMarkdown={liveDescription?.markdown ?? null}
+                descriptionLoading={liveDescriptionLoading}
                 mediaResolver={mediaResolver}
                 descExpanded={descExpanded}
                 onExpand={() => setDescExpanded(true)}
@@ -899,15 +935,30 @@ function IssueDetailDrawer({
                     )}
                   </div>
                 )}
-                <MarkdownToolbar textareaRef={commentRef} value={comment} onChange={setComment} />
-                <textarea
-                  ref={commentRef}
-                  className="h-24 w-full resize-y rounded-md border border-zinc-700 bg-zinc-900 p-2.5 text-sm text-zinc-100 outline-none focus:border-indigo-500"
-                  placeholder={t.detail.commentPlaceholder}
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  onPaste={(e) => void handleCommentPaste(e)}
-                />
+                <div className="flex items-center justify-between gap-2">
+                  <EditPreviewTabs mode={commentViewMode} onChange={setCommentViewMode} />
+                  {commentViewMode === 'edit' && (
+                    <MarkdownToolbar
+                      textareaRef={commentRef}
+                      value={comment}
+                      onChange={setComment}
+                    />
+                  )}
+                </div>
+                {commentViewMode === 'edit' ? (
+                  <textarea
+                    ref={commentRef}
+                    className="h-24 w-full resize-y rounded-md border border-zinc-700 bg-zinc-900 p-2.5 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+                    placeholder={t.detail.commentPlaceholder}
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    onPaste={(e) => void handleCommentPaste(e)}
+                  />
+                ) : (
+                  <div className="h-24 w-full overflow-y-auto rounded-md border border-zinc-800 p-3">
+                    <MarkdownLite text={comment} />
+                  </div>
+                )}
                 <p className="-mt-1 text-xs text-zinc-600">
                   Markdown: **negrito**, listas, `código` — cole imagem para anexar
                 </p>
@@ -1343,8 +1394,8 @@ function SubtaskCreateForm({
 /**
  * Um comentário ao vivo. Se for do usuário atual, mostra ações discretas de
  * editar/excluir no header; edição troca o corpo por um textarea prefilled com o
- * texto plano; exclusão pede confirmação inline (sem window.confirm), que expira
- * sozinha em 5s.
+ * markdown do comentário (preserva a formatação); exclusão pede confirmação
+ * inline (sem window.confirm), que expira sozinha em 5s.
  */
 function CommentItem({
   comment,
@@ -1361,7 +1412,8 @@ function CommentItem({
   const isMine = myAccountId !== null && comment.authorAccountId === myAccountId
 
   const [mode, setMode] = useState<'view' | 'edit' | 'confirmDelete'>('view')
-  const [body, setBody] = useState(comment.bodyText)
+  const [body, setBody] = useState(comment.bodyMarkdown)
+  const [editViewMode, setEditViewMode] = useState<'edit' | 'preview'>('edit')
   const bodyRef = useRef<HTMLTextAreaElement>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -1424,7 +1476,8 @@ function CommentItem({
                 title={t.detail.editComment}
                 aria-label={t.detail.editComment}
                 onClick={() => {
-                  setBody(comment.bodyText)
+                  setBody(comment.bodyMarkdown)
+                  setEditViewMode('edit')
                   setMode('edit')
                 }}
               >
@@ -1463,13 +1516,24 @@ function CommentItem({
       </div>
       {mode === 'edit' ? (
         <div className="space-y-1.5">
-          <MarkdownToolbar textareaRef={bodyRef} value={body} onChange={setBody} />
-          <textarea
-            ref={bodyRef}
-            className="h-20 w-full resize-y rounded-md border border-zinc-700 bg-zinc-950 p-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-          />
+          <div className="flex items-center justify-between gap-2">
+            <EditPreviewTabs mode={editViewMode} onChange={setEditViewMode} />
+            {editViewMode === 'edit' && (
+              <MarkdownToolbar textareaRef={bodyRef} value={body} onChange={setBody} />
+            )}
+          </div>
+          {editViewMode === 'edit' ? (
+            <textarea
+              ref={bodyRef}
+              className="h-20 w-full resize-y rounded-md border border-zinc-700 bg-zinc-950 p-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+            />
+          ) : (
+            <div className="h-20 w-full overflow-y-auto rounded-md border border-zinc-800 p-3">
+              <MarkdownLite text={body} />
+            </div>
+          )}
           <p className="text-xs text-zinc-600">{t.detail.commentEditHint}</p>
           <div className="flex items-center gap-2">
             <Button disabled={busy || !body.trim()} onClick={() => void handleSave()}>
@@ -1499,6 +1563,8 @@ function DescriptionSection({
   issue,
   issueKey,
   liveDescription,
+  liveMarkdown,
+  descriptionLoading,
   mediaResolver,
   descExpanded,
   onExpand
@@ -1506,19 +1572,24 @@ function DescriptionSection({
   issue: Issue
   issueKey: string
   liveDescription: unknown | null
+  liveMarkdown: string | null
+  descriptionLoading: boolean
   mediaResolver: ReturnType<typeof useMediaResolver>
   descExpanded: boolean
   onExpand: () => void
 }): React.JSX.Element {
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState(false)
-  const [value, setValue] = useState(issue.descriptionText ?? '')
+  const [value, setValue] = useState(liveMarkdown ?? issue.descriptionText ?? '')
+  const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit')
   const descriptionRef = useRef<HTMLTextAreaElement>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const startEdit = (): void => {
-    setValue(issue.descriptionText ?? '')
+    if (descriptionLoading) return
+    setValue(liveMarkdown ?? issue.descriptionText ?? '')
+    setViewMode('edit')
     setError(null)
     setEditing(true)
   }
@@ -1545,17 +1616,27 @@ function DescriptionSection({
           {t.detail.description}
         </h3>
         <p className="mb-1.5 text-xs text-zinc-600">
-          Editar substitui a formatação atual — o texto será salvo como markdown (títulos #, listas
-          -, **negrito**, `código`).
+          O texto usa markdown — use a barra acima ou a prévia.
         </p>
-        <MarkdownToolbar textareaRef={descriptionRef} value={value} onChange={setValue} />
-        <textarea
-          ref={descriptionRef}
-          className="min-h-40 w-full resize-y rounded-md border border-zinc-700 bg-zinc-900 p-2.5 font-mono text-xs text-zinc-100 outline-none focus:border-indigo-500"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          disabled={busy}
-        />
+        <div className="mb-1.5 flex items-center justify-between gap-2">
+          <EditPreviewTabs mode={viewMode} onChange={setViewMode} />
+          {viewMode === 'edit' && (
+            <MarkdownToolbar textareaRef={descriptionRef} value={value} onChange={setValue} />
+          )}
+        </div>
+        {viewMode === 'edit' ? (
+          <textarea
+            ref={descriptionRef}
+            className="min-h-40 w-full resize-y rounded-md border border-zinc-700 bg-zinc-900 p-2.5 font-mono text-xs text-zinc-100 outline-none focus:border-indigo-500"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            disabled={busy}
+          />
+        ) : (
+          <div className="min-h-40 w-full overflow-y-auto rounded-md border border-zinc-800 p-3">
+            <MarkdownLite text={value} />
+          </div>
+        )}
         <div className="mt-2 flex items-center gap-2">
           <Button disabled={busy} onClick={() => void save()}>
             {busy ? <Spinner /> : null}
@@ -1577,8 +1658,10 @@ function DescriptionSection({
           {t.detail.description}
         </h3>
         <button
-          className="text-xs text-indigo-400 hover:underline light:text-indigo-600"
+          className="text-xs text-indigo-400 hover:underline disabled:opacity-50 disabled:hover:no-underline light:text-indigo-600"
           onClick={startEdit}
+          disabled={descriptionLoading}
+          title={descriptionLoading ? 'Carregando…' : undefined}
         >
           Editar
         </button>

@@ -528,6 +528,8 @@ export const ipcContract = {
     res: undefined as unknown as {
       /** documento ADF cru da descrição (null se vazia) */
       description: unknown | null
+      /** descrição convertida para markdown (para o editor preservar a formatação) */
+      markdown: string | null
     }
   },
   'issues:comments': {
@@ -540,8 +542,10 @@ export const ipcContract = {
         authorName: string | null
         createdAt: string
         body: unknown
-        /** texto plano do body (para o editor de comentário próprio) */
+        /** texto plano do body (busca/fallback) */
         bodyText: string
+        /** body em markdown (editor de comentário próprio preserva a formatação) */
+        bodyMarkdown: string
       }>
     }
   },

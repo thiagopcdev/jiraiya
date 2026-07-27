@@ -1,14 +1,29 @@
 import { AppError, handle } from '../registry'
 import type { AppContext } from '../../appContext'
+import type { AdfNode } from '../../jira/types'
 import { getWorkspaceRow } from '../../db/repos/workspace'
 import { getPrefs } from '../../db/repos/misc'
 import { getIssueByKey } from '../../db/repos/issue'
 import { adfToText } from '../../jira/adf'
+import { adfToMarkdown } from '../../jira/adfToMarkdown'
 import { markdownToAdf } from '../../issues/markdownToAdf'
 import { JiraHttpError } from '../../jira/http'
 import { claudeStatus, ClaudeUnavailableError } from '../../summaries/claude'
 import { draftCommentWithClaude } from '../../issues/commentDraft'
 import { parseCreateError } from './create'
+
+/**
+ * ADF → markdown tolerante a falhas: documento vazio ou conversão que lance
+ * (shape exótico) devolvem o fallback (null na descrição, texto plano no comentário).
+ */
+function safeMarkdown<T extends string | null>(node: AdfNode | null, fallback: T): string | T {
+  if (!node) return fallback
+  try {
+    return adfToMarkdown(node)
+  } catch {
+    return fallback
+  }
+}
 
 function requireWorkspace(ctx: AppContext): NonNullable<ReturnType<typeof getWorkspaceRow>> {
   const workspace = getWorkspaceRow(ctx.db)
@@ -26,8 +41,8 @@ export function registerCommentHandlers(ctx: AppContext): void {
   handle('issues:description', async ({ key }) => {
     requireWorkspace(ctx)
     const client = requireClient(ctx)
-    const description = (await client.issueDescription(key.trim().toUpperCase())) as unknown
-    return { description }
+    const description = await client.issueDescription(key.trim().toUpperCase())
+    return { description: description as unknown, markdown: safeMarkdown(description, null) }
   })
 
   handle('issues:comments', async ({ key }) => {
@@ -42,7 +57,8 @@ export function registerCommentHandlers(ctx: AppContext): void {
         authorName: c.author?.displayName ?? null,
         createdAt: c.created,
         body: (c.body ?? null) as unknown,
-        bodyText: adfToText(c.body ?? null)
+        bodyText: adfToText(c.body ?? null),
+        bodyMarkdown: safeMarkdown(c.body ?? null, adfToText(c.body ?? null))
       }))
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
     return { comments }
