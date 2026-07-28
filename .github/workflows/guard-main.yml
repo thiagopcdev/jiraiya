@@ -1,0 +1,22 @@
+# PRs para a main só podem vir da develop. O GitHub não restringe a branch de
+# ORIGEM nativamente, então este check falha em qualquer outra origem — marque-o
+# como obrigatório no ruleset da main (Require status checks: "valida-origem")
+# para bloquear o merge.
+name: Guarda da main
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  valida-origem:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Só a develop pode abrir PR para a main
+        run: |
+          if [ "${{ github.head_ref }}" != "develop" ]; then
+            echo "::error::PR para a main deve partir da develop (origem atual: ${{ github.head_ref }})"
+            exit 1
+          fi
+          echo "Origem develop confirmada."
