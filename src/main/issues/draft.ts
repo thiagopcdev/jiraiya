@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { runClaudePrompt } from '../summaries/claude'
-import type { ClaudeModel } from '@shared/domain'
+import { runAiPrompt } from '../ai/service'
+import { extractJson } from '../ai/text'
 import { CARD_PATTERN, patternBlockFor } from './cardPattern'
 
 const draftSchema = z.object({
@@ -9,32 +9,28 @@ const draftSchema = z.object({
 })
 
 /**
- * Extrai o JSON do texto do Claude (tolera cerca ```json e preâmbulo) e valida.
+ * Extrai o JSON da resposta da IA (tolera cerca ```json e preâmbulo) e valida.
  * Qualquer falha → Error com mensagem amigável.
  */
 export function parseDraftResponse(raw: string): { title: string; description: string } {
   try {
-    const start = raw.indexOf('{')
-    const end = raw.lastIndexOf('}')
-    if (start === -1 || end === -1 || end < start) {
-      throw new Error('sem objeto JSON')
-    }
-    const parsed = draftSchema.parse(JSON.parse(raw.slice(start, end + 1)))
+    // extractJson tira a cerca ```json (Gemini/Codex cercam sempre) e recorta
+    // do primeiro '{' ao último '}', cobrindo preâmbulo/rodapé de texto
+    const parsed = draftSchema.parse(JSON.parse(extractJson(raw)))
     return { title: parsed.title.trim(), description: parsed.description.trim() }
   } catch {
-    throw new Error('Resposta do Claude em formato inesperado')
+    throw new Error('Resposta da IA em formato inesperado')
   }
 }
 
 /**
  * Monta o prompt pt-BR no padrão Biud (bloco História ou Tarefa/Bug conforme o tipo)
- * e gera um rascunho de título + descrição via CLI do Claude.
+ * e gera um rascunho de título + descrição no provider de IA ativo.
  */
-export async function draftIssueWithClaude(input: {
+export async function draftIssue(input: {
   idea: string
   projectKey: string
   issueType: string
-  model?: ClaudeModel
 }): Promise<{ title: string; description: string }> {
   const bloco = patternBlockFor(input.issueType)
 
@@ -62,6 +58,6 @@ export async function draftIssueWithClaude(input: {
     'Responda SOMENTE com JSON válido no formato {"title": "...", "description": "..."} — sem cerca de código, sem texto antes ou depois.'
   ].join('\n')
 
-  const raw = await runClaudePrompt(prompt, input.model)
+  const raw = await runAiPrompt('draft', prompt)
   return parseDraftResponse(raw)
 }

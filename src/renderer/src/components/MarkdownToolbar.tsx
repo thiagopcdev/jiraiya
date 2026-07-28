@@ -1,5 +1,4 @@
 import { useEffect, useState, type RefObject } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import {
   Bold,
   Italic,
@@ -16,6 +15,7 @@ import {
   Loader2
 } from 'lucide-react'
 import { invoke, IpcError } from '../api/client'
+import { useAiStatus } from '../api/hooks'
 import { t } from '../strings/ptBR'
 
 interface EditResult {
@@ -258,11 +258,7 @@ export function MarkdownToolbar({
   /** habilita o botão "Formatar com IA"; define o tom (descrição × comentário) */
   aiContext?: 'description' | 'comment'
 }): React.JSX.Element {
-  const { data: claudeStatus } = useQuery({
-    queryKey: ['claude-status'],
-    queryFn: () => invoke('claude:status', {}),
-    staleTime: 5 * 60_000
-  })
+  const { data: aiStatus } = useAiStatus()
   const [polishBusy, setPolishBusy] = useState(false)
   const [polishError, setPolishError] = useState<string | null>(null)
   const [previous, setPrevious] = useState<string | null>(null)
@@ -326,7 +322,7 @@ export function MarkdownToolbar({
     )
   }
 
-  const showPolish = Boolean(aiContext) && claudeStatus?.available
+  const showPolish = Boolean(aiContext) && Boolean(aiStatus?.active)
 
   return (
     <div className="mb-1 flex items-center gap-0.5">

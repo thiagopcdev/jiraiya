@@ -1,11 +1,11 @@
 import type { AskAction } from '@shared/domain'
 
 /**
- * Protocolo de ações do "Pergunte ao Jiraiya": o Claude pode PROPOR ações,
+ * Protocolo de ações do "Pergunte ao Jiraiya": a IA pode PROPOR ações,
  * que só são executadas depois de confirmação explícita do usuário na UI.
  */
 
-/** Marcador de início do bloco de ações na resposta do Claude. */
+/** Marcador de início do bloco de ações na resposta da IA. */
 const MARKER = '===ACOES==='
 
 /** Máximo de ações aceitas num bloco (o excedente é descartado). */
@@ -40,7 +40,7 @@ export const ACTIONS_PROMPT = [
 ].join('\n')
 
 /**
- * Extrai o bloco de ações da resposta do Claude.
+ * Extrai o bloco de ações da resposta da IA.
  * Protocolo: a resposta pode terminar com uma linha '===ACOES===' seguida de um
  * array JSON de ações. Retorna { answer: <texto sem o bloco, trimado>, actions: [...] }.
  * Sem bloco → actions []. JSON inválido ou não-array → actions [] (answer preserva só o texto).
@@ -78,7 +78,7 @@ function parseActionsBlock(block: string): AskAction[] {
   return actions
 }
 
-/** Remove cerca de código (```json … ```) que o Claude às vezes adiciona. */
+/** Remove cerca de código (```json … ```) que a IA às vezes adiciona. */
 function stripCodeFence(block: string): string {
   const fenced = /^```[a-z]*\s*([\s\S]*?)\s*```$/i.exec(block.trim())
   return (fenced ? fenced[1] : block).trim()

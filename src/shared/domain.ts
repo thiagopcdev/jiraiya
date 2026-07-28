@@ -102,7 +102,7 @@ export interface Summary {
   periodEnd: string
   template: SummaryTemplate
   contentMd: string
-  generatedBy: 'template' | 'claude'
+  generatedBy: AiGeneratedBy
   createdAt: string
   editedAt: string | null
 }
@@ -196,8 +196,35 @@ export interface SprintListItem {
   endDate: string | null
 }
 
-/** Alias de modelo do CLI do Claude (resolvido pelo CLI para a versão mais nova). */
+/**
+ * Alias de modelo do CLI do Claude (resolvido pelo CLI para a versão mais nova).
+ * @deprecated os prefs legados model* continuam com esse tipo por compat;
+ * a seleção nova é por string em `aiModels` (validada por provider).
+ */
 export type ClaudeModel = 'haiku' | 'sonnet' | 'opus'
+
+/** Providers de IA suportados. */
+export type AiProviderId = 'claude' | 'gemini' | 'codex' | 'openrouter'
+/** Pref do provider ativo; 'auto' = claude → gemini → codex → openrouter (o primeiro disponível). */
+export type AiProviderPref = 'auto' | AiProviderId
+/** Funcionalidades com modelo configurável individualmente. */
+export type AiFeature = 'summaries' | 'team' | 'draft' | 'split' | 'comment' | 'ask'
+/** Origem de um conteúdo gerado ('claude' legado persistido continua válido). */
+export type AiGeneratedBy = 'template' | AiProviderId
+
+/** Entrada da auditoria de comandos externos (CLIs de IA, OpenRouter, gh). */
+export interface CommandLogEntry {
+  id: number
+  ts: string
+  kind: 'cli' | 'http'
+  provider: string
+  feature: string | null
+  /** linha de comando/chamada já REDIGIDA (prompt truncado; nunca keys/headers) */
+  command: string
+  durationMs: number | null
+  ok: boolean
+  error: string | null
+}
 
 export interface Prefs {
   syncIntervalMinutes: number
@@ -207,12 +234,22 @@ export interface Prefs {
   notifyCriticalAlerts: boolean
   notifyAssignedToMe: boolean
   notifyMentions: boolean
+  /** @deprecated fallback do claude — a seleção nova vive em aiModels */
   modelSummaries: ClaudeModel
+  /** @deprecated */
   modelTeam: ClaudeModel
+  /** @deprecated */
   modelDraft: ClaudeModel
+  /** @deprecated */
   modelSplit: ClaudeModel
+  /** @deprecated */
   modelComment: ClaudeModel
+  /** @deprecated */
   modelAsk: ClaudeModel
+  /** provider de IA ativo ('auto' = claude se disponível, senão o primeiro que houver) */
+  aiProvider: AiProviderPref
+  /** modelo escolhido por provider e por função (preserva a escolha ao alternar provider) */
+  aiModels: Partial<Record<AiProviderId, Partial<Record<AiFeature, string>>>>
   /** gera a daily de ontem no primeiro boot do dia e notifica */
   morningBriefing: boolean
   /** verifica novas releases no GitHub (repo privado exige token) */
@@ -299,6 +336,8 @@ export const DEFAULT_PREFS: Prefs = {
   modelComment: 'sonnet',
   // perguntas abertas sobre os dados pedem o modelo mais capaz
   modelAsk: 'opus',
+  aiProvider: 'auto',
+  aiModels: {},
   morningBriefing: true,
   updateCheck: true,
   prIntegration: false,

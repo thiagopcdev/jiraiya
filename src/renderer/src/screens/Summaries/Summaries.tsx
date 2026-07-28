@@ -11,10 +11,10 @@ import {
 } from 'date-fns'
 import { Check, Copy, Download, Save, Sparkles, Trash2 } from 'lucide-react'
 import type { Period } from '@shared/periods'
-import type { SummaryTemplate } from '@shared/domain'
+import type { AiGeneratedBy, SummaryTemplate } from '@shared/domain'
 import type { IpcResponse } from '@shared/ipc-contract'
 import { invoke } from '../../api/client'
-import { useSprintList } from '../../api/hooks'
+import { useAiStatus, useSprintList } from '../../api/hooks'
 import { Button, Card, EmptyState, Spinner } from '../../components/ui'
 import { useIssueDetail } from '../../components/issueDetail'
 import { t } from '../../strings/ptBR'
@@ -90,26 +90,37 @@ function truncate(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max)}…` : text
 }
 
+/**
+ * Label do provider que gerou um resumo salvo: usa o label do status ATUAL se o id do
+ * provider ainda bater com algum da lista (renomeou/mudou de detail sem perder o nome
+ * amigável); cai para 'IA' quando o provider não existe mais no status corrente
+ * (dado antigo persistido, ex.: 'claude' de antes da migração multi-provider).
+ */
+function generatedByLabel(
+  generatedBy: AiGeneratedBy,
+  aiStatus: IpcResponse<'ai:status'> | undefined
+): string {
+  const found = aiStatus?.providers.find((p) => p.id === generatedBy)
+  return found?.label ?? 'IA'
+}
+
 export default function Summaries(): React.JSX.Element {
   const queryClient = useQueryClient()
   const { openIssue } = useIssueDetail()
   const [periodKey, setPeriodKey] = useState('7d')
   const [template, setTemplate] = useState<SummaryKind>('standup')
   const [sprintJiraId, setSprintJiraId] = useState<number | null>(null)
-  const [useClaude, setUseClaude] = useState(true)
+  const [useAi, setUseAi] = useState(true)
   const [content, setContent] = useState('')
-  const [generatedBy, setGeneratedBy] = useState<'template' | 'claude' | null>(null)
+  const [generatedBy, setGeneratedBy] = useState<AiGeneratedBy | null>(null)
   const [busy, setBusy] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [claudeFellBack, setClaudeFellBack] = useState(false)
+  const [aiFellBack, setAiFellBack] = useState(false)
 
   const period = periodOptions.find((p) => p.key === periodKey)!.period
   const isSprintRetro = template === 'sprint_retro'
 
-  const { data: claudeInfo } = useQuery({
-    queryKey: ['claude-status'],
-    queryFn: () => invoke('claude:status', {})
-  })
+  const { data: aiStatus } = useAiStatus()
   const { data: history } = useQuery({
     queryKey: ['summaries'],
     queryFn: () => invoke('summaries:list', {})
@@ -130,18 +141,18 @@ export default function Summaries(): React.JSX.Element {
   const generate = async (): Promise<void> => {
     if (isSprintRetro && effectiveSprintId == null) return
     setBusy(true)
-    setClaudeFellBack(false)
+    setAiFellBack(false)
     try {
-      const wantClaude = useClaude && (claudeInfo?.available ?? false)
+      const wantAi = useAi && Boolean(aiStatus?.active)
       const res = isSprintRetro
         ? await invoke('summaries:sprintRetro', {
             sprintJiraId: effectiveSprintId!,
-            useClaude: wantClaude
+            useClaude: wantAi
           })
-        : await invoke('summaries:generate', { period, template, useClaude: wantClaude })
+        : await invoke('summaries:generate', { period, template, useClaude: wantAi })
       setContent(res.markdown)
       setGeneratedBy(res.generatedBy)
-      if (wantClaude && res.generatedBy === 'template') setClaudeFellBack(true)
+      if (wantAi && res.generatedBy === 'template') setAiFellBack(true)
     } finally {
       setBusy(false)
     }
@@ -281,23 +292,23 @@ export default function Summaries(): React.JSX.Element {
           </label>
           <label
             className={`flex items-center gap-2 pb-1.5 text-sm ${
-              claudeInfo?.available ? 'cursor-pointer text-zinc-300' : 'text-zinc-600'
+              aiStatus?.active ? 'cursor-pointer text-zinc-300' : 'text-zinc-600'
             }`}
             title={
-              claudeInfo?.available
-                ? 'Reescreve o resumo com o Claude (CLI local)'
-                : 'CLI do Claude não encontrado nesta máquina'
+              aiStatus?.active
+                ? `Reescreve o resumo com ${aiStatus.active.label}`
+                : 'Nenhum provider de IA disponível — configure em Ajustes'
             }
           >
             <input
               type="checkbox"
               className="accent-indigo-600"
-              disabled={!claudeInfo?.available}
-              checked={useClaude && (claudeInfo?.available ?? false)}
-              onChange={(e) => setUseClaude(e.target.checked)}
+              disabled={!aiStatus?.active}
+              checked={useAi && Boolean(aiStatus?.active)}
+              onChange={(e) => setUseAi(e.target.checked)}
             />
             <Sparkles size={14} className="text-indigo-400 light:text-indigo-600" />
-            Aprimorar com Claude
+            Aprimorar com {aiStatus?.active?.label ?? 'IA'}
           </label>
           <Button
             className="ml-auto"
@@ -315,14 +326,14 @@ export default function Summaries(): React.JSX.Element {
           title={
             <span className="flex items-center gap-2">
               Prévia (editável)
-              {generatedBy === 'claude' && (
+              {generatedBy && generatedBy !== 'template' && (
                 <span className="flex items-center gap-1 text-xs font-normal text-indigo-400 light:text-indigo-600">
-                  <Sparkles size={12} /> gerado com Claude
+                  <Sparkles size={12} /> gerado com {generatedByLabel(generatedBy, aiStatus)}
                 </span>
               )}
-              {claudeFellBack && (
+              {aiFellBack && (
                 <span className="text-xs font-normal text-amber-400 light:text-amber-600">
-                  Gerado por template — Claude indisponível
+                  Gerado por template — {aiStatus?.active?.label ?? 'IA'} indisponível
                 </span>
               )}
             </span>

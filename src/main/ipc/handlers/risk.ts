@@ -4,7 +4,8 @@ import { getWorkspaceRow } from '../../db/repos/workspace'
 import { getActiveSprint } from '../../db/repos/catalog'
 import { getPrefs } from '../../db/repos/misc'
 import { collectPeriodComments } from '../../summaries/selectors'
-import { claudeStatus, runClaudePrompt, ClaudeUnavailableError } from '../../summaries/claude'
+import { activeProvider, runAiPrompt } from '../../ai/service'
+import { AiUnavailableError } from '../../ai/types'
 import { buildSprintRisk } from '../../queries/risk'
 
 function requireWorkspace(ctx: AppContext): NonNullable<ReturnType<typeof getWorkspaceRow>> {
@@ -30,10 +31,11 @@ export function registerRiskHandlers(ctx: AppContext): void {
 
   handle('sprint:riskExplain', async () => {
     const workspace = requireWorkspace(ctx)
-    if (!claudeStatus().available) {
+    const provider = activeProvider()
+    if (!provider) {
       throw new AppError(
-        'CLAUDE_UNAVAILABLE',
-        'CLI do Claude não encontrado — instale o Claude Code para explicar os riscos'
+        'AI_UNAVAILABLE',
+        'Nenhum provider de IA disponível — configure em Ajustes'
       )
     }
     const prefs = getPrefs(ctx.db)
@@ -76,14 +78,14 @@ export function registerRiskHandlers(ctx: AppContext): void {
     ].join('\n')
 
     try {
-      const markdown = await runClaudePrompt(prompt, prefs.modelAsk)
-      return { markdown, generatedBy: 'claude' as const }
+      const markdown = await runAiPrompt('ask', prompt)
+      return { markdown, generatedBy: provider.id }
     } catch (err) {
       const message =
-        err instanceof ClaudeUnavailableError || err instanceof Error
+        err instanceof AiUnavailableError || err instanceof Error
           ? err.message
-          : 'Não foi possível explicar os riscos com o Claude'
-      throw new AppError('CLAUDE_UNAVAILABLE', message)
+          : `Não foi possível explicar os riscos (${provider.label})`
+      throw new AppError('AI_UNAVAILABLE', message)
     }
   })
 }

@@ -2,12 +2,12 @@ import { AppError, handle } from '../registry'
 import type { AppContext } from '../../appContext'
 import type { CreateIssueType } from '@shared/domain'
 import { getWorkspaceRow } from '../../db/repos/workspace'
-import { getPrefs } from '../../db/repos/misc'
 import { getActiveSprint } from '../../db/repos/catalog'
 import { markdownToAdf } from '../../issues/markdownToAdf'
 import { JiraHttpError } from '../../jira/http'
-import { claudeStatus, ClaudeUnavailableError } from '../../summaries/claude'
-import { draftIssueWithClaude } from '../../issues/draft'
+import { activeProvider } from '../../ai/service'
+import { AiUnavailableError } from '../../ai/types'
+import { draftIssue } from '../../issues/draft'
 
 function requireWorkspace(ctx: AppContext): NonNullable<ReturnType<typeof getWorkspaceRow>> {
   const workspace = getWorkspaceRow(ctx.db)
@@ -35,26 +35,22 @@ export function registerCreateHandlers(ctx: AppContext): void {
   })
 
   handle('issues:draft', async ({ idea, projectKey, issueType }) => {
-    if (!claudeStatus().available) {
+    const provider = activeProvider()
+    if (!provider) {
       throw new AppError(
-        'CLAUDE_UNAVAILABLE',
-        'CLI do Claude não encontrado — instale o Claude Code para gerar rascunhos'
+        'AI_UNAVAILABLE',
+        'Nenhum provider de IA disponível — configure em Ajustes'
       )
     }
     try {
-      const draft = await draftIssueWithClaude({
-        idea,
-        projectKey,
-        issueType,
-        model: getPrefs(ctx.db).modelDraft
-      })
-      return { ...draft, generatedBy: 'claude' as const }
+      const draft = await draftIssue({ idea, projectKey, issueType })
+      return { ...draft, generatedBy: provider.id }
     } catch (err) {
       const message =
-        err instanceof ClaudeUnavailableError || err instanceof Error
+        err instanceof AiUnavailableError || err instanceof Error
           ? err.message
-          : 'Não foi possível gerar o rascunho com o Claude'
-      throw new AppError('CLAUDE_UNAVAILABLE', message)
+          : `Não foi possível gerar o rascunho (${provider.label})`
+      throw new AppError('AI_UNAVAILABLE', message)
     }
   })
 

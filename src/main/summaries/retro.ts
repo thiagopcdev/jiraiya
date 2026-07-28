@@ -135,7 +135,7 @@ export function buildRetroDigest(ctx: RetroCtx, sprintJiraId: number): RetroDige
 
 const dateOnly = (iso: string): string => iso.slice(0, 10)
 
-/** Markdown pt-BR determinístico da retro (fallback quando não usa Claude). */
+/** Markdown pt-BR determinístico da retro (fallback quando não usa IA). */
 export function renderRetroTemplate(digest: RetroDigest): string {
   const { sprint, myDone, teamTotals, myTotals, rejectedCount, openAtEnd } = digest
   const lines: string[] = []

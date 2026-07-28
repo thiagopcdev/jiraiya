@@ -1,16 +1,14 @@
-import { runClaudePrompt } from '../summaries/claude'
-import type { ClaudeModel } from '@shared/domain'
+import { runAiPrompt } from '../ai/service'
 
 /**
  * Reescreve notas soltas como um comentário estruturado de Jira no padrão da
  * Biud: resumo executivo no topo (para PO/QA) e, quando as notas justificarem,
- * seções técnicas. Devolve o markdown cru do Claude (sem parse de JSON).
+ * seções técnicas. Devolve o markdown cru da IA (sem parse de JSON).
  */
-export async function draftCommentWithClaude(input: {
+export async function draftComment(input: {
   issueKey: string
   issueSummary: string
   notes: string
-  model?: ClaudeModel
 }): Promise<string> {
   const prompt = [
     'Você redige comentários de Jira do time da Biud.',
@@ -27,5 +25,5 @@ export async function draftCommentWithClaude(input: {
     input.notes
   ].join('\n')
 
-  return runClaudePrompt(prompt, input.model)
+  return runAiPrompt('comment', prompt)
 }

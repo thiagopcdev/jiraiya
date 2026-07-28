@@ -6,7 +6,7 @@ import { getPrefs } from '../../db/repos/misc'
 import { updateIssueFields, updateIssueStatus } from '../../db/repos/issue'
 import { markdownToAdf } from '../../issues/markdownToAdf'
 import { JiraHttpError } from '../../jira/http'
-import { claudeStatus } from '../../summaries/claude'
+import { activeProvider } from '../../ai/service'
 import { buildAskContext } from '../../ask/context'
 import { askJiraiya } from '../../ask/ask'
 import { parseCreateError } from './create'
@@ -34,10 +34,11 @@ function rejectJira(err: unknown, code: string, prefix: string): never {
 export function registerAskHandlers(ctx: AppContext): void {
   handle('ask:question', async ({ question, history }) => {
     const workspace = requireWorkspace(ctx)
-    if (!claudeStatus().available) {
+    const provider = activeProvider()
+    if (!provider) {
       throw new AppError(
-        'CLAUDE_UNAVAILABLE',
-        'CLI do Claude não encontrado — instale o Claude Code para perguntar ao Jiraiya'
+        'AI_UNAVAILABLE',
+        'Nenhum provider de IA disponível — configure em Ajustes'
       )
     }
     const prefs = getPrefs(ctx.db)
@@ -51,13 +52,13 @@ export function registerAskHandlers(ctx: AppContext): void {
         question,
         history,
         snapshotJson,
-        todayIso: new Date().toISOString().slice(0, 10),
-        model: prefs.modelAsk
+        todayIso: new Date().toISOString().slice(0, 10)
       })
-      return { answer, generatedBy: 'claude' as const, actions }
+      return { answer, generatedBy: provider.id, actions }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Não foi possível responder com o Claude'
-      throw new AppError('CLAUDE_UNAVAILABLE', message)
+      const message =
+        err instanceof Error ? err.message : `Não foi possível responder (${provider.label})`
+      throw new AppError('AI_UNAVAILABLE', message)
     }
   })
 

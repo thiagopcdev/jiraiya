@@ -4,7 +4,8 @@ import { getWorkspaceRow } from '../../db/repos/workspace'
 import { getPrefs } from '../../db/repos/misc'
 import { buildTeamSummary } from '../../queries/team'
 import { buildVelocity } from '../../queries/velocity'
-import { summarizeTeamWithClaude } from '../../summaries/claude'
+import { activeProvider } from '../../ai/service'
+import { summarizeTeam } from '../../ai/prompts'
 import { resolveWithSprint } from './issues'
 
 export function registerTeamHandlers(ctx: AppContext): void {
@@ -24,7 +25,7 @@ export function registerTeamHandlers(ctx: AppContext): void {
     const prefs = getPrefs(ctx.db)
     const members = buildTeamSummary(ctx.db, workspace, range, prefs.stalledDays)
 
-    // envia só o essencial pro Claude (nomes, chaves, contagens) — uma única chamada
+    // envia só o essencial pra IA (nomes, chaves, contagens) — uma única chamada
     const compact = members.map((m) => ({
       nome: m.name,
       emAndamento: m.inProgress.map((i) => ({ key: i.key, resumo: i.summary, status: i.status })),
@@ -35,14 +36,14 @@ export function registerTeamHandlers(ctx: AppContext): void {
     }))
 
     try {
-      const markdown = await summarizeTeamWithClaude({
-        model: prefs.modelTeam,
+      const markdown = await summarizeTeam({
         periodLabel: range.label,
         teamJson: JSON.stringify(compact, null, 2)
       })
       return { ok: true, markdown }
     } catch {
-      return { ok: false, markdown: 'Claude indisponível — mostrando apenas o radar do time.' }
+      const label = activeProvider()?.label ?? 'IA'
+      return { ok: false, markdown: `${label} indisponível — mostrando apenas o radar do time.` }
     }
   })
 

@@ -11,6 +11,40 @@ export function useAuthStatus(): UseQueryResult<IpcResponse<'auth:status'>> {
   })
 }
 
+/** Status dos providers de IA (CLIs + OpenRouter): disponibilidade, provider ativo e modelos. */
+export function useAiStatus(): UseQueryResult<IpcResponse<'ai:status'>> {
+  return useQuery({
+    queryKey: ['ai-status'],
+    queryFn: () => invoke('ai:status', {})
+  })
+}
+
+/** Modelos do OpenRouter para o combobox — só busca quando o provider ativo é openrouter. */
+export function useOpenRouterModels(
+  enabled: boolean
+): UseQueryResult<IpcResponse<'ai:openrouterModels'>> {
+  return useQuery({
+    queryKey: ['openrouter-models'],
+    queryFn: () => invoke('ai:openrouterModels', {}),
+    enabled,
+    retry: 0
+  })
+}
+
+/**
+ * Label do provider a citar num aviso de indisponibilidade: o ativo (se houver), senão o
+ * provider explicitamente escolhido em Ajustes (mesmo indisponível) — só cai pra null
+ * quando a preferência é 'auto' e nada está disponível (nenhum provider específico a citar).
+ */
+export function unavailableAiProviderLabel(
+  status: IpcResponse<'ai:status'> | undefined
+): string | null {
+  if (!status) return null
+  if (status.active) return status.active.label
+  if (status.activePref === 'auto') return null
+  return status.providers.find((p) => p.id === status.activePref)?.label ?? null
+}
+
 export function useSyncStatus(): UseQueryResult<IpcResponse<'sync:status'>> {
   return useQuery({
     queryKey: ['sync-status'],

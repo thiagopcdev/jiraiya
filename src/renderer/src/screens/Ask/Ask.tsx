@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { Send, Sparkles, Trash2 } from 'lucide-react'
 import { invoke, IpcError } from '../../api/client'
+import { useAiStatus, unavailableAiProviderLabel } from '../../api/hooks'
 import { Button, EmptyState, Spinner } from '../../components/ui'
 import { MarkdownLite } from '../../components/MarkdownLite'
 import { t } from '../../strings/ptBR'
@@ -104,10 +104,7 @@ function AskActionCard({
 }
 
 export default function Ask(): React.JSX.Element {
-  const { data: claudeInfo } = useQuery({
-    queryKey: ['claude-status'],
-    queryFn: () => invoke('claude:status', {})
-  })
+  const { data: aiStatus } = useAiStatus()
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
@@ -197,12 +194,12 @@ export default function Ask(): React.JSX.Element {
     }
   }
 
-  if (claudeInfo && !claudeInfo.available) {
+  if (aiStatus && !aiStatus.active) {
     return (
       <div className="mx-auto flex h-full w-full max-w-3xl flex-col p-6">
         <h2 className="text-xl font-semibold text-zinc-100">{t.ask.title}</h2>
         <p className="mt-1 text-sm text-zinc-500">{t.ask.hint}</p>
-        <EmptyState message={t.ask.claudeUnavailableHint} />
+        <EmptyState message={t.ask.aiUnavailableHint(unavailableAiProviderLabel(aiStatus))} />
       </div>
     )
   }

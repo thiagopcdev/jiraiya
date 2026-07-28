@@ -82,7 +82,10 @@ export const t = {
       'Ex.: contexto (onde/por que isso importa), o que precisa ser feito e o comportamento esperado ao final.',
     generate: 'Gerar título e descrição',
     generating: 'Gerando…',
-    claudeUnavailableHint: 'Instale o Claude Code para gerar rascunhos',
+    aiUnavailableHint: (provider: string | null) =>
+      provider
+        ? `${provider} indisponível — verifique em Ajustes`
+        : 'Configure um provider de IA em Ajustes (Claude, Gemini, Codex ou OpenRouter)',
     cardTitle: 'Card',
     summary: 'Título',
     description: 'Descrição',
@@ -110,18 +113,21 @@ export const t = {
     searching: 'Buscando…',
     notFound: 'Card não encontrado localmente — verifique a key ou sincronize.',
     noDescription: 'Este card não tem descrição — a análise será baseada só no título.',
-    analyze: 'Analisar com Claude',
+    analyze: (provider: string | null) => `Analisar com ${provider ?? 'IA'}`,
     analyzing: 'Analisando… pode levar alguns minutos',
-    claudeUnavailableHint: 'Instale o Claude Code para analisar cards',
+    aiUnavailableHint: (provider: string | null) =>
+      provider
+        ? `${provider} indisponível — verifique em Ajustes`
+        : 'Configure um provider de IA em Ajustes (Claude, Gemini, Codex ou OpenRouter)',
     rationaleTitle: 'Critério da divisão',
     itemsTitle: 'Itens da divisão',
     itemTitleLabel: 'Título',
     itemDescriptionLabel: 'Descrição',
     removeItem: 'Remover item',
     addItem: '+ Adicionar item',
-    feedbackLabel: 'Feedback para o Claude',
+    feedbackLabel: 'Feedback para a IA',
     feedbackPlaceholder: 'Ex.: junte os itens 2 e 3; adicione um item de testes e2e',
-    refine: 'Refinar com Claude',
+    refine: (provider: string | null) => `Refinar com ${provider ?? 'IA'}`,
     refining: 'Analisando… pode levar alguns minutos',
     structureTitle: 'Estrutura',
     modeSubtask: 'Subtarefas do card original',
@@ -145,7 +151,10 @@ export const t = {
     send: 'Enviar',
     thinking: 'Pensando… (pode levar alguns minutos)',
     clearConversation: 'Limpar conversa',
-    claudeUnavailableHint: 'Instale o Claude Code para perguntar ao Jiraiya',
+    aiUnavailableHint: (provider: string | null) =>
+      provider
+        ? `${provider} indisponível — verifique em Ajustes`
+        : 'Configure um provider de IA em Ajustes (Claude, Gemini, Codex ou OpenRouter)',
     suggestions: [
       'O que travou a sprint essa semana?',
       'Resume o feedback que recebi nos meus cards',
@@ -216,10 +225,13 @@ export const t = {
     commentSubmit: 'Comentar no Jira',
     commentSending: 'Enviando…',
     aiStructure: 'Estruturar com IA',
-    aiNotesPlaceholder: 'Notas rápidas — o Claude estrutura em um comentário.',
+    aiNotesPlaceholder: 'Notas rápidas — a IA estrutura em um comentário.',
     aiGenerate: 'Gerar comentário',
     aiGenerating: 'Gerando…',
-    claudeUnavailableHint: 'Instale o Claude Code para estruturar comentários com IA',
+    aiUnavailableHint: (provider: string | null) =>
+      provider
+        ? `${provider} indisponível — verifique em Ajustes`
+        : 'Configure um provider de IA em Ajustes (Claude, Gemini, Codex ou OpenRouter)',
     editTitle: 'Editar',
     save: 'Salvar',
     saving: 'Salvando…',

@@ -48,6 +48,7 @@ import { registerNotesHandlers } from './ipc/handlers/notes'
 import { registerWorklogExportHandlers } from './ipc/handlers/worklogExport'
 import { registerTrayPanelHandlers } from './ipc/handlers/trayPanel'
 import { registerQueueHandlers } from './ipc/handlers/queue'
+import { registerAiHandlers } from './ipc/handlers/ai'
 import { drainQueue } from './queue/drainer'
 import { startWorklogReminder } from './worklogReminder'
 import { clearTempDir } from './attachments/store'
@@ -58,7 +59,10 @@ import { getPrefs, listActiveAlerts } from './db/repos/misc'
 import { seedMentionHistory, unreadCount } from './db/repos/mentions'
 import { runMorningBriefing } from './briefing'
 import { checkForUpdate } from './update'
-import { claudeStatus } from './summaries/claude'
+import { initAiRegistry } from './ai/registry'
+import { aiStatus } from './ai/service'
+import { initGhLogging } from './gh/gh'
+import { getCredential } from './security/credentials'
 
 const UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000
 const TRAY_PANEL_WIDTH = 360
@@ -82,7 +86,8 @@ function triggerMorningBriefing(db: Database.Database): void {
   void runMorningBriefing(
     db,
     { push: (s) => ctx.push('push:briefing-ready', s) },
-    { claudeAvailable: claudeStatus().available, showWindow: () => showMainWindow() }
+    // lazy: o provider pode passar a existir depois do boot (chave configurada em Ajustes)
+    { aiAvailable: () => aiStatus().active !== null, showWindow: () => showMainWindow() }
   )
 }
 
@@ -343,6 +348,16 @@ app.whenReady().then(() => {
     }
   })
 
+  // registry de IA antes dos handlers: eles resolvem provider/modelo por chamada
+  initAiRegistry({
+    db: ctx.db,
+    getOpenRouterKey: () => {
+      const workspace = getWorkspaceRow(ctx.db)
+      return workspace ? getCredential(ctx.db, workspace.id, 'openrouter_api_key') : null
+    }
+  })
+  initGhLogging(ctx.db)
+
   registerAuthHandlers(ctx)
   registerProjectHandlers(ctx)
   registerSyncHandlers(ctx)
@@ -366,7 +381,7 @@ app.whenReady().then(() => {
   registerSearchHandlers(ctx)
   registerEpicHandlers(ctx)
   registerPrHandlers(ctx)
-  registerPolishHandlers(ctx)
+  registerPolishHandlers()
   registerTrendHandlers(ctx)
   registerTemplateHandlers(ctx)
   registerBackupHandlers(ctx)
@@ -375,6 +390,7 @@ app.whenReady().then(() => {
   registerWorklogExportHandlers(ctx)
   registerTrayPanelHandlers(ctx, { showWindow: showMainWindow })
   registerQueueHandlers(ctx)
+  registerAiHandlers(ctx)
 
   createWindow()
 

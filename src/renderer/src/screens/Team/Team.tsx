@@ -5,7 +5,7 @@ import { standupReference, type Period } from '@shared/periods'
 import type { Issue, SprintTrend, TeamMemberSummary } from '@shared/domain'
 import { invoke, IpcError } from '../../api/client'
 import { t } from '../../strings/ptBR'
-import { useTeam, useTrends, useVelocity } from '../../api/hooks'
+import { useAiStatus, useTeam, useTrends, useVelocity } from '../../api/hooks'
 import { Badge, Button, Card, EmptyState, Spinner } from '../../components/ui'
 import { statusColor } from '../../components/statusColor'
 import { IssuesByStatus } from '../../components/IssuesByStatus'
@@ -27,6 +27,8 @@ export default function Team(): React.JSX.Element {
   const period = periodOptions.find((p) => p.key === periodKey)!.period
   const { data, isLoading } = useTeam(period)
   const { data: velocity, isLoading: velocityLoading } = useVelocity()
+  const { data: aiStatus } = useAiStatus()
+  const aiLabel = aiStatus?.active?.label ?? 'IA'
 
   const [narrative, setNarrative] = useState<string | null>(null)
   const [narrativeBusy, setNarrativeBusy] = useState(false)
@@ -50,7 +52,12 @@ export default function Team(): React.JSX.Element {
         <h2 className="mr-auto text-xl font-semibold text-zinc-100">Time</h2>
         <Button
           variant="secondary"
-          disabled={narrativeBusy || members.length === 0}
+          disabled={narrativeBusy || members.length === 0 || !aiStatus?.active}
+          title={
+            !aiStatus?.active
+              ? 'Nenhum provider de IA disponível — configure em Ajustes'
+              : undefined
+          }
           onClick={() => void generateNarrative()}
         >
           {narrativeBusy ? (
@@ -138,7 +145,7 @@ export default function Team(): React.JSX.Element {
           title={
             <span className="flex items-center gap-2">
               <Sparkles size={13} className="text-indigo-400 light:text-indigo-600" /> Panorama do
-              time (Claude)
+              time ({aiLabel})
             </span>
           }
           className="mb-4"
@@ -172,6 +179,8 @@ function RiskRadar(): React.JSX.Element | null {
     queryKey: ['sprint-risk'],
     queryFn: () => invoke('sprint:risk', {})
   })
+  const { data: aiStatus } = useAiStatus()
+  const aiLabel = aiStatus?.active?.label ?? 'IA'
   const [explain, setExplain] = useState<string | null>(null)
   const [explainBusy, setExplainBusy] = useState(false)
   const { openIssue } = useIssueDetail()
@@ -226,13 +235,22 @@ function RiskRadar(): React.JSX.Element | null {
       </div>
 
       <div className="mt-3">
-        <Button variant="secondary" disabled={explainBusy} onClick={() => void explainRisk()}>
+        <Button
+          variant="secondary"
+          disabled={explainBusy || !aiStatus?.active}
+          title={
+            !aiStatus?.active
+              ? 'Nenhum provider de IA disponível — configure em Ajustes'
+              : undefined
+          }
+          onClick={() => void explainRisk()}
+        >
           {explainBusy ? (
             <Spinner />
           ) : (
             <Sparkles size={14} className="text-indigo-400 light:text-indigo-600" />
           )}
-          {explainBusy ? 'Analisando…' : 'Explicar com Claude'}
+          {explainBusy ? 'Analisando…' : `Explicar com ${aiLabel}`}
         </Button>
       </div>
 

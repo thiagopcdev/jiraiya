@@ -47,7 +47,7 @@ export interface CommentDigestItem {
 /**
  * Comentários do período relevantes para o resumo: os que EU escrevi + os que
  * escreveram em cards atribuídos a mim. Só entra no digest quando o resumo vai
- * para o Claude (contexto real de decisões/bloqueios/feedback); o template
+ * para a IA (contexto real de decisões/bloqueios/feedback); o template
  * determinístico não os usa. Limitado e truncado para não inflar o prompt.
  */
 export function collectPeriodComments(

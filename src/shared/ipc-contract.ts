@@ -1,8 +1,12 @@
 import { z } from 'zod'
 import type {
+  AiGeneratedBy,
+  AiProviderId,
+  AiProviderPref,
   Alert,
   AskAction,
   ChangelogEntry,
+  CommandLogEntry,
   Mention,
   Board,
   CreateIssueType,
@@ -26,7 +30,11 @@ import type {
 
 /** Fonte única de verdade dos canais IPC: schema zod do request + tipo do response. */
 
+/** @deprecated validação dos prefs legados model* (fallback do claude) */
 const claudeModelSchema = z.enum(['haiku', 'sonnet', 'opus']).optional()
+const aiProviderIdSchema = z.enum(['claude', 'gemini', 'codex', 'openrouter'])
+const aiFeatureSchema = z.enum(['summaries', 'team', 'draft', 'split', 'comment', 'ask'])
+const aiGeneratedBySchema = z.enum(['template', 'claude', 'gemini', 'codex', 'openrouter'])
 
 /** Item de divisão de card (título + descrição em texto simples). */
 const splitItemSchema = z.object({
@@ -110,14 +118,14 @@ export const ipcContract = {
       template: z.enum(['standup', 'weekly', 'one_on_one', 'monthly']),
       useClaude: z.boolean()
     }),
-    res: undefined as unknown as { markdown: string; generatedBy: 'template' | 'claude' }
+    res: undefined as unknown as { markdown: string; generatedBy: AiGeneratedBy }
   },
   'summaries:save': {
     req: z.object({
       period: periodSchema,
       template: z.enum(['standup', 'weekly', 'one_on_one', 'monthly']),
       contentMd: z.string(),
-      generatedBy: z.enum(['template', 'claude'])
+      generatedBy: aiGeneratedBySchema
     }),
     res: undefined as unknown as { id: number }
   },
@@ -128,10 +136,6 @@ export const ipcContract = {
   'summaries:delete': {
     req: z.object({ id: z.number() }),
     res: undefined as unknown as { ok: true }
-  },
-  'claude:status': {
-    req: z.object({}),
-    res: undefined as unknown as { available: boolean; path: string | null }
   },
   'export:clipboard': {
     req: z.object({ text: z.string() }),
@@ -168,6 +172,10 @@ export const ipcContract = {
       modelSplit: claudeModelSchema,
       modelComment: claudeModelSchema,
       modelAsk: claudeModelSchema,
+      aiProvider: z.enum(['auto', 'claude', 'gemini', 'codex', 'openrouter']).optional(),
+      aiModels: z
+        .partialRecord(aiProviderIdSchema, z.partialRecord(aiFeatureSchema, z.string().min(1)))
+        .optional(),
       morningBriefing: z.boolean().optional(),
       updateCheck: z.boolean().optional(),
       prIntegration: z.boolean().optional(),
@@ -197,7 +205,7 @@ export const ipcContract = {
     }),
     res: undefined as unknown as {
       answer: string
-      generatedBy: 'claude'
+      generatedBy: AiProviderId
       /** ações propostas pelo Claude — só executam com confirmação do usuário */
       actions: AskAction[]
     }
@@ -342,7 +350,7 @@ export const ipcContract = {
       /** ajusta o tom do prompt (descrição de card × comentário) e o modelo (modelDraft × modelComment) */
       context: z.enum(['description', 'comment'])
     }),
-    res: undefined as unknown as { text: string; generatedBy: 'claude' }
+    res: undefined as unknown as { text: string; generatedBy: AiProviderId }
   },
   'filters:list': {
     req: z.object({}),
@@ -378,7 +386,7 @@ export const ipcContract = {
   },
   'sprint:riskExplain': {
     req: z.object({}),
-    res: undefined as unknown as { markdown: string; generatedBy: 'claude' }
+    res: undefined as unknown as { markdown: string; generatedBy: AiProviderId }
   },
   'update:check': {
     req: z.object({ force: z.boolean().optional() }),
@@ -652,7 +660,7 @@ export const ipcContract = {
       issueKey: z.string().trim().min(1).max(64),
       notes: z.string().trim().min(1).max(4000)
     }),
-    res: undefined as unknown as { body: string; generatedBy: 'claude' }
+    res: undefined as unknown as { body: string; generatedBy: AiProviderId }
   },
   'board:view': {
     req: z.object({
@@ -694,7 +702,7 @@ export const ipcContract = {
   },
   'summaries:sprintRetro': {
     req: z.object({ sprintJiraId: z.number().int(), useClaude: z.boolean() }),
-    res: undefined as unknown as { markdown: string; generatedBy: 'template' | 'claude' }
+    res: undefined as unknown as { markdown: string; generatedBy: AiGeneratedBy }
   },
   'stats:leadTime': {
     req: z.object({ days: z.number().int().min(7).max(365).optional() }),
@@ -713,7 +721,7 @@ export const ipcContract = {
     res: undefined as unknown as {
       items: Array<{ title: string; description: string }>
       rationale: string
-      generatedBy: 'claude'
+      generatedBy: AiProviderId
     }
   },
   'issues:split': {
@@ -732,7 +740,7 @@ export const ipcContract = {
       projectKey: z.string().min(1),
       issueType: z.string().min(1)
     }),
-    res: undefined as unknown as { title: string; description: string; generatedBy: 'claude' }
+    res: undefined as unknown as { title: string; description: string; generatedBy: AiProviderId }
   },
   'issues:create': {
     req: z.object({
@@ -902,6 +910,45 @@ export const ipcContract = {
   },
   'queue:discard': {
     req: z.object({ id: z.number().int() }),
+    res: undefined as unknown as { ok: true }
+  },
+  'ai:status': {
+    req: z.object({}),
+    res: undefined as unknown as {
+      providers: Array<{
+        id: AiProviderId
+        label: string
+        kind: 'cli' | 'api'
+        available: boolean
+        /** path do binário | 'chave configurada' | motivo da indisponibilidade */
+        detail: string | null
+        /** lista curada (CLIs) ou defaults mínimos (openrouter) para os selects */
+        models: Array<{ id: string; label: string }>
+      }>
+      /** provider efetivamente em uso; null = nenhum disponível */
+      active: { id: AiProviderId; label: string } | null
+      activePref: AiProviderPref
+    }
+  },
+  'ai:openrouterModels': {
+    req: z.object({ refresh: z.boolean().optional() }),
+    res: undefined as unknown as { models: Array<{ id: string; name: string }> }
+  },
+  'ai:setOpenRouterKey': {
+    /** valida a key contra a API antes de gravar; NUNCA retorna a key salva */
+    req: z.object({ key: z.string().trim().min(1).max(500) }),
+    res: undefined as unknown as { ok: true }
+  },
+  'ai:clearOpenRouterKey': {
+    req: z.object({}),
+    res: undefined as unknown as { ok: true }
+  },
+  'commandLog:list': {
+    req: z.object({}),
+    res: undefined as unknown as { entries: CommandLogEntry[] }
+  },
+  'commandLog:clear': {
+    req: z.object({}),
     res: undefined as unknown as { ok: true }
   }
 } as const

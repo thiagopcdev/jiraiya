@@ -3,7 +3,13 @@ import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, ExternalLink, Sparkles } from 'lucide-react'
 import { invoke, IpcError } from '../../api/client'
-import { useGlobalSearch, useIssueTypes, useProjects } from '../../api/hooks'
+import {
+  useAiStatus,
+  useGlobalSearch,
+  useIssueTypes,
+  useProjects,
+  unavailableAiProviderLabel
+} from '../../api/hooks'
 import { Badge, Button, Card, EmptyState, Input, Spinner } from '../../components/ui'
 import { MarkdownToolbar } from '../../components/MarkdownToolbar'
 import { statusColor } from '../../components/statusColor'
@@ -44,10 +50,7 @@ export default function Create(): React.JSX.Element {
     : (issueTypes[0]?.id ?? null)
   const selectedIssueType = issueTypes.find((it) => it.id === issueTypeId) ?? null
 
-  const { data: claudeInfo } = useQuery({
-    queryKey: ['claude-status'],
-    queryFn: () => invoke('claude:status', {})
-  })
+  const { data: aiStatus } = useAiStatus()
   const { data: sprintData } = useQuery({
     queryKey: ['sprint-active'],
     queryFn: () => invoke('sprint:active', {})
@@ -74,7 +77,7 @@ export default function Create(): React.JSX.Element {
   const [createdKey, setCreatedKey] = useState<string | null>(null)
 
   // Aviso de possíveis duplicados: usa o que estiver preenchido (título/summary do
-  // modo manual, senão a ideia do modo Claude), debounced para não bater a busca a
+  // modo manual, senão a ideia do modo IA), debounced para não bater a busca a
   // cada tecla.
   const duplicateSource = summary.trim() || idea.trim()
   const duplicateQuery = buildDuplicateQuery(duplicateSource)
@@ -148,7 +151,7 @@ export default function Create(): React.JSX.Element {
   }
 
   const draftDisabled =
-    draftBusy || !claudeInfo?.available || !idea.trim() || !projectKey || !selectedIssueType
+    draftBusy || !aiStatus?.active || !idea.trim() || !projectKey || !selectedIssueType
   const submitDisabled = createBusy || !projectKey || !selectedIssueType || !summary.trim()
 
   return (
@@ -257,9 +260,9 @@ export default function Create(): React.JSX.Element {
                 {draftBusy ? <Spinner /> : <Sparkles size={14} />}
                 {draftBusy ? t.create.generating : t.create.generate}
               </Button>
-              {!claudeInfo?.available && (
+              {!aiStatus?.active && (
                 <span className="text-xs text-amber-400 light:text-amber-600">
-                  {t.create.claudeUnavailableHint}
+                  {t.create.aiUnavailableHint(unavailableAiProviderLabel(aiStatus))}
                 </span>
               )}
             </div>

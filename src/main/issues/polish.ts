@@ -1,7 +1,7 @@
 /**
  * "Melhorar com IA" de texto livre: reformata o que o usuário escreveu em
  * markdown profissional SEM mudar o conteúdo. Funções puras — o handler cuida
- * do CLI do Claude e da escolha de modelo.
+ * do provider de IA e da escolha de modelo.
  */
 
 /**

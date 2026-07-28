@@ -1,5 +1,12 @@
 import type Database from 'better-sqlite3'
-import type { Alert, AlertSeverity, Prefs, Summary, SummaryTemplate } from '@shared/domain'
+import type {
+  AiGeneratedBy,
+  Alert,
+  AlertSeverity,
+  Prefs,
+  Summary,
+  SummaryTemplate
+} from '@shared/domain'
 import { DEFAULT_PREFS } from '@shared/domain'
 
 /** Repos de summary, alert, sync_state e prefs. */
@@ -15,7 +22,7 @@ export function saveSummary(
     periodEnd: string
     template: SummaryTemplate
     contentMd: string
-    generatedBy: 'template' | 'claude'
+    generatedBy: AiGeneratedBy
   }
 ): number {
   const info = db
@@ -57,7 +64,7 @@ export function listSummaries(db: Database.Database, workspaceId: number): Summa
     periodEnd: r.period_end,
     template: r.template as SummaryTemplate,
     contentMd: r.content_md,
-    generatedBy: r.generated_by as 'template' | 'claude',
+    generatedBy: r.generated_by as AiGeneratedBy,
     createdAt: r.created_at,
     editedAt: r.edited_at
   }))

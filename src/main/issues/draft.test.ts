@@ -22,30 +22,30 @@ describe('parseDraftResponse', () => {
 
   it('title vazio lança erro de formato inesperado', () => {
     expect(() => parseDraftResponse('{"title":"","description":"Descrição"}')).toThrow(
-      'Resposta do Claude em formato inesperado'
+      'Resposta da IA em formato inesperado'
     )
   })
 
   it('title só com espaços/whitespace lança erro de formato inesperado', () => {
     expect(() => parseDraftResponse('{"title":"   ","description":"Descrição"}')).toThrow(
-      'Resposta do Claude em formato inesperado'
+      'Resposta da IA em formato inesperado'
     )
   })
 
   it('title muito longo (300 chars) lança erro de formato inesperado', () => {
     const longTitle = 'a'.repeat(300)
     expect(() => parseDraftResponse(`{"title":"${longTitle}","description":"Descrição"}`)).toThrow(
-      'Resposta do Claude em formato inesperado'
+      'Resposta da IA em formato inesperado'
     )
   })
 
   it('raw sem nenhum JSON lança erro de formato inesperado', () => {
-    expect(() => parseDraftResponse('não sei')).toThrow('Resposta do Claude em formato inesperado')
+    expect(() => parseDraftResponse('não sei')).toThrow('Resposta da IA em formato inesperado')
   })
 
   it('JSON sem campo description lança erro de formato inesperado', () => {
     expect(() => parseDraftResponse('{"title":"Título"}')).toThrow(
-      'Resposta do Claude em formato inesperado'
+      'Resposta da IA em formato inesperado'
     )
   })
 })

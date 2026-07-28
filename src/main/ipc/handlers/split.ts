@@ -1,13 +1,12 @@
 import { AppError, handle } from '../registry'
 import type { AppContext } from '../../appContext'
 import { getWorkspaceRow } from '../../db/repos/workspace'
-import { getPrefs } from '../../db/repos/misc'
 import { getIssueByKey } from '../../db/repos/issue'
 import { textToAdf } from '../../jira/adf'
 import { markdownToAdf } from '../../issues/markdownToAdf'
 import { JiraHttpError } from '../../jira/http'
-import { claudeStatus } from '../../summaries/claude'
-import { splitIssueWithClaude } from '../../issues/split'
+import { activeProvider } from '../../ai/service'
+import { splitIssue } from '../../issues/split'
 import { parseCreateError } from './create'
 
 function requireWorkspace(ctx: AppContext): NonNullable<ReturnType<typeof getWorkspaceRow>> {
@@ -32,27 +31,27 @@ export function registerSplitHandlers(ctx: AppContext): void {
         'Card não encontrado localmente — sincronize ou confira a key'
       )
     }
-    if (!claudeStatus().available) {
+    const provider = activeProvider()
+    if (!provider) {
       throw new AppError(
-        'CLAUDE_UNAVAILABLE',
-        'CLI do Claude não encontrado — instale o Claude Code para gerar rascunhos'
+        'AI_UNAVAILABLE',
+        'Nenhum provider de IA disponível — configure em Ajustes'
       )
     }
     try {
-      const { items, rationale } = await splitIssueWithClaude({
+      const { items, rationale } = await splitIssue({
         parentKey: row.key,
         parentTitle: row.summary,
         parentDescription: row.description_text,
         parentIssueType: row.issue_type,
         feedback,
-        currentItems,
-        model: getPrefs(ctx.db).modelSplit
+        currentItems
       })
-      return { items, rationale, generatedBy: 'claude' as const }
+      return { items, rationale, generatedBy: provider.id }
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Não foi possível gerar o rascunho com o Claude'
-      throw new AppError('CLAUDE_UNAVAILABLE', message)
+        err instanceof Error ? err.message : `Não foi possível gerar o rascunho (${provider.label})`
+      throw new AppError('AI_UNAVAILABLE', message)
     }
   })
 

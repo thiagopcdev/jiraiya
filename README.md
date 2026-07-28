@@ -1,6 +1,6 @@
 # Jiraiya
 
-Cliente de desktop (Electron, macOS/Windows) para o **Jira Cloud** — feito para trabalhar o dia inteiro sem abrir o Jira no navegador, com um copiloto de IA opcional via **Claude** (CLI local, sua assinatura Pro/Max; nenhuma API key).
+Cliente de desktop (Electron, macOS/Windows) para o **Jira Cloud** — feito para trabalhar o dia inteiro sem abrir o Jira no navegador, com um copiloto de IA opcional via **Claude, Gemini ou Codex** (CLI local, sua própria assinatura) **ou OpenRouter** (API key).
 
 Tudo local: cache em SQLite (`better-sqlite3`), tokens criptografados via `safeStorage` (Keychain/DPAPI), imagens de anexos só em RAM. Nada sobe para lugar nenhum além do seu próprio Jira.
 
@@ -17,13 +17,14 @@ Tudo local: cache em SQLite (`better-sqlite3`), tokens criptografados via `safeS
 - **Timer de trabalho** por card com registro em 1 clique + widget flutuante
 - **Painel rápido no tray**: timer, cards em andamento, menções e daily sem abrir a janela
 
-**Copiloto (Claude via CLI local — opcional, tudo degrada sem ele)**
+**Copiloto (Claude, Gemini, Codex ou OpenRouter — opcional, tudo degrada sem ele)**
 
 - **Criar e dividir cards** com título/descrição redigidos no padrão do time
 - **Resumos** daily/weekly/1:1/mensal/retro enriquecidos com os comentários do período
 - **Perguntar** — chat sobre seus dados locais que propõe ações (mover, comentar, registrar tempo) executadas **só com a sua confirmação**
 - **Formatar com IA** em qualquer editor de texto
 - **Briefing matinal** automático no primeiro boot do dia
+- **Provider configurável** em Configurações — CLI (Claude Code, Gemini CLI, Codex CLI) ou OpenRouter (API key), com modelo por funcionalidade e auditoria dos comandos executados
 
 **Busca e navegação**
 
@@ -51,32 +52,37 @@ No primeiro uso, conecte com a URL do site (`suaempresa.atlassian.net`), e-mail 
 
 Integrações opcionais (o app funciona sem todas):
 
-| Integração | O que habilita | Requisito |
-|---|---|---|
-| CLI `claude` | Todo o copiloto de IA | [Claude Code](https://claude.com/claude-code) logado (assinatura Pro/Max) |
-| CLI `gh` | Seção de PRs relacionados ao card | `gh` autenticado; ligar em Configurações |
-| Token do GitHub | Aviso e download de novas versões (repo privado) | Token com leitura do repo, em Configurações |
+| Integração      | O que habilita                                   | Requisito                                                                 |
+| --------------- | ------------------------------------------------ | ------------------------------------------------------------------------- |
+| CLI `claude`    | Copiloto de IA (provider Claude)                 | [Claude Code](https://claude.com/claude-code) logado (assinatura Pro/Max) |
+| CLI `gemini`    | Copiloto de IA (provider Gemini)                 | [Gemini CLI](https://github.com/google-gemini/gemini-cli) logado          |
+| CLI `codex`     | Copiloto de IA (provider Codex)                  | [Codex CLI](https://github.com/openai/codex) logado                       |
+| OpenRouter      | Copiloto de IA (provider OpenRouter)             | API key configurada em Configurações                                      |
+| CLI `gh`        | Seção de PRs relacionados ao card                | `gh` autenticado; ligar em Configurações                                  |
+| Token do GitHub | Aviso e download de novas versões (repo privado) | Token com leitura do repo, em Configurações                               |
+
+Nenhuma integração é obrigatória: sem nenhum provider de IA configurado, o app funciona normalmente e os recursos de IA ficam desabilitados (com aviso em Configurações). Com mais de um provider disponível, escolha o ativo em Configurações → Inteligência artificial — inclusive um modelo por funcionalidade — e acompanhe os comandos externos disparados (CLIs e `gh`) na auditoria "Ver comandos executados", também em Configurações.
 
 ## Scripts
 
-| Script | O que faz |
-|---|---|
-| `npm run dev` | App em modo dev com HMR |
-| `npm test` | Testes (vitest via runtime do Electron, por causa da ABI do better-sqlite3) |
-| `npm run typecheck` | tsc em main/preload/renderer |
-| `npm run lint` | eslint |
-| `npm run build:mac` | DMG para macOS (arm64) |
-| `npm run build:win` | Instalador NSIS para Windows |
+| Script              | O que faz                                                                   |
+| ------------------- | --------------------------------------------------------------------------- |
+| `npm run dev`       | App em modo dev com HMR                                                     |
+| `npm test`          | Testes (vitest via runtime do Electron, por causa da ABI do better-sqlite3) |
+| `npm run typecheck` | tsc em main/preload/renderer                                                |
+| `npm run lint`      | eslint                                                                      |
+| `npm run build:mac` | DMG para macOS (arm64)                                                      |
+| `npm run build:win` | Instalador NSIS para Windows                                                |
 
 Releases: push de uma tag `v*` dispara o workflow que cria a release no GitHub com o `.exe` e o `.dmg`. Os apps instalados avisam sobre a versão nova (boot + a cada 6h) com download direto pelo banner.
 
 ## Arquitetura
 
 - `src/shared/` — contrato IPC (zod req + tipos de res, fonte única) e tipos de domínio, importado por main e renderer
-- `src/main/` — todo o Node: `jira/` (client REST v3 + Agile com retry/rate-limit, ADF↔markdown), `sync/` (engine incremental por cursor + derivação de atividades), `db/` (migrations + repos + FTS5), `summaries/`, `ask/`, `alerts/`, `watch/`, `queries/` (leituras puras testáveis), `gh/` (PRs), `backup.ts`
+- `src/main/` — todo o Node: `jira/` (client REST v3 + Agile com retry/rate-limit, ADF↔markdown), `sync/` (engine incremental por cursor + derivação de atividades), `db/` (migrations + repos + FTS5), `ai/` (providers Claude/Gemini/Codex via CLI + OpenRouter via API, resolução do provider ativo, auditoria de comandos), `summaries/`, `ask/`, `alerts/`, `watch/`, `queries/` (leituras puras testáveis), `gh/` (PRs), `backup.ts`
 - `src/renderer/` — React 19 + Tailwind 4 + TanStack Query sobre IPC; sem acesso a Node (`sandbox: true`); tema por variáveis CSS (a escala zinc inverte no claro)
 
-A integração com o Claude invoca `claude -p` (modo não-interativo) resolvendo o binário em caminhos usuais; qualquer falha cai no template determinístico. Regra de ouro do histórico: agregações por sprint usam **janela temporal** sobre `resolved_at` (o Jira só guarda a última sprint do card).
+A integração de IA invoca o CLI do provider ativo (`claude -p`, `gemini` ou `codex`, todos em modo não-interativo) resolvendo o binário em caminhos usuais, ou a API do OpenRouter quando esse é o provider escolhido; qualquer falha cai no template determinístico. Cada comando externo executado (CLIs de IA e `gh`) fica registrado numa auditoria local, consultável em Configurações. Regra de ouro do histórico: agregações por sprint usam **janela temporal** sobre `resolved_at` (o Jira só guarda a última sprint do card).
 
 ## Licença e autoria
 

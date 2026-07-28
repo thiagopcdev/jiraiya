@@ -1,5 +1,5 @@
-import type { AskAction, ClaudeModel } from '@shared/domain'
-import { runClaudePrompt } from '../summaries/claude'
+import type { AskAction } from '@shared/domain'
+import { runAiPrompt } from '../ai/service'
 import { ACTIONS_PROMPT, parseAskResponse } from './actions'
 
 /** Monta o prompt pt-BR do "Pergunte ao Jiraiya". Pura — testável sem CLI. */
@@ -43,7 +43,7 @@ export function buildAskPrompt(input: {
 }
 
 /**
- * Executa a pergunta no CLI do Claude e separa a resposta em texto + ações
+ * Executa a pergunta no provider de IA ativo e separa a resposta em texto + ações
  * propostas (as ações só rodam depois de confirmação do usuário, via ask:execute).
  */
 export async function askJiraiya(input: {
@@ -51,9 +51,9 @@ export async function askJiraiya(input: {
   history?: Array<{ role: 'user' | 'assistant'; content: string }>
   snapshotJson: string
   todayIso: string
-  model?: ClaudeModel
 }): Promise<{ answer: string; actions: AskAction[] }> {
   const prompt = buildAskPrompt(input)
-  const raw = await runClaudePrompt(prompt, input.model)
+  const raw = await runAiPrompt('ask', prompt)
+  // o bloco de ações já é desencapado de cerca ```json dentro do parseAskResponse
   return parseAskResponse(raw)
 }

@@ -5,7 +5,8 @@ import { getPrefs, deleteSummary, listSummaries, saveSummary } from '../../db/re
 import { buildPeriodDigest, collectPeriodComments } from '../../summaries/selectors'
 import { templates } from '../../summaries/templates'
 import { buildRetroDigest, renderRetroTemplate } from '../../summaries/retro'
-import { claudeStatus, enhanceWithClaude } from '../../summaries/claude'
+import { activeProvider } from '../../ai/service'
+import { enhanceSummary } from '../../ai/prompts'
 import { resolveWithSprint } from './issues'
 
 export function registerSummaryHandlers(ctx: AppContext): void {
@@ -18,17 +19,17 @@ export function registerSummaryHandlers(ctx: AppContext): void {
     const digest = buildPeriodDigest(ctx.db, workspace, range, prefs.stalledDays)
     const markdown = templates[template](digest)
 
-    if (useClaude) {
+    const provider = useClaude ? activeProvider() : null
+    if (provider) {
       try {
-        // comentários do período só entram no caminho do Claude (contexto real
+        // comentários do período só entram no caminho da IA (contexto real
         // de decisões/bloqueios/feedback); o template determinístico não muda
         const comentariosDoPeriodo = collectPeriodComments(ctx.db, workspace, range)
-        const enhanced = await enhanceWithClaude({
-          model: prefs.modelSummaries,
+        const enhanced = await enhanceSummary({
           templateMarkdown: markdown,
           digestJson: JSON.stringify({ ...digest, comentariosDoPeriodo }, null, 2)
         })
-        return { markdown: enhanced, generatedBy: 'claude' as const }
+        return { markdown: enhanced, generatedBy: provider.id }
       } catch {
         // fallback silencioso pro template — o renderer avisa via generatedBy
       }
@@ -47,18 +48,18 @@ export function registerSummaryHandlers(ctx: AppContext): void {
     if (!digest) throw new AppError('NOT_FOUND', 'Sprint não encontrada')
 
     const markdown = renderRetroTemplate(digest)
-    if (useClaude) {
+    const provider = useClaude ? activeProvider() : null
+    if (provider) {
       try {
         const comentariosDoPeriodo = collectPeriodComments(ctx.db, workspace, {
           start: digest.sprint.startDate,
           end: digest.sprint.endDate
         })
-        const enhanced = await enhanceWithClaude({
-          model: getPrefs(ctx.db).modelSummaries,
+        const enhanced = await enhanceSummary({
           templateMarkdown: markdown,
           digestJson: JSON.stringify({ ...digest, comentariosDoPeriodo }, null, 2)
         })
-        return { markdown: enhanced, generatedBy: 'claude' as const }
+        return { markdown: enhanced, generatedBy: provider.id }
       } catch {
         // fallback silencioso pro template — o renderer avisa via generatedBy
       }
@@ -93,6 +94,4 @@ export function registerSummaryHandlers(ctx: AppContext): void {
     deleteSummary(ctx.db, workspace.id, id)
     return { ok: true as const }
   })
-
-  handle('claude:status', () => claudeStatus())
 }

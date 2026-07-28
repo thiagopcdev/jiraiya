@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, ExternalLink, PanelRight, Sparkles, Trash2 } from 'lucide-react'
 import { invoke, IpcError } from '../../api/client'
-import { useIssueTypes, useIssues } from '../../api/hooks'
+import { useAiStatus, useIssueTypes, useIssues, unavailableAiProviderLabel } from '../../api/hooks'
 import { Badge, Button, Card, Input, Spinner } from '../../components/ui'
 import { MarkdownToolbar } from '../../components/MarkdownToolbar'
 import { statusColor } from '../../components/statusColor'
@@ -101,10 +101,7 @@ export default function Split(): React.JSX.Element {
   const [createdKeys, setCreatedKeys] = useState<string[] | null>(null)
   const [commentPosted, setCommentPosted] = useState(true)
 
-  const { data: claudeInfo } = useQuery({
-    queryKey: ['claude-status'],
-    queryFn: () => invoke('claude:status', {})
-  })
+  const { data: aiStatus } = useAiStatus()
 
   const { data: issueTypesData } = useIssueTypes(parent?.projectKey ?? null, true)
   const allIssueTypes = issueTypesData?.issueTypes ?? []
@@ -247,7 +244,8 @@ export default function Split(): React.JSX.Element {
       : parent.descriptionText
     : null
 
-  const analyzeDisabled = analyzeBusy || !parent || !claudeInfo?.available
+  const activeProviderLabel = aiStatus?.active?.label ?? null
+  const analyzeDisabled = analyzeBusy || !parent || !aiStatus?.active
   const submitDisabled =
     createBusy ||
     items.length === 0 ||
@@ -385,11 +383,11 @@ export default function Split(): React.JSX.Element {
           <div className="flex items-center gap-3">
             <Button disabled={analyzeDisabled} onClick={() => void analyze()}>
               {analyzeBusy ? <Spinner /> : <Sparkles size={14} />}
-              {analyzeBusy ? t.split.analyzing : t.split.analyze}
+              {analyzeBusy ? t.split.analyzing : t.split.analyze(activeProviderLabel)}
             </Button>
-            {!claudeInfo?.available && (
+            {!aiStatus?.active && (
               <span className="text-xs text-amber-400 light:text-amber-600">
-                {t.split.claudeUnavailableHint}
+                {t.split.aiUnavailableHint(unavailableAiProviderLabel(aiStatus))}
               </span>
             )}
           </div>
@@ -435,11 +433,11 @@ export default function Split(): React.JSX.Element {
                 <div className="mt-3">
                   <Button
                     variant="secondary"
-                    disabled={analyzeBusy || !claudeInfo?.available || !feedback.trim()}
+                    disabled={analyzeBusy || !aiStatus?.active || !feedback.trim()}
                     onClick={() => void refine()}
                   >
                     {analyzeBusy ? <Spinner /> : <Sparkles size={14} />}
-                    {analyzeBusy ? t.split.refining : t.split.refine}
+                    {analyzeBusy ? t.split.refining : t.split.refine(activeProviderLabel)}
                   </Button>
                 </div>
               </Card>

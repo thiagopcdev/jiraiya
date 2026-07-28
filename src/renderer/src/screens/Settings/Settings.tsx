@@ -1,11 +1,20 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, ExternalLink, XCircle } from 'lucide-react'
-import type { Prefs } from '@shared/domain'
+import { CheckCircle2, ExternalLink, Terminal } from 'lucide-react'
+import type { AiFeature, AiProviderId, Prefs } from '@shared/domain'
 import { invoke, IpcError } from '../../api/client'
-import { useAuthStatus, usePrefs, usePrStatus, useProjects } from '../../api/hooks'
+import {
+  useAiStatus,
+  useAuthStatus,
+  useOpenRouterModels,
+  usePrefs,
+  usePrStatus,
+  useProjects
+} from '../../api/hooks'
 import { Button, Card, Input, Spinner } from '../../components/ui'
+import { CommandLogModal } from '../../components/CommandLogModal'
+import { ModelCombobox } from '../../components/ModelCombobox'
 
 type CommentTemplate = { id: number; name: string; content: string }
 
@@ -19,7 +28,7 @@ export default function Settings(): React.JSX.Element {
       <ProjectsSection />
       <SyncSection />
       <PullRequestsSection />
-      <ClaudeSection />
+      <AiSection />
       <TemplatesSection />
       <BackupSection />
       <UpdateSection />
@@ -361,90 +370,215 @@ function SelectRow({
   )
 }
 
-const CLAUDE_MODEL_OPTIONS: Array<[string, string]> = [
-  ['haiku', 'Haiku (mais rápido)'],
-  ['sonnet', 'Sonnet (equilíbrio)'],
-  ['opus', 'Opus (mais capaz)']
+/** Funcionalidades com modelo configurável, na ordem mostrada em Ajustes. */
+const AI_FEATURES: Array<{ key: AiFeature; label: string }> = [
+  { key: 'summaries', label: 'Resumos (daily/weekly/1:1)' },
+  { key: 'team', label: 'Narrativa do time' },
+  { key: 'draft', label: 'Criar task (rascunho)' },
+  { key: 'split', label: 'Dividir task (análise)' },
+  { key: 'comment', label: 'Comentário de card (IA)' },
+  { key: 'ask', label: 'Perguntar ao Jiraiya' }
 ]
 
-function ClaudeSection(): React.JSX.Element {
+function AiSection(): React.JSX.Element {
   const queryClient = useQueryClient()
-  const { data } = useQuery({
-    queryKey: ['claude-status'],
-    queryFn: () => invoke('claude:status', {})
-  })
+  const { data: aiStatus } = useAiStatus()
   const { data: prefs } = usePrefs()
+
+  const [key, setKey] = useState('')
+  const [keyBusy, setKeyBusy] = useState(false)
+  const [keyError, setKeyError] = useState<string | null>(null)
+  const [removeBusy, setRemoveBusy] = useState(false)
+  const [showLog, setShowLog] = useState(false)
+
+  const activeId = aiStatus?.active?.id ?? null
+  const activeProvider = activeId ? aiStatus?.providers.find((p) => p.id === activeId) : null
+  const openrouterProvider = aiStatus?.providers.find((p) => p.id === 'openrouter')
+  const openrouterHasKey = Boolean(openrouterProvider?.available)
+  const { data: openrouterModels, isLoading: openrouterModelsLoading } = useOpenRouterModels(
+    activeId === 'openrouter'
+  )
+
+  const invalidateAi = async (): Promise<void> => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['ai-status'] }),
+      queryClient.invalidateQueries({ queryKey: ['openrouter-models'] })
+    ])
+  }
 
   const update = async (patch: Partial<Prefs>): Promise<void> => {
     await invoke('prefs:set', patch)
     void queryClient.invalidateQueries({ queryKey: ['prefs'] })
   }
 
+  const setProvider = async (pref: string): Promise<void> => {
+    await update({ aiProvider: pref as Prefs['aiProvider'] })
+    await invalidateAi()
+  }
+
+  const setFeatureModel = (feature: AiFeature, modelId: string): void => {
+    if (!activeId) return
+    const current = { ...(prefs?.aiModels?.[activeId] ?? {}) }
+    if (modelId) {
+      current[feature] = modelId
+    } else {
+      delete current[feature]
+    }
+    void update({ aiModels: { ...prefs?.aiModels, [activeId]: current } })
+  }
+
+  const saveKey = async (): Promise<void> => {
+    const trimmed = key.trim()
+    if (!trimmed) return
+    setKeyBusy(true)
+    setKeyError(null)
+    try {
+      await invoke('ai:setOpenRouterKey', { key: trimmed })
+      setKey('')
+      await invalidateAi()
+    } catch (err) {
+      setKeyError(err instanceof IpcError ? err.message : 'Falha ao salvar a chave.')
+    } finally {
+      setKeyBusy(false)
+    }
+  }
+
+  const removeKey = async (): Promise<void> => {
+    setRemoveBusy(true)
+    try {
+      await invoke('ai:clearOpenRouterKey', {})
+      await invalidateAi()
+    } finally {
+      setRemoveBusy(false)
+    }
+  }
+
+  if (!aiStatus || !prefs) {
+    return <Card title="Inteligência artificial">{<Spinner className="text-zinc-500" />}</Card>
+  }
+
+  const providerOptions: Array<[string, string]> = [
+    ['auto', 'Automático (Claude se disponível)'],
+    ...aiStatus.providers.map((p): [string, string] => [
+      p.id,
+      p.id === 'openrouter' ? 'OpenRouter' : p.label
+    ])
+  ]
+
   return (
-    <Card title="Claude">
-      {data?.available ? (
-        <div className="space-y-4">
-          <p className="flex items-center gap-2 text-sm text-zinc-300">
-            <CheckCircle2 size={15} className="text-green-400" />
-            Claude disponível
-            <span className="truncate font-mono text-xs text-zinc-500">{data.path}</span>
+    <Card title="Inteligência artificial">
+      <div className="space-y-4">
+        <div className="space-y-1.5">
+          {aiStatus.providers.map((p) => (
+            <div key={p.id} className="flex items-center gap-2 text-sm">
+              <span
+                className={`size-2 shrink-0 rounded-full ${p.available ? 'bg-green-500' : 'bg-red-500'}`}
+              />
+              <span className="shrink-0 text-zinc-300">
+                {p.id === 'openrouter' ? 'OpenRouter' : p.label}
+              </span>
+              {p.detail && (
+                <span
+                  className={`truncate text-xs text-zinc-500 ${p.kind === 'cli' ? 'font-mono' : ''}`}
+                >
+                  {p.detail}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {!activeId && (
+          <p className="rounded-md bg-amber-950/40 px-3 py-2 text-xs text-amber-400 light:bg-amber-50 light:text-amber-700">
+            Nenhum provider de IA disponível — instale o Claude Code, o Gemini CLI, o Codex CLI ou
+            configure uma chave da OpenRouter abaixo.
           </p>
-          {prefs && (
-            <>
-              <p className="text-xs text-zinc-500">
-                Modelo usado em cada funcionalidade (os aliases apontam para a versão mais recente
-                disponível na sua conta):
-              </p>
-              <SelectRow
-                label="Resumos (daily/weekly/1:1)"
-                value={prefs.modelSummaries}
-                options={CLAUDE_MODEL_OPTIONS}
-                onChange={(v) => void update({ modelSummaries: v as Prefs['modelSummaries'] })}
+        )}
+
+        <SelectRow
+          label="Provider ativo"
+          value={prefs.aiProvider}
+          options={providerOptions}
+          onChange={(v) => void setProvider(v)}
+        />
+
+        <div className="space-y-1.5 border-t border-zinc-800 pt-3">
+          <span className="block text-xs font-medium text-zinc-400">Chave da OpenRouter</span>
+          {openrouterHasKey ? (
+            <div className="flex items-center gap-2">
+              <span className="flex items-center gap-1 text-xs text-green-400">
+                <CheckCircle2 size={13} /> chave configurada
+              </span>
+              <Button variant="danger" disabled={removeBusy} onClick={() => void removeKey()}>
+                {removeBusy && <Spinner />}
+                Remover
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-end gap-2">
+              <Input
+                type="password"
+                className="flex-1"
+                placeholder="sk-or-…"
+                value={key}
+                onChange={(e) => setKey(e.target.value)}
               />
-              <SelectRow
-                label="Narrativa do time"
-                value={prefs.modelTeam}
-                options={CLAUDE_MODEL_OPTIONS}
-                onChange={(v) => void update({ modelTeam: v as Prefs['modelTeam'] })}
-              />
-              <SelectRow
-                label="Criar task (rascunho)"
-                value={prefs.modelDraft}
-                options={CLAUDE_MODEL_OPTIONS}
-                onChange={(v) => void update({ modelDraft: v as Prefs['modelDraft'] })}
-              />
-              <SelectRow
-                label="Dividir task (análise)"
-                value={prefs.modelSplit}
-                options={CLAUDE_MODEL_OPTIONS}
-                onChange={(v) => void update({ modelSplit: v as Prefs['modelSplit'] })}
-              />
-              <SelectRow
-                label="Comentário de card (IA)"
-                value={prefs.modelComment}
-                options={CLAUDE_MODEL_OPTIONS}
-                onChange={(v) => void update({ modelComment: v as Prefs['modelComment'] })}
-              />
-              <SelectRow
-                label="Perguntar ao Jiraiya"
-                value={prefs.modelAsk}
-                options={CLAUDE_MODEL_OPTIONS}
-                onChange={(v) => void update({ modelAsk: v as Prefs['modelAsk'] })}
-              />
-            </>
+              <Button
+                variant="secondary"
+                disabled={keyBusy || !key.trim()}
+                onClick={() => void saveKey()}
+              >
+                {keyBusy && <Spinner />}
+                Salvar
+              </Button>
+            </div>
           )}
+          {keyError && <p className="text-xs text-red-400 light:text-red-600">{keyError}</p>}
         </div>
-      ) : (
-        <div className="text-sm text-zinc-400">
-          <p className="flex items-center gap-2">
-            <XCircle size={15} className="text-zinc-500" />
-            CLI do Claude não encontrado — resumos usarão apenas o template.
-          </p>
-          <p className="mt-1 text-xs text-zinc-500">
-            Instale o Claude Code e faça login para habilitar o aprimoramento com IA.
-          </p>
-        </div>
-      )}
+
+        {activeId && activeProvider && (
+          <div className="space-y-2 border-t border-zinc-800 pt-3">
+            <p className="text-xs text-zinc-500">
+              Modelo usado em cada funcionalidade ({activeProvider.label}):
+            </p>
+            {AI_FEATURES.map((f) =>
+              activeId === 'openrouter' ? (
+                <label key={f.key} className="block">
+                  <span className="mb-1 block text-xs font-medium text-zinc-400">{f.label}</span>
+                  <ModelCombobox
+                    value={prefs.aiModels?.openrouter?.[f.key] ?? ''}
+                    onChange={(id) => setFeatureModel(f.key, id)}
+                    models={openrouterModels?.models ?? []}
+                    hasKey={openrouterHasKey}
+                    loading={openrouterModelsLoading}
+                  />
+                </label>
+              ) : (
+                <SelectRow
+                  key={f.key}
+                  label={f.label}
+                  value={prefs.aiModels?.[activeId as AiProviderId]?.[f.key] ?? ''}
+                  options={[
+                    ['', 'Padrão (recomendado)'],
+                    ...activeProvider.models.map((m): [string, string] => [m.id, m.label])
+                  ]}
+                  onChange={(v) => setFeatureModel(f.key, v)}
+                />
+              )
+            )}
+          </div>
+        )}
+
+        <button
+          className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300"
+          onClick={() => setShowLog(true)}
+        >
+          <Terminal size={12} />
+          Ver comandos executados
+        </button>
+      </div>
+
+      {showLog && <CommandLogModal onClose={() => setShowLog(false)} />}
     </Card>
   )
 }

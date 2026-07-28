@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { runClaudePrompt } from '../summaries/claude'
-import type { ClaudeModel } from '@shared/domain'
+import { runAiPrompt } from '../ai/service'
+import { extractJson } from '../ai/text'
 import { CARD_PATTERN, patternBlockFor } from './cardPattern'
 
 export interface SplitItem {
@@ -22,17 +22,12 @@ const splitSchema = z.object({
 })
 
 /**
- * Extrai o JSON do texto do Claude (recorta do primeiro '{' ao último '}') e valida.
- * rationale ausente no JSON → '' (default). Qualquer falha → Error amigável.
+ * Extrai o JSON da resposta da IA (tira a cerca ```json e recorta do primeiro '{'
+ * ao último '}') e valida. rationale ausente → '' (default). Falha → Error amigável.
  */
 export function parseSplitResponse(raw: string): { items: SplitItem[]; rationale: string } {
   try {
-    const start = raw.indexOf('{')
-    const end = raw.lastIndexOf('}')
-    if (start === -1 || end === -1 || end < start) {
-      throw new Error('sem objeto JSON')
-    }
-    const parsed = splitSchema.parse(JSON.parse(raw.slice(start, end + 1)))
+    const parsed = splitSchema.parse(JSON.parse(extractJson(raw)))
     return {
       items: parsed.items.map((i) => ({
         title: i.title.trim(),
@@ -41,23 +36,22 @@ export function parseSplitResponse(raw: string): { items: SplitItem[]; rationale
       rationale: parsed.rationale.trim()
     }
   } catch {
-    throw new Error('Resposta do Claude em formato inesperado')
+    throw new Error('Resposta da IA em formato inesperado')
   }
 }
 
 /**
- * Monta o prompt pt-BR no padrão Biud e pede ao Claude para dividir um card em
+ * Monta o prompt pt-BR no padrão Biud e pede à IA para dividir um card em
  * 2 a 6 cards menores, independentes e verificáveis isoladamente. Suporta
  * iteração com feedback do usuário sobre itens já editados.
  */
-export async function splitIssueWithClaude(input: {
+export async function splitIssue(input: {
   parentKey: string
   parentTitle: string
   parentDescription: string | null
   parentIssueType: string | null
   feedback?: string
   currentItems?: SplitItem[]
-  model?: ClaudeModel
 }): Promise<{ items: SplitItem[]; rationale: string }> {
   const bloco = patternBlockFor(input.parentIssueType)
   const isIteration = Boolean(input.currentItems?.length)
@@ -103,6 +97,6 @@ export async function splitIssueWithClaude(input: {
     'Responda SOMENTE com JSON válido no formato {"items":[{"title":"...","description":"..."}], "rationale":"..."} — rationale com 1-2 frases explicando o critério da divisão. Sem cerca de código, sem texto antes ou depois.'
   ].join('\n')
 
-  const raw = await runClaudePrompt(prompt, input.model)
+  const raw = await runAiPrompt('split', prompt)
   return parseSplitResponse(raw)
 }

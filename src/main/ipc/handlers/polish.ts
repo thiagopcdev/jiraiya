@@ -1,33 +1,34 @@
 import { AppError, handle } from '../registry'
-import type { AppContext } from '../../appContext'
-import { getPrefs } from '../../db/repos/misc'
-import { claudeStatus, runClaudePrompt, ClaudeUnavailableError } from '../../summaries/claude'
+import { activeProvider, runAiPrompt } from '../../ai/service'
+import { AiUnavailableError } from '../../ai/types'
 import { buildPolishPrompt, cleanPolishedText } from '../../issues/polish'
 
-export function registerPolishHandlers(ctx: AppContext): void {
+/** Sem ctx: o modelo vem do registry de IA, não mais dos prefs legados. */
+export function registerPolishHandlers(): void {
   handle('text:polish', async ({ text, context }) => {
-    if (!claudeStatus().available) {
+    const provider = activeProvider()
+    if (!provider) {
       throw new AppError(
-        'CLAUDE_UNAVAILABLE',
-        'CLI do Claude não encontrado — instale o Claude Code para melhorar o texto'
+        'AI_UNAVAILABLE',
+        'Nenhum provider de IA disponível — configure em Ajustes'
       )
     }
-    const prefs = getPrefs(ctx.db)
-    const model = context === 'description' ? prefs.modelDraft : prefs.modelComment
+    // o polimento herda o modelo da função correspondente (descrição → draft, comentário → comment)
+    const feature = context === 'description' ? 'draft' : 'comment'
     try {
-      const raw = await runClaudePrompt(buildPolishPrompt(text, context), model)
+      const raw = await runAiPrompt(feature, buildPolishPrompt(text, context))
       const polished = cleanPolishedText(raw)
       if (polished === '') {
-        throw new AppError('CLAUDE_UNAVAILABLE', 'O Claude devolveu uma resposta vazia')
+        throw new AppError('AI_UNAVAILABLE', `Resposta vazia (${provider.label})`)
       }
-      return { text: polished, generatedBy: 'claude' as const }
+      return { text: polished, generatedBy: provider.id }
     } catch (err) {
       if (err instanceof AppError) throw err
       const message =
-        err instanceof ClaudeUnavailableError || err instanceof Error
+        err instanceof AiUnavailableError || err instanceof Error
           ? err.message
-          : 'Não foi possível melhorar o texto com o Claude'
-      throw new AppError('CLAUDE_UNAVAILABLE', message)
+          : `Não foi possível melhorar o texto (${provider.label})`
+      throw new AppError('AI_UNAVAILABLE', message)
     }
   })
 }

@@ -39,6 +39,7 @@ import type {
 import type { IpcRequest, IpcResponse } from '@shared/ipc-contract'
 import { invoke, IpcError } from '../api/client'
 import {
+  useAiStatus,
   useAuthStatus,
   useIssueActivity,
   useIssueSearch,
@@ -48,6 +49,7 @@ import {
   usePrsForIssue,
   usePrStatus,
   useSprintList,
+  unavailableAiProviderLabel,
   useWorklogs
 } from '../api/hooks'
 import { Badge, Button, EmptyState, Input, Spinner } from './ui'
@@ -301,10 +303,7 @@ function IssueDetailDrawer({
     retry: 0
   })
 
-  const { data: claudeInfo } = useQuery({
-    queryKey: ['claude-status'],
-    queryFn: () => invoke('claude:status', {})
-  })
+  const { data: aiStatus } = useAiStatus()
   const { data: sprintsData } = useSprintList()
   const sprintName =
     issue?.sprintJiraId != null
@@ -1118,8 +1117,12 @@ function IssueDetailDrawer({
                   {!aiOpen && (
                     <Button
                       variant="secondary"
-                      disabled={!claudeInfo?.available}
-                      title={!claudeInfo?.available ? t.detail.claudeUnavailableHint : undefined}
+                      disabled={!aiStatus?.active}
+                      title={
+                        !aiStatus?.active
+                          ? t.detail.aiUnavailableHint(unavailableAiProviderLabel(aiStatus))
+                          : undefined
+                      }
                       onClick={() => setAiOpen(true)}
                     >
                       <Sparkles size={14} />
@@ -1130,8 +1133,10 @@ function IssueDetailDrawer({
                 {commentError && (
                   <p className="text-sm text-amber-400 light:text-amber-600">{commentError}</p>
                 )}
-                {!claudeInfo?.available && (
-                  <p className="text-xs text-zinc-600">{t.detail.claudeUnavailableHint}</p>
+                {!aiStatus?.active && (
+                  <p className="text-xs text-zinc-600">
+                    {t.detail.aiUnavailableHint(unavailableAiProviderLabel(aiStatus))}
+                  </p>
                 )}
               </section>
 

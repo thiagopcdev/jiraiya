@@ -1,11 +1,13 @@
 import { Notification } from 'electron'
 import type Database from 'better-sqlite3'
+import type { AiGeneratedBy } from '@shared/domain'
 import { resolvePeriod } from '@shared/periods'
 import { getPrefs, saveSummary } from './db/repos/misc'
 import { getWorkspaceRow } from './db/repos/workspace'
 import { buildPeriodDigest, collectPeriodComments } from './summaries/selectors'
 import { templates } from './summaries/templates'
-import { enhanceWithClaude } from './summaries/claude'
+import { activeProvider } from './ai/service'
+import { enhanceSummary } from './ai/prompts'
 
 /** Data local YYYY-MM-DD (America/Sao_Paulo implícito via locale do sistema). */
 function localDate(d: Date): string {
@@ -32,13 +34,16 @@ function setPref(db: Database.Database, key: string, value: string): void {
 
 /**
  * Gera a daily de ONTEM no primeiro boot do dia, salva como summary e notifica.
- * Idempotente pela data (user_pref 'lastBriefingDate'). Falhas do Claude caem no
+ * Idempotente pela data (user_pref 'lastBriefingDate'). Falhas da IA caem no
  * template determinístico.
+ *
+ * `aiAvailable` é lazy: o provider pode ficar disponível depois do boot (chave
+ * do OpenRouter configurada em Ajustes), então avalia a cada execução.
  */
 export async function runMorningBriefing(
   db: Database.Database,
   ctx: { push: (summary: { summaryId: number }) => void },
-  deps: { claudeAvailable: boolean; showWindow: () => void }
+  deps: { aiAvailable: () => boolean; showWindow: () => void }
 ): Promise<void> {
   const prefs = getPrefs(db)
   if (!prefs.morningBriefing) return
@@ -52,17 +57,17 @@ export async function runMorningBriefing(
   const range = resolvePeriod({ type: 'yesterday' }, new Date())
   const digest = buildPeriodDigest(db, workspace, range, prefs.stalledDays)
   let contentMd = templates.standup(digest)
-  let generatedBy: 'template' | 'claude' = 'template'
+  let generatedBy: AiGeneratedBy = 'template'
 
-  if (deps.claudeAvailable) {
+  const provider = deps.aiAvailable() ? activeProvider() : null
+  if (provider) {
     try {
       const comentariosDoPeriodo = collectPeriodComments(db, workspace, range)
-      contentMd = await enhanceWithClaude({
-        model: prefs.modelSummaries,
+      contentMd = await enhanceSummary({
         templateMarkdown: contentMd,
         digestJson: JSON.stringify({ ...digest, comentariosDoPeriodo }, null, 2)
       })
-      generatedBy = 'claude'
+      generatedBy = provider.id
     } catch {
       // fallback silencioso pro template
     }

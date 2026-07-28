@@ -37,33 +37,33 @@ describe('parseSplitResponse', () => {
 
   it('items vazio ([]) lança erro de formato inesperado', () => {
     const raw = '{"items":[],"rationale":"r"}'
-    expect(() => parseSplitResponse(raw)).toThrow('Resposta do Claude em formato inesperado')
+    expect(() => parseSplitResponse(raw)).toThrow('Resposta da IA em formato inesperado')
   })
 
   it('11 itens (acima do máximo de 10) lança erro de formato inesperado', () => {
     const items = Array.from({ length: 11 }, (_, i) => ({ title: `Item ${i}`, description: 'd' }))
     const raw = JSON.stringify({ items, rationale: 'r' })
-    expect(() => parseSplitResponse(raw)).toThrow('Resposta do Claude em formato inesperado')
+    expect(() => parseSplitResponse(raw)).toThrow('Resposta da IA em formato inesperado')
   })
 
   it('item com title vazio lança erro de formato inesperado', () => {
     const raw = '{"items":[{"title":"","description":"d"}],"rationale":"r"}'
-    expect(() => parseSplitResponse(raw)).toThrow('Resposta do Claude em formato inesperado')
+    expect(() => parseSplitResponse(raw)).toThrow('Resposta da IA em formato inesperado')
   })
 
   it('item com title só espaços/whitespace lança erro de formato inesperado', () => {
     const raw = '{"items":[{"title":"   ","description":"d"}],"rationale":"r"}'
-    expect(() => parseSplitResponse(raw)).toThrow('Resposta do Claude em formato inesperado')
+    expect(() => parseSplitResponse(raw)).toThrow('Resposta da IA em formato inesperado')
   })
 
   it('title acima de 255 chars lança erro de formato inesperado', () => {
     const longTitle = 'a'.repeat(256)
     const raw = `{"items":[{"title":"${longTitle}","description":"d"}],"rationale":"r"}`
-    expect(() => parseSplitResponse(raw)).toThrow('Resposta do Claude em formato inesperado')
+    expect(() => parseSplitResponse(raw)).toThrow('Resposta da IA em formato inesperado')
   })
 
   it('raw sem nenhum JSON lança erro de formato inesperado', () => {
-    expect(() => parseSplitResponse('não sei')).toThrow('Resposta do Claude em formato inesperado')
+    expect(() => parseSplitResponse('não sei')).toThrow('Resposta da IA em formato inesperado')
   })
 
   it('title com espaços nas pontas é trimado', () => {

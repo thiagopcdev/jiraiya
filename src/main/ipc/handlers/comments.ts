@@ -2,14 +2,14 @@ import { AppError, handle } from '../registry'
 import type { AppContext } from '../../appContext'
 import type { AdfNode } from '../../jira/types'
 import { getWorkspaceRow } from '../../db/repos/workspace'
-import { getPrefs } from '../../db/repos/misc'
 import { getIssueByKey } from '../../db/repos/issue'
 import { adfToText } from '../../jira/adf'
 import { adfToMarkdown } from '../../jira/adfToMarkdown'
 import { markdownToAdf } from '../../issues/markdownToAdf'
 import { JiraHttpError } from '../../jira/http'
-import { claudeStatus, ClaudeUnavailableError } from '../../summaries/claude'
-import { draftCommentWithClaude } from '../../issues/commentDraft'
+import { activeProvider } from '../../ai/service'
+import { AiUnavailableError } from '../../ai/types'
+import { draftComment } from '../../issues/commentDraft'
 import { isRetryableNetworkError } from '../../queue/classify'
 import { enqueueAction, queueCounts } from '../../queue/repo'
 import { parseCreateError } from './create'
@@ -81,26 +81,26 @@ export function registerCommentHandlers(ctx: AppContext): void {
         'Card não encontrado localmente — sincronize ou confira a key'
       )
     }
-    if (!claudeStatus().available) {
+    const provider = activeProvider()
+    if (!provider) {
       throw new AppError(
-        'CLAUDE_UNAVAILABLE',
-        'CLI do Claude não encontrado — instale o Claude Code para gerar rascunhos'
+        'AI_UNAVAILABLE',
+        'Nenhum provider de IA disponível — configure em Ajustes'
       )
     }
     try {
-      const body = await draftCommentWithClaude({
+      const body = await draftComment({
         issueKey: issue.key,
         issueSummary: issue.summary,
-        notes,
-        model: getPrefs(ctx.db).modelComment
+        notes
       })
-      return { body, generatedBy: 'claude' as const }
+      return { body, generatedBy: provider.id }
     } catch (err) {
       const message =
-        err instanceof ClaudeUnavailableError || err instanceof Error
+        err instanceof AiUnavailableError || err instanceof Error
           ? err.message
-          : 'Não foi possível gerar o rascunho com o Claude'
-      throw new AppError('CLAUDE_UNAVAILABLE', message)
+          : `Não foi possível gerar o rascunho (${provider.label})`
+      throw new AppError('AI_UNAVAILABLE', message)
     }
   })
 
