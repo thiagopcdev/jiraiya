@@ -73,6 +73,12 @@ Nenhuma integração é obrigatória: sem nenhum provider de IA configurado, o a
 | `npm run lint`      | eslint                                                                      |
 | `npm run build:mac` | DMG para macOS (arm64)                                                      |
 | `npm run build:win` | Instalador NSIS para Windows                                                |
+| `npm run test:coverage` | Testes com relatório de cobertura (gate: 85% statements/functions/lines, 78% branches) |
+
+## Fluxo de branches e CI
+
+- Trabalho entra por branch de feature → **PR para `develop`**. O CI (`.github/workflows/ci.yml`) valida typecheck, lint e a suíte com gate de cobertura em todo PR/push da develop.
+- A `main` é protegida: **só recebe PR vindo da `develop`** — o check `valida-origem` (`.github/workflows/guard-main.yml`) reprova qualquer outra origem, e push direto é bloqueado por ruleset.
 
 Releases: push de uma tag `v*` dispara o workflow que cria a release no GitHub com o `.exe` e o `.dmg`. Os apps instalados avisam sobre a versão nova (boot + a cada 6h) com download direto pelo banner.
 
