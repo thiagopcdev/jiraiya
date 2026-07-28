@@ -103,7 +103,7 @@ export function CommandLogModal({ onClose }: { onClose: () => void }): React.JSX
                     )}
                   </div>
                   <button
-                    className={`block w-full rounded bg-zinc-950/60 px-2 py-1 text-left font-mono text-xs text-zinc-400 light:bg-zinc-100 light:text-zinc-600 ${
+                    className={`block w-full rounded bg-zinc-950/60 px-2 py-1 text-left font-mono text-xs text-zinc-400 hover:bg-zinc-900 hover:text-zinc-300 light:bg-zinc-100 light:text-zinc-600 light:hover:bg-zinc-200 ${
                       expanded.has(entry.id) ? 'break-all whitespace-pre-wrap' : 'truncate'
                     }`}
                     onClick={() => toggleExpand(entry.id)}

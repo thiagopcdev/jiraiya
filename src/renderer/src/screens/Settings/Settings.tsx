@@ -178,7 +178,7 @@ function ProjectsSection(): React.JSX.Element {
           <button
             key={p.key}
             disabled={busy}
-            className={`rounded-full border px-3 py-1 text-sm transition-colors ${
+            className={`rounded-full border px-3 py-1 text-sm transition-colors disabled:opacity-50 ${
               p.selected
                 ? 'border-indigo-600 bg-indigo-950/60 text-indigo-200'
                 : 'border-zinc-700 text-zinc-400 hover:border-zinc-500'

@@ -4,6 +4,30 @@
 @custom-variant light (&:where([data-theme='light'], [data-theme='light'] *));
 
 /*
+ * Affordance de clique: o Tailwind 4 mudou o default de <button> para
+ * cursor:default — devolvemos o pointer a tudo que é interativo e marcamos
+ * o desabilitado explicitamente.
+ */
+@layer base {
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  select:not(:disabled),
+  summary,
+  input[type='checkbox']:not(:disabled),
+  input[type='radio']:not(:disabled),
+  label:has(> input[type='checkbox']:not(:disabled)),
+  label:has(> input[type='radio']:not(:disabled)) {
+    cursor: pointer;
+  }
+  button:disabled,
+  select:disabled,
+  input[type='checkbox']:disabled,
+  input[type='radio']:disabled {
+    cursor: not-allowed;
+  }
+}
+
+/*
  * Tema: o app foi construído dark-only com classes zinc-* literais. Em vez de
  * trocar ~700 usos por tokens semânticos, a escala zinc é redefinida sobre
  * variáveis (--tone-N) e o tema claro INVERTE a escala (950↔50, 900↔100, …,

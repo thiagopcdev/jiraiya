@@ -372,7 +372,7 @@ export default function Summaries(): React.JSX.Element {
             {history.summaries.map((s) => (
               <div key={s.id} className="flex items-center gap-3 py-2">
                 <button
-                  className="min-w-0 flex-1 text-left"
+                  className="min-w-0 flex-1 rounded-md -mx-1.5 px-1.5 py-0.5 text-left hover:bg-zinc-800/60"
                   onClick={() => {
                     setContent(s.contentMd)
                     setGeneratedBy(s.generatedBy)
