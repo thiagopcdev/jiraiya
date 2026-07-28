@@ -8,3 +8,4 @@ out
 dist/
 out/
 *.log
+coverage
