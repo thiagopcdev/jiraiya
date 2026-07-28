@@ -1,0 +1,417 @@
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { QueryClientProvider } from '@tanstack/react-query'
+import userEvent from '@testing-library/user-event'
+import type { Issue } from '@shared/domain'
+import type { IpcResponse } from '@shared/ipc-contract'
+import { installMockApi, MockIpcFailure } from '../../testing/mockApi'
+import { makeQueryClient, renderWithProviders } from '../../testing/render'
+import { IssueDetailContext } from '../../components/issueDetail'
+import Board from './Board'
+
+type BoardData = IpcResponse<'board:view'>
+
+function makeIssue(overrides: Partial<Issue> = {}): Issue {
+  return {
+    jiraId: '1',
+    key: 'BT-1',
+    projectKey: 'BT',
+    summary: 'Card de exemplo',
+    descriptionText: null,
+    issueType: 'Story',
+    status: 'A fazer',
+    statusCategory: 'new',
+    priority: 'Medium',
+    assigneeAccountId: null,
+    assigneeName: null,
+    reporterAccountId: null,
+    storyPoints: null,
+    sprintJiraId: null,
+    labels: [],
+    parentKey: null,
+    flagged: false,
+    createdAt: null,
+    updatedAt: null,
+    resolvedAt: null,
+    url: 'https://x.atlassian.net/browse/BT-1',
+    ...overrides
+  }
+}
+
+function makeBoardData(overrides: Partial<BoardData> = {}): BoardData {
+  return {
+    board: { jiraId: 1, name: 'Board Principal', type: 'scrum', projectKey: 'BT' },
+    boards: [{ jiraId: 1, name: 'Board Principal', type: 'scrum', projectKey: 'BT' }],
+    sprint: { jiraId: 10, name: 'Sprint 10' },
+    sprints: [
+      {
+        jiraId: 10,
+        name: 'Sprint 10',
+        state: 'active',
+        startDate: '2026-01-01T12:00:00',
+        endDate: '2026-01-15T12:00:00'
+      }
+    ],
+    readOnly: false,
+    columns: [
+      { name: 'A Fazer', statusIds: ['1'], statusNames: ['A fazer'], issues: [] },
+      { name: 'Em andamento', statusIds: ['2'], statusNames: ['Em andamento'], issues: [] },
+      { name: 'Concluído', statusIds: ['3'], statusNames: ['Concluído'], issues: [] }
+    ],
+    unmapped: [],
+    columnsSource: 'jira',
+    ...overrides
+  }
+}
+
+function makeDataTransfer(): DataTransfer {
+  const store: Record<string, string> = {}
+  return {
+    setData: (fmt: string, val: string) => {
+      store[fmt] = val
+    },
+    getData: (fmt: string) => store[fmt] ?? '',
+    effectAllowed: 'all'
+  } as unknown as DataTransfer
+}
+
+const noAuth = { 'auth:status': () => ({ connected: false, workspace: null }) as never }
+
+describe('Board', () => {
+  afterEach(() => cleanup())
+
+  it('mostra o spinner enquanto carrega', () => {
+    installMockApi({ ...noAuth, 'board:view': () => new Promise(() => {}) })
+    renderWithProviders(<Board />, { withIssueDetail: false })
+    expect(document.querySelector('.animate-spin')).toBeInTheDocument()
+  })
+
+  it('estado de erro mostra a mensagem do IpcError', async () => {
+    installMockApi({
+      ...noAuth,
+      'board:view': () => {
+        throw new MockIpcFailure('BOARD_FAIL', 'Board indisponível agora')
+      }
+    })
+    renderWithProviders(<Board />, { withIssueDetail: false })
+    await waitFor(() => expect(screen.getByText('Board indisponível agora')).toBeInTheDocument())
+  })
+
+  it('renderiza colunas com issues, contagem e soma de story points', async () => {
+    installMockApi({
+      ...noAuth,
+      'board:view': () =>
+        makeBoardData({
+          columns: [
+            {
+              name: 'A Fazer',
+              statusIds: ['1'],
+              statusNames: ['A fazer'],
+              issues: [
+                makeIssue({ key: 'BT-1', summary: 'Primeira', storyPoints: 3 }),
+                makeIssue({ key: 'BT-2', summary: 'Segunda', storyPoints: 2 })
+              ]
+            },
+            { name: 'Em andamento', statusIds: ['2'], statusNames: ['Em andamento'], issues: [] },
+            { name: 'Concluído', statusIds: ['3'], statusNames: ['Concluído'], issues: [] }
+          ]
+        })
+    })
+    renderWithProviders(<Board />, { withIssueDetail: false })
+    await waitFor(() => expect(screen.getByText('Primeira')).toBeInTheDocument())
+    expect(screen.getByText('Segunda')).toBeInTheDocument()
+    expect(screen.getByText('2 · 5sp')).toBeInTheDocument()
+    expect(screen.getAllByText('Nenhum card nesta coluna.')).toHaveLength(2)
+  })
+
+  it('mostra o seletor de board quando há mais de um e o de sprint pra board scrum', async () => {
+    installMockApi({
+      ...noAuth,
+      'board:view': () =>
+        makeBoardData({
+          boards: [
+            { jiraId: 1, name: 'Board Principal', type: 'scrum', projectKey: 'BT' },
+            { jiraId: 2, name: 'Board Secundário', type: 'scrum', projectKey: 'BT' }
+          ]
+        })
+    })
+    renderWithProviders(<Board />, { withIssueDetail: false })
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: 'Board Principal' })).toBeInTheDocument()
+    )
+    expect(screen.getByRole('option', { name: 'Board Secundário' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Sprint 10 (ativa)' })).toBeInTheDocument()
+  })
+
+  it('badge de somente leitura e banner de fallback aparecem quando aplicável', async () => {
+    installMockApi({
+      ...noAuth,
+      'board:view': () => makeBoardData({ readOnly: true, columnsSource: 'fallback' })
+    })
+    renderWithProviders(<Board />, { withIssueDetail: false })
+    await waitFor(() =>
+      expect(screen.getByText('Sprint encerrada — somente leitura')).toBeInTheDocument()
+    )
+    expect(
+      screen.getByText('Colunas aproximadas (configuração do board indisponível)')
+    ).toBeInTheDocument()
+  })
+
+  it('sem sprint ativa (scrum) mostra o empty state específico', async () => {
+    installMockApi({
+      ...noAuth,
+      'board:view': () => makeBoardData({ sprint: null })
+    })
+    renderWithProviders(<Board />, { withIssueDetail: false })
+    await waitFor(() => expect(screen.getByText('Sem sprint ativa')).toBeInTheDocument())
+  })
+
+  it('coluna "fora do quadro" só aparece quando há issues não mapeadas (após filtro)', async () => {
+    installMockApi({
+      ...noAuth,
+      'board:view': () =>
+        makeBoardData({ unmapped: [makeIssue({ key: 'BT-9', summary: 'Sem coluna' })] })
+    })
+    renderWithProviders(<Board />, { withIssueDetail: false })
+    await waitFor(() => expect(screen.getByText('Fora do quadro')).toBeInTheDocument())
+    expect(screen.getByText('Sem coluna')).toBeInTheDocument()
+  })
+
+  describe('filtro de responsável', () => {
+    it('sem usuário autenticado, o padrão é "Todos" e mostra todo mundo', async () => {
+      installMockApi({
+        ...noAuth,
+        'board:view': () =>
+          makeBoardData({
+            columns: [
+              {
+                name: 'A Fazer',
+                statusIds: ['1'],
+                statusNames: ['A fazer'],
+                issues: [
+                  makeIssue({ key: 'BT-1', assigneeAccountId: 'acc-1', assigneeName: 'Ana' }),
+                  makeIssue({ key: 'BT-2', assigneeAccountId: 'acc-2', assigneeName: 'Bruno' })
+                ]
+              },
+              { name: 'Em andamento', statusIds: ['2'], statusNames: [], issues: [] },
+              { name: 'Concluído', statusIds: ['3'], statusNames: [], issues: [] }
+            ]
+          })
+      })
+      renderWithProviders(<Board />, { withIssueDetail: false })
+      await waitFor(() => expect(screen.getByText('BT-1')).toBeInTheDocument())
+      expect(screen.getByText('BT-2')).toBeInTheDocument()
+      expect(screen.getAllByTitle('Ana').length).toBeGreaterThan(0)
+      expect(screen.getAllByTitle('Bruno').length).toBeGreaterThan(0)
+    })
+
+    it('com usuário autenticado que tem cards, filtra por padrão só os dele; alternar chip muda o filtro', async () => {
+      installMockApi({
+        'auth:status': () => ({
+          connected: true,
+          workspace: {
+            id: 1,
+            siteUrl: 'https://x.atlassian.net',
+            email: 'ana@x.com',
+            accountId: 'acc-1',
+            displayName: 'Ana',
+            timeZone: null
+          }
+        }),
+        'board:view': () =>
+          makeBoardData({
+            columns: [
+              {
+                name: 'A Fazer',
+                statusIds: ['1'],
+                statusNames: [],
+                issues: [
+                  makeIssue({ key: 'BT-1', assigneeAccountId: 'acc-1', assigneeName: 'Ana' }),
+                  makeIssue({ key: 'BT-2', assigneeAccountId: 'acc-2', assigneeName: 'Bruno' })
+                ]
+              },
+              { name: 'Em andamento', statusIds: ['2'], statusNames: [], issues: [] },
+              { name: 'Concluído', statusIds: ['3'], statusNames: [], issues: [] }
+            ]
+          })
+      })
+      const user = userEvent.setup()
+      renderWithProviders(<Board />, { withIssueDetail: false })
+
+      await waitFor(() => expect(screen.getByText('BT-1')).toBeInTheDocument())
+      expect(screen.queryByText('BT-2')).not.toBeInTheDocument()
+
+      await user.click(screen.getByText('Todos'))
+      expect(screen.getByText('BT-2')).toBeInTheDocument()
+
+      // a partir de "Todos" (filtro vazio), religar o chip da Ana volta a restringir só a ela
+      await user.click(screen.getByTitle('Ana (você)'))
+      expect(screen.getByText('BT-1')).toBeInTheDocument()
+      expect(screen.queryByText('BT-2')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('drag & drop', () => {
+    it('arrastar um card pra outra coluna chama board:move com os statusIds de destino', async () => {
+      const api = installMockApi({
+        ...noAuth,
+        'board:view': () =>
+          makeBoardData({
+            columns: [
+              {
+                name: 'A Fazer',
+                statusIds: ['1'],
+                statusNames: [],
+                issues: [makeIssue({ key: 'BT-1', summary: 'Mover-me' })]
+              },
+              { name: 'Em andamento', statusIds: ['2'], statusNames: [], issues: [] },
+              { name: 'Concluído', statusIds: ['3'], statusNames: [], issues: [] }
+            ]
+          }),
+        'board:move': () => ({ newStatus: 'Em andamento', newStatusCategory: 'indeterminate' })
+      })
+      renderWithProviders(<Board />, { withIssueDetail: false })
+      await waitFor(() => expect(screen.getByText('Mover-me')).toBeInTheDocument())
+
+      const card = screen.getByText('Mover-me').closest('div[draggable]')!
+      const targetColumnTitle = screen.getByText('Em andamento')
+      const targetColumn = targetColumnTitle.closest('div')!.parentElement!
+
+      const dt = makeDataTransfer()
+      fireEvent.dragStart(card, { dataTransfer: dt })
+      fireEvent.drop(targetColumn, { dataTransfer: dt })
+
+      await waitFor(() => expect(api.count('board:move')).toBe(1))
+      expect(api.lastPayload('board:move')).toEqual({
+        issueKey: 'BT-1',
+        targetStatusIds: ['2'],
+        targetColumnName: 'Em andamento'
+      })
+    })
+
+    it('soltar na mesma coluna de origem não dispara board:move', async () => {
+      const api = installMockApi({
+        ...noAuth,
+        'board:view': () =>
+          makeBoardData({
+            columns: [
+              {
+                name: 'A Fazer',
+                statusIds: ['1'],
+                statusNames: [],
+                issues: [makeIssue({ key: 'BT-1', summary: 'Fico aqui' })]
+              },
+              { name: 'Em andamento', statusIds: ['2'], statusNames: [], issues: [] },
+              { name: 'Concluído', statusIds: ['3'], statusNames: [], issues: [] }
+            ]
+          })
+      })
+      renderWithProviders(<Board />, { withIssueDetail: false })
+      await waitFor(() => expect(screen.getByText('Fico aqui')).toBeInTheDocument())
+
+      const card = screen.getByText('Fico aqui').closest('div[draggable]')!
+      const originColumnTitle = screen.getByText('A Fazer')
+      const originColumn = originColumnTitle.closest('div')!.parentElement!
+
+      const dt = makeDataTransfer()
+      fireEvent.dragStart(card, { dataTransfer: dt })
+      fireEvent.drop(originColumn, { dataTransfer: dt })
+
+      expect(api.count('board:move')).toBe(0)
+    })
+
+    it('board somente leitura desabilita o arraste dos cards', async () => {
+      installMockApi({
+        ...noAuth,
+        'board:view': () =>
+          makeBoardData({
+            readOnly: true,
+            columns: [
+              {
+                name: 'A Fazer',
+                statusIds: ['1'],
+                statusNames: [],
+                issues: [makeIssue({ key: 'BT-1', summary: 'Travado' })]
+              },
+              { name: 'Em andamento', statusIds: ['2'], statusNames: [], issues: [] },
+              { name: 'Concluído', statusIds: ['3'], statusNames: [], issues: [] }
+            ]
+          })
+      })
+      renderWithProviders(<Board />, { withIssueDetail: false })
+      await waitFor(() => expect(screen.getByText('Travado')).toBeInTheDocument())
+      const card = screen.getByText('Travado').closest('div[draggable]')!
+      expect(card).toHaveAttribute('draggable', 'false')
+    })
+
+    it('erro no board:move reverte o otimista e mostra a mensagem por um tempo', async () => {
+      const api = installMockApi({
+        ...noAuth,
+        'board:view': () =>
+          makeBoardData({
+            columns: [
+              {
+                name: 'A Fazer',
+                statusIds: ['1'],
+                statusNames: [],
+                issues: [makeIssue({ key: 'BT-1', summary: 'Vai falhar' })]
+              },
+              { name: 'Em andamento', statusIds: ['2'], statusNames: [], issues: [] },
+              { name: 'Concluído', statusIds: ['3'], statusNames: [], issues: [] }
+            ]
+          }),
+        'board:move': () => {
+          throw new MockIpcFailure('MOVE_FAIL', 'Não foi possível mover o card')
+        }
+      })
+      renderWithProviders(<Board />, { withIssueDetail: false })
+      await waitFor(() => expect(screen.getByText('Vai falhar')).toBeInTheDocument())
+
+      const card = screen.getByText('Vai falhar').closest('div[draggable]')!
+      const targetColumnTitle = screen.getByText('Em andamento')
+      const targetColumn = targetColumnTitle.closest('div')!.parentElement!
+
+      const dt = makeDataTransfer()
+      fireEvent.dragStart(card, { dataTransfer: dt })
+      fireEvent.drop(targetColumn, { dataTransfer: dt })
+
+      await waitFor(() =>
+        expect(screen.getByText('Não foi possível mover o card')).toBeInTheDocument()
+      )
+      expect(api.count('board:move')).toBe(1)
+    })
+
+    it('clicar num card (sem arrastar) abre a gaveta com a key certa', async () => {
+      installMockApi({
+        ...noAuth,
+        'board:view': () =>
+          makeBoardData({
+            columns: [
+              {
+                name: 'A Fazer',
+                statusIds: ['1'],
+                statusNames: [],
+                issues: [makeIssue({ key: 'BT-7', summary: 'Clique aqui' })]
+              },
+              { name: 'Em andamento', statusIds: ['2'], statusNames: [], issues: [] },
+              { name: 'Concluído', statusIds: ['3'], statusNames: [], issues: [] }
+            ]
+          })
+      })
+      const openIssue = vi.fn()
+      const user = userEvent.setup()
+      const client = makeQueryClient()
+      render(
+        <QueryClientProvider client={client}>
+          <IssueDetailContext.Provider value={{ openIssue, close: vi.fn() }}>
+            <Board />
+          </IssueDetailContext.Provider>
+        </QueryClientProvider>
+      )
+      await waitFor(() => expect(screen.getByText('Clique aqui')).toBeInTheDocument())
+      await user.click(screen.getByText('Clique aqui'))
+      expect(openIssue).toHaveBeenCalledWith('BT-7')
+    })
+  })
+})
