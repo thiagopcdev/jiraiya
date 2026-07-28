@@ -59,6 +59,14 @@ const LEGACY_CLAUDE_PREF: Record<AiFeature, keyof Prefs> = {
  * Modelo efetivo de uma função: escolha explícita em `aiModels` → pref legado
  * do claude → default da função → default do provider.
  */
+/**
+ * Id de modelo seguro para virar argumento de CLI (no Windows os shims .cmd
+ * rodam via shell — nada além de [A-Za-z0-9._:/@-] passa).
+ */
+export function isSafeModelId(model: string): boolean {
+  return /^[A-Za-z0-9._:/@-]+$/.test(model)
+}
+
 export function modelFor(feature: AiFeature, providerId: AiProviderId, prefs: Prefs): string {
   const chosen = prefs.aiModels?.[providerId]?.[feature]
   if (typeof chosen === 'string' && chosen.trim() !== '') return chosen

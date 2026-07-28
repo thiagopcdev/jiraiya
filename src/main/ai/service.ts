@@ -2,7 +2,7 @@ import type { AiFeature, AiProviderId, Prefs } from '@shared/domain'
 import { DEFAULT_PREFS } from '@shared/domain'
 import type { IpcResponse } from '@shared/ipc-contract'
 import { getPrefs } from '../db/repos/misc'
-import { modelFor } from './models'
+import { isSafeModelId, modelFor } from './models'
 import { getDb, getProviders, resolveActiveProviderId } from './registry'
 import { stripOuterCodeFence } from './text'
 import { AiUnavailableError, type AiProvider, type AiProviderStatus } from './types'
@@ -67,6 +67,9 @@ export async function runAiPrompt(feature: AiFeature, prompt: string): Promise<s
     throw new AiUnavailableError('Nenhum provider de IA disponível — configure em Ajustes')
   }
   const model = modelFor(feature, provider.id, prefs())
+  if (!isSafeModelId(model)) {
+    throw new AiUnavailableError(`Id de modelo inválido: ${model.slice(0, 60)}`)
+  }
   const output = await provider.run(prompt, model)
   // modelos costumam embalar a resposta inteira num bloco de código
   return stripOuterCodeFence(output)

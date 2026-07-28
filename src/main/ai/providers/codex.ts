@@ -3,7 +3,7 @@ import { readFileSync, rmSync } from 'fs'
 import { homedir, tmpdir } from 'os'
 import { join } from 'path'
 import type { AiFeature } from '@shared/domain'
-import { resolveBinary, runCliBinary } from '../exec'
+import { findInPath, resolveBinary, runCliBinary } from '../exec'
 import { DEFAULT_MODELS, CURATED_MODELS } from '../models'
 import { AiUnavailableError, type AiProvider, type AiProviderStatus } from '../types'
 
@@ -18,13 +18,48 @@ import { AiUnavailableError, type AiProvider, type AiProviderStatus } from '../t
  * `--sandbox read-only` porque só queremos texto — nada de escrita em disco.
  */
 
-const CANDIDATE_PATHS = [
-  '/opt/homebrew/bin/codex',
-  '/usr/local/bin/codex',
-  join(homedir(), '.local', 'bin', 'codex'),
-  join(homedir(), '.npm-global', 'bin', 'codex'),
-  join(homedir(), '.cargo', 'bin', 'codex')
-]
+export function codexCandidatePaths(
+  platform: NodeJS.Platform = process.platform,
+  env: Record<string, string | undefined> = process.env
+): string[] {
+  if (platform === 'win32') {
+    return [
+      join(env.APPDATA ?? join(homedir(), 'AppData', 'Roaming'), 'npm', 'codex.cmd'),
+      join(homedir(), '.cargo', 'bin', 'codex.exe')
+    ]
+  }
+  return [
+    '/opt/homebrew/bin/codex',
+    '/usr/local/bin/codex',
+    join(homedir(), '.local', 'bin', 'codex'),
+    join(homedir(), '.npm-global', 'bin', 'codex'),
+    join(homedir(), '.cargo', 'bin', 'codex')
+  ]
+}
+
+/** No Windows o prompt vai por stdin (`codex exec -` lê o pipe). */
+export function codexInvocation(
+  prompt: string,
+  model: string,
+  outFile: string,
+  platform: NodeJS.Platform = process.platform
+): { args: string[]; stdinText: string | null } {
+  const tail = [
+    '-m',
+    model,
+    '--sandbox',
+    'read-only',
+    '--skip-git-repo-check',
+    '--output-last-message',
+    outFile
+  ]
+  if (platform === 'win32') return { args: ['exec', '-', ...tail], stdinText: prompt }
+  return { args: ['exec', prompt, ...tail], stdinText: null }
+}
+
+function findCodex(): string | null {
+  return resolveBinary(codexCandidatePaths()) ?? findInPath('codex')
+}
 
 export function createCodexProvider(): AiProvider {
   return {
@@ -32,7 +67,7 @@ export function createCodexProvider(): AiProvider {
     label: 'Codex',
     kind: 'cli',
     status(): AiProviderStatus {
-      const path = resolveBinary(CANDIDATE_PATHS)
+      const path = findCodex()
       return { available: path !== null, detail: path ?? 'CLI do Codex não encontrado' }
     },
     models() {
@@ -42,24 +77,16 @@ export function createCodexProvider(): AiProvider {
       return DEFAULT_MODELS.codex[feature] ?? DEFAULT_MODELS.codex.default
     },
     async run(prompt: string, model: string) {
-      const binary = resolveBinary(CANDIDATE_PATHS)
+      const binary = findCodex()
       if (!binary) throw new AiUnavailableError('CLI do Codex não encontrado')
 
       const outFile = join(tmpdir(), `jiraiya-codex-${randomUUID()}.txt`)
       try {
+        const { args, stdinText } = codexInvocation(prompt, model, outFile)
         await runCliBinary({
           binary,
-          args: [
-            'exec',
-            prompt,
-            '-m',
-            model,
-            '--sandbox',
-            'read-only',
-            '--skip-git-repo-check',
-            '--output-last-message',
-            outFile
-          ],
+          args,
+          stdinText,
           label: 'Codex',
           provider: 'codex'
         })

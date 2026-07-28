@@ -4,6 +4,7 @@ import { homedir } from 'os'
 import { join } from 'path'
 import type Database from 'better-sqlite3'
 import { logCommand } from '../db/repos/commandLog'
+import { findInPath } from '../ai/exec'
 import { redactCommandLine } from '../ai/audit'
 
 /**
@@ -13,12 +14,18 @@ import { redactCommandLine } from '../ai/audit'
  * nunca quebra — a integração de PRs é opcional e silenciosa.
  */
 
-const CANDIDATE_PATHS = [
-  '/opt/homebrew/bin/gh',
-  '/usr/local/bin/gh',
-  join(homedir(), '.local', 'bin', 'gh'),
-  '/usr/bin/gh'
-]
+const CANDIDATE_PATHS =
+  process.platform === 'win32'
+    ? [
+        'C:\\Program Files\\GitHub CLI\\gh.exe',
+        join(process.env.LOCALAPPDATA ?? '', 'Programs', 'GitHub CLI', 'gh.exe')
+      ]
+    : [
+        '/opt/homebrew/bin/gh',
+        '/usr/local/bin/gh',
+        join(homedir(), '.local', 'bin', 'gh'),
+        '/usr/bin/gh'
+      ]
 
 /**
  * DB da auditoria de comandos. Module-level porque runGh é chamado de vários
@@ -58,7 +65,8 @@ export function resolveGhBinary(): string | null {
   for (const p of CANDIDATE_PATHS) {
     if (existsSync(p)) return p
   }
-  return null
+  // fallback: PATH do processo (winget/scoop/brew fora dos caminhos usuais)
+  return findInPath('gh')
 }
 
 export function ghAvailable(): boolean {
