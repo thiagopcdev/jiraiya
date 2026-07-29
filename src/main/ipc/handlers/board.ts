@@ -4,6 +4,7 @@ import type { SprintListItem } from '@shared/domain'
 import { getWorkspaceRow } from '../../db/repos/workspace'
 import { getActiveSprint, listBoards, listRecentSprints } from '../../db/repos/catalog'
 import { getIssueByKey, updateIssueStatus } from '../../db/repos/issue'
+import { getPrefs, setPrefs } from '../../db/repos/misc'
 import { JiraHttpError } from '../../jira/http'
 import { parseCreateError } from './create'
 import {
@@ -48,10 +49,16 @@ export function registerBoardHandlers(ctx: AppContext): void {
       throw new AppError('NO_BOARDS', 'Nenhum board sincronizado — rode uma sincronização')
     }
 
+    // sem board pedido, abre o último usado; sumiu do Jira → scrum → primeiro
+    const lastBoardJiraId = getPrefs(db).lastBoardJiraId
     const board = req.boardJiraId
       ? boards.find((b) => b.jiraId === req.boardJiraId)
-      : (boards.find((b) => b.type === 'scrum') ?? boards[0])
+      : (boards.find((b) => b.jiraId === lastBoardJiraId) ??
+        boards.find((b) => b.type === 'scrum') ??
+        boards[0])
     if (!board) throw new AppError('BOARD_NOT_FOUND', 'Board não encontrado')
+    // lembra a escolha para o próximo acesso (grava só quando muda)
+    if (board.jiraId !== lastBoardJiraId) setPrefs(db, { lastBoardJiraId: board.jiraId })
 
     let sprint: { jiraId: number; name: string } | null = null
     let sprints: SprintListItem[] = []
