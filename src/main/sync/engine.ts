@@ -14,7 +14,13 @@ import { isFreshAssignmentToMe } from './assignment'
 import { extractMentions } from './mentions'
 import { insertMentions } from '../db/repos/mentions'
 import { getPrefs, getSyncCursor, setSyncState } from '../db/repos/misc'
-import { listBoards, selectedProjectKeys, upsertSprints } from '../db/repos/catalog'
+import {
+  listBoards,
+  pruneBoards,
+  selectedProjectKeys,
+  upsertBoards,
+  upsertSprints
+} from '../db/repos/catalog'
 import { setWorkspaceFields } from '../db/repos/workspace'
 import { discoverCustomFields } from '../jira/client'
 import type { JiraIssue } from '../jira/types'
@@ -199,8 +205,33 @@ export async function runSync(deps: SyncDeps, opts: { full?: boolean } = {}): Pr
       }
     }
 
-    // fase 3: sprints dos boards conhecidos
+    // fase 3: boards dos projetos selecionados + sprints. O refresh aqui é o
+    // que faz quadros criados no Jira depois da configuração aparecerem (a
+    // seleção de projetos só descobre boards no momento do setSelected).
     onProgress?.({ phase: 'sprints', done: 0, total: null })
+    for (const projectKey of selectedProjectKeys(db, workspace.id)) {
+      try {
+        const remote = await client.listBoards(projectKey)
+        upsertBoards(
+          db,
+          workspace.id,
+          remote.map((b) => ({
+            jiraId: b.id,
+            name: b.name ?? null,
+            type: b.type ?? null,
+            projectKey: b.location?.projectKey ?? projectKey
+          }))
+        )
+        pruneBoards(
+          db,
+          workspace.id,
+          projectKey,
+          remote.map((b) => b.id)
+        )
+      } catch {
+        // projeto sem board (ex.: service desk) ou falha pontual — usa o cache
+      }
+    }
     const boards = listBoards(db, workspace.id)
     for (const board of boards) {
       const sprints = await client.listSprints(board.jiraId)
