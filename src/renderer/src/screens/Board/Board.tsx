@@ -7,6 +7,7 @@ import { useAuthStatus, useBoard } from '../../api/hooks'
 import { useIssueDetail } from '../../components/issueDetail'
 import { Badge, EmptyState, Spinner } from '../../components/ui'
 import { t } from '../../strings/ptBR'
+import { getSessionBoardId, setSessionBoardId } from './boardSession'
 
 type BoardData = IpcResponse<'board:view'>
 type BoardColumn = BoardData['columns'][number]
@@ -39,7 +40,7 @@ function borderAccent(category: Issue['statusCategory']): string {
 }
 
 export default function Board(): React.JSX.Element {
-  const [boardId, setBoardId] = useState<number | undefined>(undefined)
+  const [boardId, setBoardId] = useState<number | undefined>(getSessionBoardId())
   const [sprintId, setSprintId] = useState<number | undefined>(undefined)
   // null = usuário ainda não mexeu no filtro → default: só os meus cards
   const [assigneeFilter, setAssigneeFilter] = useState<Set<string> | null>(null)
@@ -61,6 +62,20 @@ export default function Board(): React.JSX.Element {
     },
     []
   )
+
+  // registra o board resolvido (default do main ou troca no seletor) para as
+  // próximas montagens da sessão
+  useEffect(() => {
+    if (data) setSessionBoardId(data.board.jiraId)
+  }, [data])
+
+  // board da sessão sumiu (ex.: apagado no Jira e podado no sync) → volta ao
+  // default; ajuste de estado durante o render, padrão do React para estado
+  // derivado — o effect equivalente dispararia renders em cascata (lint)
+  if (boardId !== undefined && error instanceof IpcError && error.code === 'BOARD_NOT_FOUND') {
+    setSessionBoardId(undefined)
+    setBoardId(undefined)
+  }
 
   // limpa a guarda de drag no window: quando o drop move o card, o update
   // otimista remove o elemento original do DOM e o dragend dele NUNCA dispara —
