@@ -3,7 +3,7 @@ import Database from 'better-sqlite3'
 import type { JiraClient } from '../jira/client'
 import type { JiraChangelogHistory, JiraComment, JiraIssue } from '../jira/types'
 import { runMigrations } from '../db/migrations'
-import { upsertBoards } from '../db/repos/catalog'
+import { listBoards, setSelectedProjects, upsertBoards, upsertProjects } from '../db/repos/catalog'
 import { getSyncCursor, setPrefs, setSyncState } from '../db/repos/misc'
 import { getWorkspaceRow } from '../db/repos/workspace'
 import { runSync, type SyncDeps, type SyncProgress } from './engine'
@@ -58,6 +58,7 @@ interface ClientOpts {
   changelogs?: Map<string, JiraChangelogHistory[]>
   commentsByKey?: Record<string, JiraComment[]>
   sprints?: Array<Record<string, unknown>>
+  boards?: Array<Record<string, unknown>>
   issueChangelog?: (key: string) => Promise<JiraChangelogHistory[]>
 }
 
@@ -68,6 +69,7 @@ interface FakeSyncClient {
   issueChangelog: ReturnType<typeof vi.fn>
   issueComments: ReturnType<typeof vi.fn>
   listSprints: ReturnType<typeof vi.fn>
+  listBoards: ReturnType<typeof vi.fn>
 }
 
 function makeClient(opts: ClientOpts = {}): {
@@ -87,7 +89,8 @@ function makeClient(opts: ClientOpts = {}): {
     bulkChangelogs: vi.fn(async () => opts.changelogs ?? new Map()),
     issueChangelog: vi.fn(opts.issueChangelog ?? (async () => [])),
     issueComments: vi.fn(async (key: string) => opts.commentsByKey?.[key] ?? []),
-    listSprints: vi.fn(async () => opts.sprints ?? [])
+    listSprints: vi.fn(async () => opts.sprints ?? []),
+    listBoards: vi.fn(async () => opts.boards ?? [])
   }
   return { client, calls }
 }
@@ -466,6 +469,82 @@ describe('runSync — fase de sprints', () => {
     const { client } = makeClient()
     await runSync(deps(client))
     expect(client.listSprints).not.toHaveBeenCalled()
+  })
+})
+
+describe('runSync — refresh de boards dos projetos selecionados', () => {
+  function selectProject(key: string): void {
+    upsertProjects(db, 1, [{ jiraId: `id-${key}`, key, name: `Projeto ${key}`, avatarUrl: null }])
+    setSelectedProjects(db, 1, [key])
+  }
+
+  it('quadro criado no Jira depois da configuração aparece no próximo sync', async () => {
+    selectProject('BT')
+    upsertBoards(db, 1, [{ jiraId: 5, name: 'Board BT', type: 'scrum', projectKey: 'BT' }])
+    const { client } = makeClient({
+      boards: [
+        { id: 5, name: 'Board BT', type: 'scrum', location: { projectKey: 'BT' } },
+        { id: 9, name: 'Board novo', type: 'kanban', location: { projectKey: 'BT' } }
+      ]
+    })
+
+    await runSync(deps(client))
+
+    expect(client.listBoards).toHaveBeenCalledWith('BT')
+    expect(
+      listBoards(db, 1)
+        .map((b) => b.jiraId)
+        .sort()
+    ).toEqual([5, 9])
+    // o board novo já entra na busca de sprints da mesma rodada
+    expect(client.listSprints).toHaveBeenCalledWith(9)
+  })
+
+  it('quadro apagado no Jira some do cache local', async () => {
+    selectProject('BT')
+    upsertBoards(db, 1, [
+      { jiraId: 5, name: 'Board BT', type: 'scrum', projectKey: 'BT' },
+      { jiraId: 9, name: 'Board antigo', type: 'kanban', projectKey: 'BT' }
+    ])
+    const { client } = makeClient({
+      boards: [{ id: 5, name: 'Board BT', type: 'scrum', location: { projectKey: 'BT' } }]
+    })
+
+    await runSync(deps(client))
+
+    expect(listBoards(db, 1).map((b) => b.jiraId)).toEqual([5])
+    expect(client.listSprints).not.toHaveBeenCalledWith(9)
+  })
+
+  it('falha ao listar boards mantém o cache local e não derruba o sync', async () => {
+    selectProject('BT')
+    upsertBoards(db, 1, [{ jiraId: 5, name: 'Board BT', type: 'scrum', projectKey: 'BT' }])
+    const { client } = makeClient()
+    client.listBoards.mockRejectedValue(new Error('Jira fora do ar'))
+
+    await runSync(deps(client))
+
+    expect(listBoards(db, 1).map((b) => b.jiraId)).toEqual([5])
+    expect(client.listSprints).toHaveBeenCalledWith(5)
+  })
+
+  it('board de outro projeto não é removido pelo prune do selecionado', async () => {
+    selectProject('BT')
+    upsertBoards(db, 1, [
+      { jiraId: 5, name: 'Board BT', type: 'scrum', projectKey: 'BT' },
+      { jiraId: 7, name: 'Board XP', type: 'scrum', projectKey: 'XP' }
+    ])
+    const { client } = makeClient({
+      boards: [{ id: 5, name: 'Board BT', type: 'scrum', location: { projectKey: 'BT' } }]
+    })
+
+    await runSync(deps(client))
+
+    expect(
+      listBoards(db, 1)
+        .map((b) => b.jiraId)
+        .sort()
+    ).toEqual([5, 7])
   })
 })
 

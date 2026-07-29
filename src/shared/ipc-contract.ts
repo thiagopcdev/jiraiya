@@ -681,6 +681,8 @@ export const ipcContract = {
         statusIds: string[]
         statusNames: string[]
         issues: Issue[]
+        /** kanban com Backlog habilitado: o Jira esconde esta coluna do quadro (ausente = não é backlog) */
+        isBacklog?: boolean
       }>
       /** cards do escopo cujo status não está em nenhuma coluna */
       unmapped: Issue[]

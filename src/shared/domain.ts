@@ -259,6 +259,8 @@ export interface Prefs {
   /** escopo extra da busca de PRs (ex. 'org:biudtech'); vazio = busca global */
   prSearchScope: string
   theme: ThemePref
+  /** último board aberto no Quadro — vira o default do board:view (gravado pelo main, sem UI) */
+  lastBoardJiraId: number | null
   /** lembra de registrar tempo em dias úteis quando nenhum worklog foi lançado no dia */
   worklogReminder: boolean
   /** horário local do lembrete, formato HH:MM */
@@ -343,6 +345,7 @@ export const DEFAULT_PREFS: Prefs = {
   prIntegration: false,
   prSearchScope: '',
   theme: 'dark',
+  lastBoardJiraId: null,
   worklogReminder: true,
   worklogReminderTime: '17:30'
 }

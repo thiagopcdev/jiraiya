@@ -7,6 +7,7 @@ import { useAuthStatus, useBoard } from '../../api/hooks'
 import { useIssueDetail } from '../../components/issueDetail'
 import { Badge, EmptyState, Spinner } from '../../components/ui'
 import { t } from '../../strings/ptBR'
+import { getSessionBoardId, setSessionBoardId } from './boardSession'
 
 type BoardData = IpcResponse<'board:view'>
 type BoardColumn = BoardData['columns'][number]
@@ -39,7 +40,7 @@ function borderAccent(category: Issue['statusCategory']): string {
 }
 
 export default function Board(): React.JSX.Element {
-  const [boardId, setBoardId] = useState<number | undefined>(undefined)
+  const [boardId, setBoardId] = useState<number | undefined>(getSessionBoardId())
   const [sprintId, setSprintId] = useState<number | undefined>(undefined)
   // null = usuário ainda não mexeu no filtro → default: só os meus cards
   const [assigneeFilter, setAssigneeFilter] = useState<Set<string> | null>(null)
@@ -61,6 +62,20 @@ export default function Board(): React.JSX.Element {
     },
     []
   )
+
+  // registra o board resolvido (default do main ou troca no seletor) para as
+  // próximas montagens da sessão
+  useEffect(() => {
+    if (data) setSessionBoardId(data.board.jiraId)
+  }, [data])
+
+  // board da sessão sumiu (ex.: apagado no Jira e podado no sync) → volta ao
+  // default; ajuste de estado durante o render, padrão do React para estado
+  // derivado — o effect equivalente dispararia renders em cascata (lint)
+  if (boardId !== undefined && error instanceof IpcError && error.code === 'BOARD_NOT_FOUND') {
+    setSessionBoardId(undefined)
+    setBoardId(undefined)
+  }
 
   // limpa a guarda de drag no window: quando o drop move o card, o update
   // otimista remove o elemento original do DOM e o dragend dele NUNCA dispara —
@@ -318,6 +333,7 @@ export default function Board(): React.JSX.Element {
               <ColumnView
                 key={col.name}
                 title={col.name}
+                isBacklog={col.isBacklog}
                 issues={issues}
                 sumPoints={sumPoints}
                 isDragOver={dragOverCol === col.name}
@@ -408,6 +424,7 @@ function AssigneeChips({
 function ColumnView({
   title,
   titleClassName,
+  isBacklog = false,
   issues,
   sumPoints,
   isDragOver = false,
@@ -421,6 +438,7 @@ function ColumnView({
 }: {
   title: string
   titleClassName?: string
+  isBacklog?: boolean
   issues: Issue[]
   sumPoints: number
   isDragOver?: boolean
@@ -434,16 +452,30 @@ function ColumnView({
 }): React.JSX.Element {
   return (
     <div
-      className={`w-72 shrink-0 rounded-lg bg-zinc-900/60 p-2 ${
-        isDragOver ? 'ring-1 ring-indigo-500' : ''
-      }`}
+      className={`w-72 shrink-0 rounded-lg p-2 ${
+        isBacklog ? 'border border-dashed border-zinc-700 bg-zinc-900/30' : 'bg-zinc-900/60'
+      } ${isDragOver ? 'ring-1 ring-indigo-500' : ''}`}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
       <div className="mb-2 flex items-center justify-between px-1">
-        <span className={`text-xs font-semibold uppercase ${titleClassName ?? 'text-zinc-400'}`}>
-          {title}
+        <span className="flex items-center gap-1.5">
+          <span
+            className={`text-xs font-semibold uppercase ${
+              titleClassName ?? (isBacklog ? 'text-zinc-500' : 'text-zinc-400')
+            }`}
+          >
+            {title}
+          </span>
+          {isBacklog && (
+            <span
+              title={t.board.backlogHint}
+              className="cursor-help rounded-full border border-zinc-700 px-1.5 py-px text-[10px] font-medium text-zinc-500"
+            >
+              {t.board.backlogBadge}
+            </span>
+          )}
         </span>
         <span className="text-xs text-zinc-500">
           {issues.length}

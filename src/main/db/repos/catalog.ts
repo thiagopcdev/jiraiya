@@ -79,6 +79,24 @@ export function upsertBoards(
   run()
 }
 
+/** Remove os boards do projeto que sumiram do Jira (mantém os ids informados). */
+export function pruneBoards(
+  db: Database.Database,
+  workspaceId: number,
+  projectKey: string,
+  keepJiraIds: number[]
+): void {
+  const rows = db
+    .prepare('SELECT jira_id FROM board WHERE workspace_id = ? AND project_key = ?')
+    .all(workspaceId, projectKey) as Array<{ jira_id: number }>
+  const keep = new Set(keepJiraIds)
+  const del = db.prepare('DELETE FROM board WHERE workspace_id = ? AND jira_id = ?')
+  const run = db.transaction(() => {
+    for (const r of rows) if (!keep.has(r.jira_id)) del.run(workspaceId, r.jira_id)
+  })
+  run()
+}
+
 export function listBoards(db: Database.Database, workspaceId: number): Board[] {
   const rows = db
     .prepare('SELECT * FROM board WHERE workspace_id = ? ORDER BY name')

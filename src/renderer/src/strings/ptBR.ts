@@ -203,7 +203,10 @@ export const t = {
     all: 'Todos',
     you: 'você',
     fallbackBanner: 'Colunas aproximadas (configuração do board indisponível)',
-    empty: 'Nenhum card nesta coluna.'
+    empty: 'Nenhum card nesta coluna.',
+    backlogBadge: 'Backlog',
+    backlogHint:
+      'Coluna de backlog do kanban — no Jira ela não aparece no quadro: o conteúdo fica na tela "Backlog"'
   },
   detail: {
     openInJira: 'Abrir no Jira',

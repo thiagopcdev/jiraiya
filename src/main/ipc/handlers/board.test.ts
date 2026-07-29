@@ -8,6 +8,7 @@ const { invokeHandler, resetElectronMock } = await import('../../testing/electro
 const { makeTestContext, seedIssue } = await import('../../testing/handlersKit')
 const { clearBoardColumnCache, registerBoardHandlers } = await import('./board')
 const { upsertBoards, upsertSprints } = await import('../../db/repos/catalog')
+const { getPrefs, setPrefs } = await import('../../db/repos/misc')
 const { JiraHttpError } = await import('../../jira/http')
 
 type Ctx = ReturnType<typeof makeTestContext>
@@ -240,6 +241,77 @@ describe('board:view', () => {
     expect(data.sprint).toBeNull()
     expect(data.sprints).toEqual([])
     expect(data.columns[0].issues.map((i) => i.key)).toEqual(['ABC-1'])
+  })
+
+  it('kanban com 1ª coluna de backlog marca isBacklog (as demais não)', async () => {
+    const boardId = nextBoardId()
+    const t = setup({
+      boardConfiguration: async () => ({
+        columns: [
+          { name: 'Lista de pendências', statusIds: ['1'] },
+          { name: 'Em andamento', statusIds: ['3'] },
+          { name: 'Pronto', statusIds: ['5'] }
+        ]
+      }),
+      listStatuses: async () => statuses
+    })
+    upsertBoards(t.db, 1, [{ jiraId: boardId, name: 'K', type: 'kanban', projectKey: 'ABC' }])
+
+    const data = ok(await invokeHandler('board:view', { boardJiraId: boardId }))
+
+    expect(data.columns.map((c) => [c.name, c.isBacklog])).toEqual([
+      ['Lista de pendências', true],
+      ['Em andamento', false],
+      ['Pronto', false]
+    ])
+  })
+
+  it('scrum nunca marca coluna como backlog', async () => {
+    const boardId = nextBoardId()
+    const t = setup({
+      boardConfiguration: async () => ({
+        columns: [
+          { name: 'Backlog', statusIds: ['1'] },
+          { name: 'Pronto', statusIds: ['5'] }
+        ]
+      }),
+      listStatuses: async () => statuses
+    })
+    upsertBoards(t.db, 1, [{ jiraId: boardId, name: 'S', type: 'scrum', projectKey: 'ABC' }])
+
+    const data = ok(await invokeHandler('board:view', { boardJiraId: boardId }))
+
+    expect(data.columns.every((c) => c.isBacklog === false)).toBe(true)
+  })
+
+  it('lembra o último board escolhido e o abre por padrão no próximo acesso', async () => {
+    const scrum = nextBoardId()
+    const kanban = nextBoardId()
+    const t = setup(jiraColumns())
+    upsertBoards(t.db, 1, [
+      { jiraId: scrum, name: 'Scrum', type: 'scrum', projectKey: 'ABC' },
+      { jiraId: kanban, name: 'Kanban', type: 'kanban', projectKey: 'ABC' }
+    ])
+
+    // primeiro acesso sem preferência: default scrum
+    expect(ok(await invokeHandler('board:view', {})).board.jiraId).toBe(scrum)
+    // usuário troca para o kanban…
+    expect(ok(await invokeHandler('board:view', { boardJiraId: kanban })).board.jiraId).toBe(kanban)
+    // …e o próximo acesso sem board pedido já abre nele
+    expect(ok(await invokeHandler('board:view', {})).board.jiraId).toBe(kanban)
+  })
+
+  it('último board sumiu do Jira → cai no default sem erro', async () => {
+    const scrum = nextBoardId()
+    const t = setup(jiraColumns())
+    upsertBoards(t.db, 1, [{ jiraId: scrum, name: 'Scrum', type: 'scrum', projectKey: 'ABC' }])
+    setPrefs(t.db, { lastBoardJiraId: 999999 })
+
+    const data = ok(await invokeHandler('board:view', {}))
+
+    expect(data.board.jiraId).toBe(scrum)
+    // e a preferência é corrigida para o board resolvido
+    expect(getPrefs(t.db).lastBoardJiraId).toBe(scrum)
   })
 
   it('sem workspace → NOT_CONNECTED', async () => {

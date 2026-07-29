@@ -8,7 +8,9 @@ import type { IpcResponse } from '@shared/ipc-contract'
 import { installMockApi, MockIpcFailure } from '../../testing/mockApi'
 import { makeQueryClient, renderWithProviders } from '../../testing/render'
 import { IssueDetailContext } from '../../components/issueDetail'
+import { t } from '../../strings/ptBR'
 import Board from './Board'
+import { setSessionBoardId } from './boardSession'
 
 type BoardData = IpcResponse<'board:view'>
 
@@ -79,7 +81,10 @@ function makeDataTransfer(): DataTransfer {
 const noAuth = { 'auth:status': () => ({ connected: false, workspace: null }) as never }
 
 describe('Board', () => {
-  afterEach(() => cleanup())
+  afterEach(() => {
+    cleanup()
+    setSessionBoardId(undefined)
+  })
 
   it('mostra o spinner enquanto carrega', () => {
     installMockApi({ ...noAuth, 'board:view': () => new Promise(() => {}) })
@@ -96,6 +101,75 @@ describe('Board', () => {
     })
     renderWithProviders(<Board />, { withIssueDetail: false })
     await waitFor(() => expect(screen.getByText('Board indisponível agora')).toBeInTheDocument())
+  })
+
+  it('remontar a tela reabre o último board escolhido na sessão (sem servir o cache antigo)', async () => {
+    const calls: Array<number | undefined> = []
+    const boards = [
+      { jiraId: 1, name: 'Board Principal', type: 'scrum', projectKey: 'BT' },
+      { jiraId: 2, name: 'BT - Downstream', type: 'kanban', projectKey: 'BT' }
+    ]
+    installMockApi({
+      ...noAuth,
+      'board:view': (req: { boardJiraId?: number }) => {
+        calls.push(req.boardJiraId)
+        const board = boards.find((b) => b.jiraId === req.boardJiraId) ?? boards[0]
+        return makeBoardData(
+          board.type === 'scrum' ? { board, boards } : { board, boards, sprint: null, sprints: [] }
+        )
+      }
+    })
+
+    // 1ª visita: abre no default (scrum) e o usuário troca para o Downstream
+    renderWithProviders(<Board />, { withIssueDetail: false })
+    await waitFor(() => expect(screen.getAllByRole('combobox')[0]).toBeInTheDocument())
+    fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: '2' } })
+    await waitFor(() =>
+      expect((screen.getAllByRole('combobox')[0] as HTMLSelectElement).value).toBe('2')
+    )
+    cleanup()
+
+    // 2ª visita (nova montagem): já pede o Downstream direto ao main
+    renderWithProviders(<Board />, { withIssueDetail: false })
+    await waitFor(() =>
+      expect((screen.getAllByRole('combobox')[0] as HTMLSelectElement).value).toBe('2')
+    )
+    expect(calls[calls.length - 1]).toBe(2)
+  })
+
+  it('coluna de backlog do kanban ganha o selo "Backlog" com a explicação', async () => {
+    installMockApi({
+      ...noAuth,
+      'board:view': () =>
+        makeBoardData({
+          board: { jiraId: 2, name: 'BT - Downstream', type: 'kanban', projectKey: 'BT' },
+          sprint: null,
+          sprints: [],
+          columns: [
+            {
+              name: 'Lista de pendências',
+              statusIds: ['1'],
+              statusNames: ['A fazer'],
+              issues: [],
+              isBacklog: true
+            },
+            {
+              name: 'Em andamento',
+              statusIds: ['2'],
+              statusNames: ['Em andamento'],
+              issues: [],
+              isBacklog: false
+            }
+          ]
+        })
+    })
+    renderWithProviders(<Board />, { withIssueDetail: false })
+
+    await waitFor(() => expect(screen.getByText('Lista de pendências')).toBeInTheDocument())
+    const badge = screen.getByText('Backlog')
+    expect(badge).toHaveAttribute('title', t.board.backlogHint)
+    // colunas comuns não ganham o selo
+    expect(screen.getAllByText('Backlog')).toHaveLength(1)
   })
 
   it('renderiza colunas com issues, contagem e soma de story points', async () => {
