@@ -6,6 +6,7 @@ import { upsertIssue, type IssueUpsert } from '../db/repos/issue'
 import {
   fallbackColumns,
   groupIssuesIntoColumns,
+  isBacklogColumn,
   isReadOnlySprint,
   listBoardScopeIssues,
   pickTransition,
@@ -124,6 +125,29 @@ describe('resolveColumns', () => {
     expect(resolved.map((c) => c.name)).toEqual(['A fazer', 'Feito'])
     expect(resolved[0].statusNames).toEqual(['To Do'])
     expect(resolved[1].statusNames).toEqual(['Done'])
+  })
+})
+
+describe('isBacklogColumn', () => {
+  it('kanban + 1ª coluna com nome de backlog → true (com e sem acento)', () => {
+    expect(isBacklogColumn('kanban', 'Backlog', 0)).toBe(true)
+    expect(isBacklogColumn('kanban', 'Lista de pendências', 0)).toBe(true)
+    expect(isBacklogColumn('kanban', 'Lista de pendencias', 0)).toBe(true)
+    expect(isBacklogColumn('kanban', '  BACKLOG  ', 0)).toBe(true)
+  })
+
+  it('fora da 1ª posição nunca é backlog', () => {
+    expect(isBacklogColumn('kanban', 'Backlog', 1)).toBe(false)
+  })
+
+  it('scrum (ou tipo desconhecido) nunca marca', () => {
+    expect(isBacklogColumn('scrum', 'Backlog', 0)).toBe(false)
+    expect(isBacklogColumn(null, 'Backlog', 0)).toBe(false)
+    expect(isBacklogColumn('simple', 'Backlog', 0)).toBe(false)
+  })
+
+  it('1ª coluna kanban com nome comum não marca', () => {
+    expect(isBacklogColumn('kanban', 'A fazer', 0)).toBe(false)
   })
 })
 

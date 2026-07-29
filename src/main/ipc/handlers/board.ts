@@ -9,6 +9,7 @@ import { parseCreateError } from './create'
 import {
   fallbackColumns,
   groupIssuesIntoColumns,
+  isBacklogColumn,
   isReadOnlySprint,
   listBoardScopeIssues,
   pickTransition,
@@ -116,7 +117,10 @@ export function registerBoardHandlers(ctx: AppContext): void {
       sprint,
       sprints,
       readOnly,
-      columns: grouped.columns,
+      columns: grouped.columns.map((c, i) => ({
+        ...c,
+        isBacklog: isBacklogColumn(board.type, c.name, i)
+      })),
       unmapped: grouped.unmapped,
       columnsSource
     }

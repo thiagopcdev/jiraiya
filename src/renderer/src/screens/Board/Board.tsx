@@ -318,6 +318,7 @@ export default function Board(): React.JSX.Element {
               <ColumnView
                 key={col.name}
                 title={col.name}
+                isBacklog={col.isBacklog}
                 issues={issues}
                 sumPoints={sumPoints}
                 isDragOver={dragOverCol === col.name}
@@ -408,6 +409,7 @@ function AssigneeChips({
 function ColumnView({
   title,
   titleClassName,
+  isBacklog = false,
   issues,
   sumPoints,
   isDragOver = false,
@@ -421,6 +423,7 @@ function ColumnView({
 }: {
   title: string
   titleClassName?: string
+  isBacklog?: boolean
   issues: Issue[]
   sumPoints: number
   isDragOver?: boolean
@@ -434,16 +437,30 @@ function ColumnView({
 }): React.JSX.Element {
   return (
     <div
-      className={`w-72 shrink-0 rounded-lg bg-zinc-900/60 p-2 ${
-        isDragOver ? 'ring-1 ring-indigo-500' : ''
-      }`}
+      className={`w-72 shrink-0 rounded-lg p-2 ${
+        isBacklog ? 'border border-dashed border-zinc-700 bg-zinc-900/30' : 'bg-zinc-900/60'
+      } ${isDragOver ? 'ring-1 ring-indigo-500' : ''}`}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
       <div className="mb-2 flex items-center justify-between px-1">
-        <span className={`text-xs font-semibold uppercase ${titleClassName ?? 'text-zinc-400'}`}>
-          {title}
+        <span className="flex items-center gap-1.5">
+          <span
+            className={`text-xs font-semibold uppercase ${
+              titleClassName ?? (isBacklog ? 'text-zinc-500' : 'text-zinc-400')
+            }`}
+          >
+            {title}
+          </span>
+          {isBacklog && (
+            <span
+              title={t.board.backlogHint}
+              className="cursor-help rounded-full border border-zinc-700 px-1.5 py-px text-[10px] font-medium text-zinc-500"
+            >
+              {t.board.backlogBadge}
+            </span>
+          )}
         </span>
         <span className="text-xs text-zinc-500">
           {issues.length}

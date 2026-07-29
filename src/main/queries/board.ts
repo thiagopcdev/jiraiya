@@ -38,6 +38,27 @@ export function resolveColumns(
 }
 
 /**
+ * Coluna de backlog de um quadro kanban: com o recurso Backlog habilitado no
+ * Jira, a API de configuração devolve a primeira coluna normalmente, mas o
+ * quadro do Jira a esconde (o conteúdo vira a tela "Backlog"). Não existe flag
+ * na API — a detecção é pelo nome padrão, só em kanban e só na 1ª posição.
+ * Falso negativo (nome customizado) é inofensivo: a coluna fica sem o selo.
+ */
+export function isBacklogColumn(
+  boardType: string | null,
+  columnName: string,
+  index: number
+): boolean {
+  if (boardType !== 'kanban' || index !== 0) return false
+  const norm = columnName
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+  return norm === 'backlog' || norm === 'lista de pendencias'
+}
+
+/**
  * Distribui as issues nas colunas casando `issue.status` (NOME) contra
  * `statusNames`, normalizando com trim().toLowerCase(). Cada issue entra em no
  * máximo uma coluna (a primeira que casar); sem correspondência vai para

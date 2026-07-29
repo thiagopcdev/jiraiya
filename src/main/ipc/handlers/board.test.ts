@@ -242,6 +242,47 @@ describe('board:view', () => {
     expect(data.columns[0].issues.map((i) => i.key)).toEqual(['ABC-1'])
   })
 
+  it('kanban com 1ª coluna de backlog marca isBacklog (as demais não)', async () => {
+    const boardId = nextBoardId()
+    const t = setup({
+      boardConfiguration: async () => ({
+        columns: [
+          { name: 'Lista de pendências', statusIds: ['1'] },
+          { name: 'Em andamento', statusIds: ['3'] },
+          { name: 'Pronto', statusIds: ['5'] }
+        ]
+      }),
+      listStatuses: async () => statuses
+    })
+    upsertBoards(t.db, 1, [{ jiraId: boardId, name: 'K', type: 'kanban', projectKey: 'ABC' }])
+
+    const data = ok(await invokeHandler('board:view', { boardJiraId: boardId }))
+
+    expect(data.columns.map((c) => [c.name, c.isBacklog])).toEqual([
+      ['Lista de pendências', true],
+      ['Em andamento', false],
+      ['Pronto', false]
+    ])
+  })
+
+  it('scrum nunca marca coluna como backlog', async () => {
+    const boardId = nextBoardId()
+    const t = setup({
+      boardConfiguration: async () => ({
+        columns: [
+          { name: 'Backlog', statusIds: ['1'] },
+          { name: 'Pronto', statusIds: ['5'] }
+        ]
+      }),
+      listStatuses: async () => statuses
+    })
+    upsertBoards(t.db, 1, [{ jiraId: boardId, name: 'S', type: 'scrum', projectKey: 'ABC' }])
+
+    const data = ok(await invokeHandler('board:view', { boardJiraId: boardId }))
+
+    expect(data.columns.every((c) => c.isBacklog === false)).toBe(true)
+  })
+
   it('sem workspace → NOT_CONNECTED', async () => {
     const t = setup(jiraColumns())
     t.db.prepare('DELETE FROM workspace').run()

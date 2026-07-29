@@ -8,6 +8,7 @@ import type { IpcResponse } from '@shared/ipc-contract'
 import { installMockApi, MockIpcFailure } from '../../testing/mockApi'
 import { makeQueryClient, renderWithProviders } from '../../testing/render'
 import { IssueDetailContext } from '../../components/issueDetail'
+import { t } from '../../strings/ptBR'
 import Board from './Board'
 
 type BoardData = IpcResponse<'board:view'>
@@ -96,6 +97,41 @@ describe('Board', () => {
     })
     renderWithProviders(<Board />, { withIssueDetail: false })
     await waitFor(() => expect(screen.getByText('Board indisponível agora')).toBeInTheDocument())
+  })
+
+  it('coluna de backlog do kanban ganha o selo "Backlog" com a explicação', async () => {
+    installMockApi({
+      ...noAuth,
+      'board:view': () =>
+        makeBoardData({
+          board: { jiraId: 2, name: 'BT - Downstream', type: 'kanban', projectKey: 'BT' },
+          sprint: null,
+          sprints: [],
+          columns: [
+            {
+              name: 'Lista de pendências',
+              statusIds: ['1'],
+              statusNames: ['A fazer'],
+              issues: [],
+              isBacklog: true
+            },
+            {
+              name: 'Em andamento',
+              statusIds: ['2'],
+              statusNames: ['Em andamento'],
+              issues: [],
+              isBacklog: false
+            }
+          ]
+        })
+    })
+    renderWithProviders(<Board />, { withIssueDetail: false })
+
+    await waitFor(() => expect(screen.getByText('Lista de pendências')).toBeInTheDocument())
+    const badge = screen.getByText('Backlog')
+    expect(badge).toHaveAttribute('title', t.board.backlogHint)
+    // colunas comuns não ganham o selo
+    expect(screen.getAllByText('Backlog')).toHaveLength(1)
   })
 
   it('renderiza colunas com issues, contagem e soma de story points', async () => {
