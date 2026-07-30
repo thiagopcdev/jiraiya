@@ -114,7 +114,11 @@ function BriefingBanner(): React.JSX.Element | null {
       <span className="flex-1">Sua daily de hoje está pronta.</span>
       <button
         className="rounded-md px-2 py-1 text-sm font-medium text-indigo-400 hover:bg-zinc-800 light:text-indigo-600"
-        onClick={() => void navigate('/resumos')}
+        onClick={() => {
+          // ver = ciente: dispensa junto, senão o banner fica lá até o dia seguinte
+          dismiss()
+          void navigate('/resumos')
+        }}
       >
         Ver
       </button>
