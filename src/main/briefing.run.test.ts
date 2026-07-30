@@ -184,3 +184,54 @@ describe('runMorningBriefing — geração', () => {
     expect(pushed).toHaveLength(1)
   })
 })
+
+/** Promise que o teste resolve quando quiser (simula a IA lenta). */
+function deferred<T>(): { promise: Promise<T>; resolve: (v: T) => void } {
+  let resolve!: (v: T) => void
+  const promise = new Promise<T>((r) => {
+    resolve = r
+  })
+  return { promise, resolve }
+}
+
+describe('runMorningBriefing — concorrência', () => {
+  it('dois disparos dentro da janela do await da IA geram uma única daily', async () => {
+    upsertIssue(db, 1, yesterdayIssue())
+    activeProviderMock.mockReturnValue({ id: 'claude' })
+    const ia = deferred<string>()
+    enhanceSummaryMock.mockReturnValue(ia.promise)
+
+    // fire-and-forget, como os dois disparos reais (fim do sync e timer do boot)
+    const primeiro = runMorningBriefing(db, ctx, deps(true))
+    const segundo = runMorningBriefing(db, ctx, deps(true))
+
+    ia.resolve('# Daily escrita pela IA')
+    await Promise.all([primeiro, segundo])
+
+    const summaries = listSummaries(db, 1)
+    expect(summaries).toHaveLength(1)
+    expect(summaries[0].contentMd).toBe('# Daily escrita pela IA')
+    expect(enhanceSummaryMock).toHaveBeenCalledTimes(1)
+    expect(pref('lastBriefingDate')).toBe(today)
+    expect(pref('lastBriefingSummaryId')).toBe(String(summaries[0].id))
+    expect(pushed).toHaveLength(1)
+    expect(shownNotifications).toHaveLength(1)
+  })
+
+  it('exceção na geração libera o guard para a execução seguinte', async () => {
+    upsertIssue(db, 1, yesterdayIssue())
+    const explode = {
+      aiAvailable: () => {
+        throw new Error('provider quebrado')
+      },
+      showWindow
+    }
+
+    await expect(runMorningBriefing(db, ctx, explode)).rejects.toThrow('provider quebrado')
+
+    await runMorningBriefing(db, ctx, deps(false))
+
+    expect(listSummaries(db, 1)).toHaveLength(1)
+    expect(pref('lastBriefingDate')).toBe(today)
+  })
+})

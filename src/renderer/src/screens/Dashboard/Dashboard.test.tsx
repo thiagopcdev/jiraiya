@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { cleanup, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useLocation } from 'react-router-dom'
 import type { Issue } from '@shared/domain'
 import { installMockApi } from '../../testing/mockApi'
 import { renderWithProviders } from '../../testing/render'
@@ -127,6 +128,29 @@ describe('Dashboard', () => {
     )
     await user.click(screen.getByTitle('Dispensar'))
     expect(screen.queryByText('Sua daily de hoje está pronta.')).not.toBeInTheDocument()
+    expect(localStorage.getItem('jiraiya.dismissedBriefingId')).toBe('42')
+  })
+
+  it('clicar em "Ver" navega para /resumos e dispensa o banner (não volta ao retornar)', async () => {
+    installBaseMocks({ 'briefing:today': () => ({ summaryId: 42 }) })
+    const user = userEvent.setup()
+    // sonda de rota: o Dashboard some ao navegar, então o pathname comprova o redirect
+    function LocationProbe(): React.JSX.Element {
+      const location = useLocation()
+      return <p>rota atual: {location.pathname}</p>
+    }
+    renderWithProviders(
+      <>
+        <Dashboard />
+        <LocationProbe />
+      </>,
+      { withIssueDetail: false }
+    )
+    await waitFor(() =>
+      expect(screen.getByText('Sua daily de hoje está pronta.')).toBeInTheDocument()
+    )
+    await user.click(screen.getByRole('button', { name: 'Ver' }))
+    expect(screen.getByText('rota atual: /resumos')).toBeInTheDocument()
     expect(localStorage.getItem('jiraiya.dismissedBriefingId')).toBe('42')
   })
 
