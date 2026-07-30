@@ -87,7 +87,13 @@ export async function runGh(args: string[], timeoutMs = 20_000): Promise<string>
     const child = execFile(
       binary,
       args,
-      { timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024, env: { ...process.env } },
+      {
+        timeout: timeoutMs,
+        maxBuffer: 4 * 1024 * 1024,
+        env: { ...process.env },
+        // sem isso, no Windows cada chamada pisca uma janela de console
+        windowsHide: true
+      },
       (err, stdout, stderr) => {
         if (err) {
           const message =
