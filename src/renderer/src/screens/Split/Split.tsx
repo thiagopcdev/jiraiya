@@ -3,13 +3,18 @@ import { useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, ExternalLink, PanelRight, Sparkles, Trash2 } from 'lucide-react'
 import { invoke, IpcError } from '../../api/client'
 import { useAiStatus, useIssueTypes, useIssues, unavailableAiProviderLabel } from '../../api/hooks'
-import { Badge, Button, Card, Input, Spinner } from '../../components/ui'
+import { Badge, Button, Card, Input, ScreenHeader, Spinner } from '../../components/ui'
+import { PairTabs } from '../../components/PairTabs'
 import { MarkdownToolbar } from '../../components/MarkdownToolbar'
 import { statusColor } from '../../components/statusColor'
 import { t } from '../../strings/ptBR'
 import type { Issue } from '@shared/domain'
 import { useIssueDetail } from '../../components/issueDetail'
 
+/**
+ * Faixa de abas do par "Criar · Dividir" (item único na sidebar, handoff Tela C).
+ * Navegação de verdade — não estado local: a aba ativa é a rota atual.
+ */
 interface EditableItem {
   id: string
   title: string
@@ -253,271 +258,280 @@ export default function Split(): React.JSX.Element {
     !effectiveIssueTypeId
 
   return (
-    <div className="max-w-2xl space-y-5 p-6">
-      <h2 className="text-xl font-semibold text-zinc-100">{t.split.title}</h2>
-
-      {createdKeys ? (
-        <Card className="border-green-900 bg-green-950/30 light:border-green-300 light:bg-green-50">
-          <div className="flex items-start gap-3">
-            <CheckCircle2
-              className="mt-0.5 shrink-0 text-green-400 light:text-green-600"
-              size={20}
-            />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-zinc-100">
-                {t.split.createdTitle(createdKeys.length, parent?.key ?? '')}
-              </p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {createdKeys.map((key) => (
-                  <div key={key} className="flex items-stretch">
-                    <Button variant="secondary" onClick={() => openIssue(key)}>
-                      <PanelRight size={14} />
-                      {key}
-                    </Button>
-                    <button
-                      className="ml-1 shrink-0 rounded p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
-                      onClick={() => void invoke('shell:openIssue', { issueKey: key })}
-                      title={`Abrir ${key} no Jira`}
-                    >
-                      <ExternalLink size={13} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-              {!commentPosted && (
-                <p className="mt-3 text-sm text-amber-400 light:text-amber-600">
-                  {t.split.commentFailedHint}
+    <div className="flex flex-col">
+      <ScreenHeader title={t.split.title} />
+      <PairTabs
+        tabs={[
+          { to: '/criar', label: t.nav.create },
+          { to: '/dividir', label: t.nav.split }
+        ]}
+      />
+      <div className="max-w-2xl space-y-5 p-6">
+        {createdKeys ? (
+          <Card className="border-green-900 bg-green-950/30 light:border-green-300 light:bg-green-50">
+            <div className="flex items-start gap-3">
+              <CheckCircle2
+                className="mt-0.5 shrink-0 text-green-400 light:text-green-600"
+                size={20}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-zinc-100">
+                  {t.split.createdTitle(createdKeys.length, parent?.key ?? '')}
                 </p>
-              )}
-              <div className="mt-3 flex items-stretch gap-2">
-                <Button variant="secondary" onClick={() => parent && openIssue(parent.key)}>
-                  <PanelRight size={14} />
-                  {t.split.openParentInJira}
-                </Button>
-                <button
-                  className="shrink-0 rounded p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
-                  onClick={() => parent && void invoke('shell:openIssue', { issueKey: parent.key })}
-                  title={parent ? `Abrir ${parent.key} no Jira` : undefined}
-                >
-                  <ExternalLink size={13} />
-                </button>
-                <Button variant="ghost" onClick={resetAll}>
-                  {t.split.splitAnother}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </Card>
-      ) : (
-        <>
-          <Card title={t.split.whichCardTitle}>
-            <div className="space-y-3">
-              <label className="block">
-                <span className="mb-1 block text-xs font-medium text-zinc-400">
-                  {t.split.selectLabel}
-                </span>
-                <select
-                  className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
-                  value={parent?.key ?? ''}
-                  disabled={myIssuesLoading}
-                  onChange={(e) => {
-                    const issue = myIssues.find((i) => i.key === e.target.value)
-                    if (issue) selectParent(issue)
-                  }}
-                >
-                  <option value="" disabled>
-                    {t.split.selectPlaceholder}
-                  </option>
-                  {myIssues.map((issue) => (
-                    <option key={issue.key} value={issue.key}>
-                      {issue.key} — {truncateSummary(issue.summary)}
-                    </option>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {createdKeys.map((key) => (
+                    <div key={key} className="flex items-stretch">
+                      <Button variant="secondary" onClick={() => openIssue(key)}>
+                        <PanelRight size={14} />
+                        {key}
+                      </Button>
+                      <button
+                        className="ml-1 shrink-0 rounded p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+                        onClick={() => void invoke('shell:openIssue', { issueKey: key })}
+                        title={`Abrir ${key} no Jira`}
+                      >
+                        <ExternalLink size={13} />
+                      </button>
+                    </div>
                   ))}
-                </select>
-              </label>
-              <div className="flex items-end gap-2">
-                <Input
-                  label={t.split.orManualKey}
-                  placeholder={t.split.manualKeyPlaceholder}
-                  value={manualKey}
-                  onChange={(e) => setManualKey(e.target.value)}
-                  className="max-w-48"
-                />
-                <Button
-                  variant="secondary"
-                  disabled={getBusy || !manualKey.trim()}
-                  onClick={() => void searchManualKey()}
-                >
-                  {getBusy && <Spinner />}
-                  {getBusy ? t.split.searching : t.split.search}
-                </Button>
-              </div>
-              {getError && <p className="text-sm text-red-400 light:text-red-600">{getError}</p>}
-            </div>
-          </Card>
-
-          {parent && (
-            <Card>
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-sm text-zinc-300">{parent.key}</span>
-                  {parent.issueType && <Badge color="indigo">{parent.issueType}</Badge>}
-                  {parent.status && (
-                    <Badge color={statusColor(parent.statusCategory)}>{parent.status}</Badge>
-                  )}
                 </div>
-                <p className="text-sm font-medium text-zinc-100">{parent.summary}</p>
-                {descriptionPreview ? (
-                  <p className="line-clamp-6 text-sm whitespace-pre-wrap text-zinc-400">
-                    {descriptionPreview}
-                  </p>
-                ) : (
-                  <p className="text-sm text-amber-400 light:text-amber-600">
-                    {t.split.noDescription}
+                {!commentPosted && (
+                  <p className="mt-3 text-sm text-amber-400 light:text-amber-600">
+                    {t.split.commentFailedHint}
                   </p>
                 )}
-              </div>
-            </Card>
-          )}
-
-          <div className="flex items-center gap-3">
-            <Button disabled={analyzeDisabled} onClick={() => void analyze()}>
-              {analyzeBusy ? <Spinner /> : <Sparkles size={14} />}
-              {analyzeBusy ? t.split.analyzing : t.split.analyze(activeProviderLabel)}
-            </Button>
-            {!aiStatus?.active && (
-              <span className="text-xs text-amber-400 light:text-amber-600">
-                {t.split.aiUnavailableHint(unavailableAiProviderLabel(aiStatus))}
-              </span>
-            )}
-          </div>
-          {analyzeError && (
-            <p className="text-sm text-red-400 light:text-red-600">{analyzeError}</p>
-          )}
-
-          {items.length > 0 && (
-            <>
-              <Card title={t.split.rationaleTitle}>
-                <p className="text-sm text-zinc-400">{rationale}</p>
-              </Card>
-
-              <Card title={t.split.itemsTitle}>
-                <div className="space-y-4">
-                  {items.map((item, idx) => (
-                    <SplitItemCard
-                      key={item.id}
-                      item={item}
-                      index={idx}
-                      onChange={(patch) => updateItem(item.id, patch)}
-                      onRemove={() => removeItem(item.id)}
-                    />
-                  ))}
-                  <Button variant="secondary" onClick={addItem}>
-                    {t.split.addItem}
+                <div className="mt-3 flex items-stretch gap-2">
+                  <Button variant="secondary" onClick={() => parent && openIssue(parent.key)}>
+                    <PanelRight size={14} />
+                    {t.split.openParentInJira}
+                  </Button>
+                  <button
+                    className="shrink-0 rounded p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+                    onClick={() =>
+                      parent && void invoke('shell:openIssue', { issueKey: parent.key })
+                    }
+                    title={parent ? `Abrir ${parent.key} no Jira` : undefined}
+                  >
+                    <ExternalLink size={13} />
+                  </button>
+                  <Button variant="ghost" onClick={resetAll}>
+                    {t.split.splitAnother}
                   </Button>
                 </div>
-              </Card>
-
-              <Card>
+              </div>
+            </div>
+          </Card>
+        ) : (
+          <>
+            <Card title={t.split.whichCardTitle}>
+              <div className="space-y-3">
                 <label className="block">
-                  <span className="mb-1 block text-sm font-medium text-zinc-300">
-                    {t.split.feedbackLabel}
+                  <span className="mb-1 block text-xs font-medium text-zinc-400">
+                    {t.split.selectLabel}
                   </span>
-                  <textarea
-                    className="h-24 w-full resize-y rounded-md border border-zinc-800 bg-zinc-950 p-3 text-sm text-zinc-200 outline-none focus:border-indigo-600"
-                    placeholder={t.split.feedbackPlaceholder}
-                    value={feedback}
-                    onChange={(e) => setFeedback(e.target.value)}
-                  />
+                  <select
+                    className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
+                    value={parent?.key ?? ''}
+                    disabled={myIssuesLoading}
+                    onChange={(e) => {
+                      const issue = myIssues.find((i) => i.key === e.target.value)
+                      if (issue) selectParent(issue)
+                    }}
+                  >
+                    <option value="" disabled>
+                      {t.split.selectPlaceholder}
+                    </option>
+                    {myIssues.map((issue) => (
+                      <option key={issue.key} value={issue.key}>
+                        {issue.key} — {truncateSummary(issue.summary)}
+                      </option>
+                    ))}
+                  </select>
                 </label>
-                <div className="mt-3">
+                <div className="flex items-end gap-2">
+                  <Input
+                    label={t.split.orManualKey}
+                    placeholder={t.split.manualKeyPlaceholder}
+                    value={manualKey}
+                    onChange={(e) => setManualKey(e.target.value)}
+                    className="max-w-48"
+                  />
                   <Button
                     variant="secondary"
-                    disabled={analyzeBusy || !aiStatus?.active || !feedback.trim()}
-                    onClick={() => void refine()}
+                    disabled={getBusy || !manualKey.trim()}
+                    onClick={() => void searchManualKey()}
                   >
-                    {analyzeBusy ? <Spinner /> : <Sparkles size={14} />}
-                    {analyzeBusy ? t.split.refining : t.split.refine(activeProviderLabel)}
+                    {getBusy && <Spinner />}
+                    {getBusy ? t.split.searching : t.split.search}
                   </Button>
                 </div>
-              </Card>
+                {getError && <p className="text-sm text-red-400 light:text-red-600">{getError}</p>}
+              </div>
+            </Card>
 
-              <Card title={t.split.structureTitle}>
-                <div className="space-y-3">
-                  <div className="space-y-1.5">
-                    <label
-                      className={`flex items-center gap-2 text-sm ${subtaskTypes.length === 0 ? 'cursor-not-allowed text-zinc-600' : 'cursor-pointer text-zinc-300'}`}
-                    >
-                      <input
-                        type="radio"
-                        className="accent-indigo-600"
-                        name="split-mode"
-                        checked={effectiveMode === 'subtask'}
-                        disabled={subtaskTypes.length === 0}
-                        onChange={() => setModeChoice('subtask')}
-                      />
-                      {t.split.modeSubtask}
-                    </label>
-                    {subtaskTypes.length === 0 && (
-                      <p className="pl-6 text-xs text-amber-400 light:text-amber-600">
-                        {t.split.noSubtaskType}
-                      </p>
+            {parent && (
+              <Card>
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-sm text-zinc-300">{parent.key}</span>
+                    {parent.issueType && <Badge color="indigo">{parent.issueType}</Badge>}
+                    {parent.status && (
+                      <Badge color={statusColor(parent.statusCategory)}>{parent.status}</Badge>
                     )}
-                    <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-300">
-                      <input
-                        type="radio"
-                        className="accent-indigo-600"
-                        name="split-mode"
-                        checked={effectiveMode === 'sibling'}
-                        onChange={() => setModeChoice('sibling')}
-                      />
-                      {t.split.modeSibling}
-                    </label>
                   </div>
-
-                  {typeOptions.length > 1 && (
-                    <label className="block max-w-64">
-                      <span className="mb-1 block text-xs font-medium text-zinc-400">
-                        {t.split.issueType}
-                      </span>
-                      <select
-                        className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
-                        value={effectiveIssueTypeId ?? ''}
-                        onChange={(e) => setIssueTypeIdChoice(e.target.value)}
-                      >
-                        {typeOptions.map((it) => (
-                          <option key={it.id} value={it.id}>
-                            {it.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                  <p className="text-sm font-medium text-zinc-100">{parent.summary}</p>
+                  {descriptionPreview ? (
+                    <p className="line-clamp-6 text-sm whitespace-pre-wrap text-zinc-400">
+                      {descriptionPreview}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-amber-400 light:text-amber-600">
+                      {t.split.noDescription}
+                    </p>
                   )}
-
-                  <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-300">
-                    <input
-                      type="checkbox"
-                      className="accent-indigo-600"
-                      checked={assignToMe}
-                      onChange={(e) => setAssignToMe(e.target.checked)}
-                    />
-                    {t.split.assignToMe}
-                  </label>
                 </div>
               </Card>
+            )}
 
-              {createError && (
-                <p className="text-sm text-red-400 light:text-red-600">{createError}</p>
-              )}
-
-              <Button className="w-full" disabled={submitDisabled} onClick={() => void submit()}>
-                {createBusy && <Spinner />}
-                {createBusy ? t.split.submitting : t.split.submit(items.length)}
+            <div className="flex items-center gap-3">
+              <Button disabled={analyzeDisabled} onClick={() => void analyze()}>
+                {analyzeBusy ? <Spinner /> : <Sparkles size={14} />}
+                {analyzeBusy ? t.split.analyzing : t.split.analyze(activeProviderLabel)}
               </Button>
-            </>
-          )}
-        </>
-      )}
+              {!aiStatus?.active && (
+                <span className="text-xs text-amber-400 light:text-amber-600">
+                  {t.split.aiUnavailableHint(unavailableAiProviderLabel(aiStatus))}
+                </span>
+              )}
+            </div>
+            {analyzeError && (
+              <p className="text-sm text-red-400 light:text-red-600">{analyzeError}</p>
+            )}
+
+            {items.length > 0 && (
+              <>
+                <Card title={t.split.rationaleTitle}>
+                  <p className="text-sm text-zinc-400">{rationale}</p>
+                </Card>
+
+                <Card title={t.split.itemsTitle}>
+                  <div className="space-y-4">
+                    {items.map((item, idx) => (
+                      <SplitItemCard
+                        key={item.id}
+                        item={item}
+                        index={idx}
+                        onChange={(patch) => updateItem(item.id, patch)}
+                        onRemove={() => removeItem(item.id)}
+                      />
+                    ))}
+                    <Button variant="secondary" onClick={addItem}>
+                      {t.split.addItem}
+                    </Button>
+                  </div>
+                </Card>
+
+                <Card>
+                  <label className="block">
+                    <span className="mb-1 block text-sm font-medium text-zinc-300">
+                      {t.split.feedbackLabel}
+                    </span>
+                    <textarea
+                      className="h-24 w-full resize-y rounded-md border border-zinc-800 bg-zinc-950 p-3 text-sm text-zinc-200 outline-none focus:border-indigo-600"
+                      placeholder={t.split.feedbackPlaceholder}
+                      value={feedback}
+                      onChange={(e) => setFeedback(e.target.value)}
+                    />
+                  </label>
+                  <div className="mt-3">
+                    <Button
+                      variant="secondary"
+                      disabled={analyzeBusy || !aiStatus?.active || !feedback.trim()}
+                      onClick={() => void refine()}
+                    >
+                      {analyzeBusy ? <Spinner /> : <Sparkles size={14} />}
+                      {analyzeBusy ? t.split.refining : t.split.refine(activeProviderLabel)}
+                    </Button>
+                  </div>
+                </Card>
+
+                <Card title={t.split.structureTitle}>
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <label
+                        className={`flex items-center gap-2 text-sm ${subtaskTypes.length === 0 ? 'cursor-not-allowed text-zinc-600' : 'cursor-pointer text-zinc-300'}`}
+                      >
+                        <input
+                          type="radio"
+                          className="accent-indigo-600"
+                          name="split-mode"
+                          checked={effectiveMode === 'subtask'}
+                          disabled={subtaskTypes.length === 0}
+                          onChange={() => setModeChoice('subtask')}
+                        />
+                        {t.split.modeSubtask}
+                      </label>
+                      {subtaskTypes.length === 0 && (
+                        <p className="pl-6 text-xs text-amber-400 light:text-amber-600">
+                          {t.split.noSubtaskType}
+                        </p>
+                      )}
+                      <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-300">
+                        <input
+                          type="radio"
+                          className="accent-indigo-600"
+                          name="split-mode"
+                          checked={effectiveMode === 'sibling'}
+                          onChange={() => setModeChoice('sibling')}
+                        />
+                        {t.split.modeSibling}
+                      </label>
+                    </div>
+
+                    {typeOptions.length > 1 && (
+                      <label className="block max-w-64">
+                        <span className="mb-1 block text-xs font-medium text-zinc-400">
+                          {t.split.issueType}
+                        </span>
+                        <select
+                          className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
+                          value={effectiveIssueTypeId ?? ''}
+                          onChange={(e) => setIssueTypeIdChoice(e.target.value)}
+                        >
+                          {typeOptions.map((it) => (
+                            <option key={it.id} value={it.id}>
+                              {it.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+
+                    <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-300">
+                      <input
+                        type="checkbox"
+                        className="accent-indigo-600"
+                        checked={assignToMe}
+                        onChange={(e) => setAssignToMe(e.target.checked)}
+                      />
+                      {t.split.assignToMe}
+                    </label>
+                  </div>
+                </Card>
+
+                {createError && (
+                  <p className="text-sm text-red-400 light:text-red-600">{createError}</p>
+                )}
+
+                <Button className="w-full" disabled={submitDisabled} onClick={() => void submit()}>
+                  {createBusy && <Spinner />}
+                  {createBusy ? t.split.submitting : t.split.submit(items.length)}
+                </Button>
+              </>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }

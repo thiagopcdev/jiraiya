@@ -52,10 +52,10 @@ function baseHandlers(): MockHandlers {
   }
 }
 
-function setup(overrides?: (api: MockApiControl) => void): MockApiControl {
+function setup(overrides?: (api: MockApiControl) => void, route?: string): MockApiControl {
   const api = installMockApi(baseHandlers())
   overrides?.(api)
-  renderWithProviders(<Filters />)
+  renderWithProviders(<Filters />, { route })
   return api
 }
 
@@ -76,6 +76,13 @@ describe('Filters', () => {
     })
     await waitFor(() => expect(screen.getByText('Nenhum filtro salvo ainda.')).toBeInTheDocument())
     expect(screen.getByText('Execute o JQL para ver os resultados.')).toBeInTheDocument()
+  })
+
+  it('renderiza o título via ScreenHeader', async () => {
+    setup()
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Filtros' })).toBeInTheDocument()
+    )
   })
 
   it('carrega um filtro salvo, roda o JQL e mostra resultados', async () => {
@@ -232,5 +239,21 @@ describe('Filters', () => {
     await waitFor(() => expect(api.count('filters:delete')).toBe(1))
     expect(api.lastPayload('filters:delete')).toEqual({ id: 1 })
     await waitFor(() => expect(screen.getByText('Nenhum filtro salvo ainda.')).toBeInTheDocument())
+  })
+
+  it('a faixa de abas Filtros/Timeline marca a aba ativa pela rota e navega ao clicar', async () => {
+    const user = userEvent.setup()
+    setup(undefined, '/filtros')
+    await waitReady()
+
+    const filtersTab = screen.getByRole('link', { name: 'Filtros' })
+    const timelineTab = screen.getByRole('link', { name: 'Timeline' })
+    expect(filtersTab).toHaveAttribute('aria-current', 'page')
+    expect(timelineTab).not.toHaveAttribute('aria-current')
+    expect(timelineTab).toHaveAttribute('href', '/timeline')
+
+    await user.click(timelineTab)
+    expect(timelineTab).toHaveAttribute('aria-current', 'page')
+    expect(filtersTab).not.toHaveAttribute('aria-current')
   })
 })

@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { Badge, Button, Card, EmptyState, Input, Spinner } from './ui'
+import { Badge, Button, Card, CollapsedStats, EmptyState, Input, ScreenHeader, Spinner } from './ui'
 
 afterEach(cleanup)
 
@@ -100,6 +100,57 @@ describe('ui — componentes de apoio', () => {
     it('mostra a mensagem informada', () => {
       render(<EmptyState message="Nada por aqui ainda." />)
       expect(screen.getByText('Nada por aqui ainda.')).toBeInTheDocument()
+    })
+  })
+
+  describe('ScreenHeader', () => {
+    it('renderiza título, contexto e ações', () => {
+      render(
+        <ScreenHeader
+          title="Hoje"
+          context="quinta, 2 de agosto · Sprint 47"
+          actions={<button>Nova daily</button>}
+        />
+      )
+      expect(screen.getByRole('heading', { name: 'Hoje' })).toBeInTheDocument()
+      expect(screen.getByText('quinta, 2 de agosto · Sprint 47')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Nova daily' })).toBeInTheDocument()
+    })
+
+    it('sem contexto nem ações, renderiza só o título', () => {
+      render(<ScreenHeader title="Quadro" />)
+      expect(screen.getByRole('heading', { name: 'Quadro' })).toBeInTheDocument()
+      expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('CollapsedStats', () => {
+    const items = [
+      { label: 'Reprovados', count: 0 },
+      { label: 'Parados', count: 0 },
+      { label: 'Sem estimativa', count: 0 }
+    ]
+
+    it('com todos os contadores zerados, mostra a linha única e não renderiza children', () => {
+      render(
+        <CollapsedStats items={items} allClearLabel="Nada pendente">
+          <div>lista de atenção</div>
+        </CollapsedStats>
+      )
+      expect(screen.getByText('Nada pendente')).toBeInTheDocument()
+      expect(screen.getByText('Reprovados 0 · Parados 0 · Sem estimativa 0')).toBeInTheDocument()
+      expect(screen.queryByText('lista de atenção')).not.toBeInTheDocument()
+    })
+
+    it('com um contador > 0, renderiza children e não a linha única', () => {
+      const withCount = [items[0], { label: 'Parados', count: 2 }, items[2]]
+      render(
+        <CollapsedStats items={withCount} allClearLabel="Nada pendente">
+          <div>lista de atenção</div>
+        </CollapsedStats>
+      )
+      expect(screen.getByText('lista de atenção')).toBeInTheDocument()
+      expect(screen.queryByText('Nada pendente')).not.toBeInTheDocument()
     })
   })
 })

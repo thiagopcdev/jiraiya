@@ -260,6 +260,8 @@ export interface Prefs {
   /** escopo extra da busca de PRs (ex. 'org:biudtech'); vazio = busca global */
   prSearchScope: string
   theme: ThemePref
+  /** densidade visual (só padding/line-height, nunca fonte ou hierarquia) */
+  density: DensityPref
   /** último board aberto no Quadro — vira o default do board:view (gravado pelo main, sem UI) */
   lastBoardJiraId: number | null
   /** lembra de registrar tempo em dias úteis quando nenhum worklog foi lançado no dia */
@@ -284,6 +286,9 @@ export interface SprintTrend {
 
 /** Tema visual do app; 'system' segue o modo claro/escuro do SO. */
 export type ThemePref = 'dark' | 'light' | 'system'
+
+/** Densidade visual do app; sem opção 'system' (não há equivalente no SO). */
+export type DensityPref = 'comfortable' | 'compact'
 
 /** Ação proposta pelo Perguntar — só executa com confirmação explícita do usuário. */
 export interface AskAction {
@@ -346,6 +351,7 @@ export const DEFAULT_PREFS: Prefs = {
   prIntegration: false,
   prSearchScope: '',
   theme: 'dark',
+  density: 'comfortable',
   lastBoardJiraId: null,
   worklogReminder: true,
   worklogReminderTime: '17:30'

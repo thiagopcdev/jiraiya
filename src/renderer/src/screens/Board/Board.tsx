@@ -5,7 +5,7 @@ import type { IpcResponse } from '@shared/ipc-contract'
 import { invoke, IpcError } from '../../api/client'
 import { useAuthStatus, useBoard } from '../../api/hooks'
 import { useIssueDetail } from '../../components/issueDetail'
-import { Badge, EmptyState, Spinner } from '../../components/ui'
+import { Badge, EmptyState, ScreenHeader, Spinner } from '../../components/ui'
 import { t } from '../../strings/ptBR'
 import { getSessionBoardId, setSessionBoardId } from './boardSession'
 
@@ -53,7 +53,7 @@ export default function Board(): React.JSX.Element {
   const queryClient = useQueryClient()
   const { data, isLoading, error } = useBoard(boardId, sprintId)
   const { data: authData } = useAuthStatus()
-  const { openIssue } = useIssueDetail()
+  const { openIssue, DockedPanel } = useIssueDetail()
   const myAccountId = authData?.workspace?.accountId ?? null
 
   useEffect(
@@ -254,116 +254,146 @@ export default function Board(): React.JSX.Element {
   const canDrag = !data.readOnly && data.columnsSource === 'jira'
   const unmappedFiltered = filterIssues(data.unmapped)
 
+  // linha de contexto do ScreenHeader: leitura geral da sprint (todas as
+  // issues carregadas, sem o filtro de responsável — o filtro é uma lente
+  // sobre o mesmo escopo, não muda o que a sprint contém).
+  const boardLabel = data.board.name ?? `Board ${data.board.jiraId}`
+  const sprintMeta = data.sprint
+    ? data.sprints.find((s) => s.jiraId === data.sprint?.jiraId)
+    : undefined
+  const sprintLabel = data.sprint
+    ? (sprintMeta?.name ?? data.sprint.name) +
+      (sprintMeta?.state === 'active'
+        ? t.board.activeSuffix
+        : sprintMeta?.state === 'closed'
+          ? t.board.closedSuffix
+          : '')
+    : null
+  const remainingPoints = allIssues.reduce(
+    (sum, i) => (i.statusCategory === 'done' ? sum : sum + (i.storyPoints ?? 0)),
+    0
+  )
+
   return (
-    <div className="p-6">
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <h2 className="text-xl font-semibold text-zinc-100">{t.board.title}</h2>
-
-        {data.boards.length > 1 && (
-          <select
-            className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
-            value={data.board.jiraId}
-            onChange={(e) => {
-              setBoardId(Number(e.target.value))
-              setSprintId(undefined)
-            }}
-          >
-            {data.boards.map((b) => (
-              <option key={b.jiraId} value={b.jiraId}>
-                {b.name ?? `Board ${b.jiraId}`}
-              </option>
-            ))}
-          </select>
-        )}
-
-        {showSprintSelect && (
-          <select
-            className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
-            value={sprintId ?? data.sprint?.jiraId ?? ''}
-            onChange={(e) => setSprintId(Number(e.target.value))}
-          >
-            {!data.sprint && sprintId === undefined && (
-              <option value="" disabled>
-                {t.board.sprintPlaceholder}
-              </option>
-            )}
-            {data.sprints.map((s) => (
-              <option key={s.jiraId} value={s.jiraId}>
-                {(s.name ?? t.board.sprintFallbackName(s.jiraId)) +
-                  (s.state === 'active' ? t.board.activeSuffix : t.board.closedSuffix)}
-              </option>
-            ))}
-          </select>
-        )}
-
-        {data.readOnly && <Badge color="amber">{t.board.readOnlyBadge}</Badge>}
-
-        <div className="ml-auto">
-          <AssigneeChips
-            people={people}
-            hasUnassigned={hasUnassigned}
-            myAccountId={myAccountId}
-            filter={effectiveFilter}
-            onToggle={toggleAssignee}
-            onClearAll={() => setAssigneeFilter(new Set())}
-          />
-        </div>
-      </div>
-
-      {data.columnsSource === 'fallback' && (
-        <div className="mb-3 rounded-md border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-500">
-          {t.board.fallbackBanner}
-        </div>
-      )}
-
-      {moveError && (
-        <div className="mb-3 rounded-md border border-red-900/50 bg-red-950/30 px-3 py-2 text-sm text-red-300 light:border-red-300 light:bg-red-50 light:text-red-700">
-          {moveError}
-        </div>
-      )}
-
-      {showNoActiveSprint ? (
-        <EmptyState message={t.board.noActiveSprint} />
-      ) : (
-        <div className="flex gap-3 overflow-x-auto pb-3">
-          {data.columns.map((col) => {
-            const issues = filterIssues(col.issues)
-            const sumPoints = issues.reduce((sum, i) => sum + (i.storyPoints ?? 0), 0)
-            return (
-              <ColumnView
-                key={col.name}
-                title={col.name}
-                isBacklog={col.isBacklog}
-                issues={issues}
-                sumPoints={sumPoints}
-                isDragOver={dragOverCol === col.name}
-                onDragOver={(e) => {
-                  e.preventDefault()
-                  setDragOverCol(col.name)
+    <div className="flex h-full flex-col">
+      <ScreenHeader
+        title={t.board.title}
+        context={t.board.context(boardLabel, sprintLabel, allIssues.length, remainingPoints)}
+        actions={
+          <>
+            {data.boards.length > 1 && (
+              <select
+                className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
+                value={data.board.jiraId}
+                onChange={(e) => {
+                  setBoardId(Number(e.target.value))
+                  setSprintId(undefined)
                 }}
-                onDragLeave={() => setDragOverCol(null)}
-                onDrop={handleDropOnColumn(col)}
-                pendingKeys={pendingKeys}
-                canDrag={canDrag}
-                didDragRef={didDragRef}
-                onOpen={openIssue}
-              />
-            )
-          })}
-          {unmappedFiltered.length > 0 && (
-            <ColumnView
-              title={t.board.outOfBoard}
-              titleClassName="text-zinc-600"
-              issues={unmappedFiltered}
-              sumPoints={unmappedFiltered.reduce((sum, i) => sum + (i.storyPoints ?? 0), 0)}
-              pendingKeys={pendingKeys}
-              canDrag={canDrag}
-              didDragRef={didDragRef}
-              onOpen={openIssue}
+              >
+                {data.boards.map((b) => (
+                  <option key={b.jiraId} value={b.jiraId}>
+                    {b.name ?? `Board ${b.jiraId}`}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {showSprintSelect && (
+              <select
+                className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
+                value={sprintId ?? data.sprint?.jiraId ?? ''}
+                onChange={(e) => setSprintId(Number(e.target.value))}
+              >
+                {!data.sprint && sprintId === undefined && (
+                  <option value="" disabled>
+                    {t.board.sprintPlaceholder}
+                  </option>
+                )}
+                {data.sprints.map((s) => (
+                  <option key={s.jiraId} value={s.jiraId}>
+                    {(s.name ?? t.board.sprintFallbackName(s.jiraId)) +
+                      (s.state === 'active' ? t.board.activeSuffix : t.board.closedSuffix)}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {data.readOnly && <Badge color="amber">{t.board.readOnlyBadge}</Badge>}
+
+            <AssigneeChips
+              people={people}
+              hasUnassigned={hasUnassigned}
+              myAccountId={myAccountId}
+              filter={effectiveFilter}
+              onToggle={toggleAssignee}
+              onClearAll={() => setAssigneeFilter(new Set())}
             />
+          </>
+        }
+      />
+
+      {/* linha cheia abaixo do cabeçalho: área de colunas (rola vertical e vira
+          irmã do painel docado) + o painel em si, ambos esticando a altura toda */}
+      <div className="flex min-h-0 flex-1">
+        <div className="min-w-0 flex-1 overflow-y-auto p-6">
+          {data.columnsSource === 'fallback' && (
+            <div className="mb-3 rounded-md border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-500">
+              {t.board.fallbackBanner}
+            </div>
+          )}
+
+          {moveError && (
+            <div className="mb-3 rounded-md border border-red-900/50 bg-red-950/30 px-3 py-2 text-sm text-red-300 light:border-red-300 light:bg-red-50 light:text-red-700">
+              {moveError}
+            </div>
+          )}
+
+          {showNoActiveSprint ? (
+            <EmptyState message={t.board.noActiveSprint} />
+          ) : (
+            <div className="flex gap-3 overflow-x-auto pb-3">
+              {data.columns.map((col) => {
+                const issues = filterIssues(col.issues)
+                const sumPoints = issues.reduce((sum, i) => sum + (i.storyPoints ?? 0), 0)
+                return (
+                  <ColumnView
+                    key={col.name}
+                    title={col.name}
+                    isBacklog={col.isBacklog}
+                    wipMax={col.wipMax}
+                    issues={issues}
+                    sumPoints={sumPoints}
+                    isDragOver={dragOverCol === col.name}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      setDragOverCol(col.name)
+                    }}
+                    onDragLeave={() => setDragOverCol(null)}
+                    onDrop={handleDropOnColumn(col)}
+                    pendingKeys={pendingKeys}
+                    canDrag={canDrag}
+                    didDragRef={didDragRef}
+                    onOpen={openIssue}
+                  />
+                )
+              })}
+              {unmappedFiltered.length > 0 && (
+                <ColumnView
+                  title={t.board.outOfBoard}
+                  titleClassName="text-zinc-600"
+                  issues={unmappedFiltered}
+                  sumPoints={unmappedFiltered.reduce((sum, i) => sum + (i.storyPoints ?? 0), 0)}
+                  pendingKeys={pendingKeys}
+                  canDrag={canDrag}
+                  didDragRef={didDragRef}
+                  onOpen={openIssue}
+                />
+              )}
+            </div>
           )}
         </div>
-      )}
+        <DockedPanel />
+      </div>
     </div>
   )
 }
@@ -425,6 +455,7 @@ function ColumnView({
   title,
   titleClassName,
   isBacklog = false,
+  wipMax,
   issues,
   sumPoints,
   isDragOver = false,
@@ -439,6 +470,8 @@ function ColumnView({
   title: string
   titleClassName?: string
   isBacklog?: boolean
+  /** limite de WIP da coluna (ausente/null = board sem constraint configurada) */
+  wipMax?: number | null
   issues: Issue[]
   sumPoints: number
   isDragOver?: boolean
@@ -450,9 +483,10 @@ function ColumnView({
   didDragRef: React.MutableRefObject<boolean>
   onOpen: (key: string) => void
 }): React.JSX.Element {
+  const overWip = wipMax != null && issues.length > wipMax
   return (
     <div
-      className={`w-72 shrink-0 rounded-lg p-2 ${
+      className={`flex-1 basis-[236px] min-w-[236px] rounded-lg p-2 ${
         isBacklog ? 'border border-dashed border-zinc-700 bg-zinc-900/30' : 'bg-zinc-900/60'
       } ${isDragOver ? 'ring-1 ring-indigo-500' : ''}`}
       onDragOver={onDragOver}
@@ -476,10 +510,17 @@ function ColumnView({
               {t.board.backlogBadge}
             </span>
           )}
+          {wipMax != null && (
+            // estouro do limite: mesmo tratamento de atenção usado no resto do app
+            // (vermelho), em vez do âmbar neutro — o Jira também destaca a coluna
+            // quando o WIP passa do configurado.
+            <Badge color={overWip ? 'red' : 'amber'}>
+              {t.board.wipLimit(issues.length, wipMax)}
+            </Badge>
+          )}
         </span>
         <span className="text-xs text-zinc-500">
-          {issues.length}
-          {sumPoints > 0 ? ` · ${sumPoints}sp` : ''}
+          {t.board.columnSummary(issues.length, sumPoints)}
         </span>
       </div>
       <div className="min-h-24 space-y-2">

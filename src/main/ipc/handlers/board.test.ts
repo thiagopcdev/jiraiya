@@ -108,6 +108,29 @@ describe('board:view', () => {
     expect(data.unmapped.map((i) => i.key)).toEqual(['ABC-2'])
   })
 
+  it('coluna com limite de WIP no Jira chega em columns[].wipMax; as demais (sem constraint) ficam null', async () => {
+    const boardId = nextBoardId()
+    const t = setup({
+      boardConfiguration: async () => ({
+        columns: [
+          { name: 'A fazer', statusIds: ['1'], wipMax: null },
+          { name: 'Em andamento', statusIds: ['3'], wipMax: 2 },
+          { name: 'Pronto', statusIds: ['5'], wipMax: null }
+        ]
+      }),
+      listStatuses: async () => statuses
+    })
+    upsertBoards(t.db, 1, [{ jiraId: boardId, name: 'K', type: 'kanban', projectKey: 'ABC' }])
+
+    const data = ok(await invokeHandler('board:view', { boardJiraId: boardId }))
+
+    expect(data.columns.map((c) => [c.name, c.wipMax])).toEqual([
+      ['A fazer', null],
+      ['Em andamento', 2],
+      ['Pronto', null]
+    ])
+  })
+
   it('segunda chamada usa o cache de colunas', async () => {
     const boardId = nextBoardId()
     const cols = jiraColumns()

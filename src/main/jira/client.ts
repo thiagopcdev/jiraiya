@@ -324,16 +324,21 @@ export class JiraClient {
     })
   }
 
-  /** Configuração de colunas do board (nome + ids de status por coluna). */
+  /**
+   * Configuração de colunas do board (nome + ids de status + limite de WIP por
+   * coluna). `wipMax` vem de `max` só quando o board tem constraint configurada
+   * na coluna — a maioria não tem, e nesse caso é `null`.
+   */
   async boardConfiguration(
     boardId: number
-  ): Promise<{ columns: Array<{ name: string; statusIds: string[] }> }> {
+  ): Promise<{ columns: Array<{ name: string; statusIds: string[]; wipMax: number | null }> }> {
     const res = await this.http.get<JiraBoardConfiguration>(
       `/rest/agile/1.0/board/${boardId}/configuration`
     )
     const columns = (res.columnConfig?.columns ?? []).map((c) => ({
       name: c.name ?? '',
-      statusIds: (c.statuses ?? []).map((s) => s.id)
+      statusIds: (c.statuses ?? []).map((s) => s.id),
+      wipMax: c.max ?? null
     }))
     return { columns }
   }

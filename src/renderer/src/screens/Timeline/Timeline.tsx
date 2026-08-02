@@ -16,9 +16,15 @@ import type { Period } from '@shared/periods'
 import type { ActivityKind, IssueActivity } from '@shared/domain'
 import { useProjects, useTimeline } from '../../api/hooks'
 import { invoke } from '../../api/client'
-import { EmptyState, Spinner } from '../../components/ui'
+import { EmptyState, ScreenHeader, Spinner } from '../../components/ui'
+import { PairTabs } from '../../components/PairTabs'
+import { t } from '../../strings/ptBR'
 import { useIssueDetail } from '../../components/issueDetail'
 
+/**
+ * Faixa de abas do par "Filtros · Timeline" (item único na sidebar, handoff Tela C).
+ * Navegação de verdade — não estado local: a aba ativa é a rota atual.
+ */
 const periodOptions: Array<{ key: string; label: string; period: Period }> = [
   { key: 'today', label: 'Hoje', period: { type: 'today' } },
   { key: '7d', label: '7 dias', period: { type: '7d' } },
@@ -74,63 +80,74 @@ export default function Timeline(): React.JSX.Element {
   const groups = useMemo(() => groupByDay(data?.activities ?? []), [data])
 
   return (
-    <div className="p-6">
-      <div className="mb-5 flex flex-wrap items-center gap-3">
-        <h2 className="mr-auto text-xl font-semibold text-zinc-100">Timeline</h2>
-        <select
-          className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-300"
-          value={projectKey}
-          onChange={(e) => setProjectKey(e.target.value)}
-        >
-          <option value="">Todos os projetos</option>
-          {selectedProjects.map((p) => (
-            <option key={p.key} value={p.key}>
-              {p.key}
-            </option>
-          ))}
-        </select>
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-400">
-          <input
-            type="checkbox"
-            className="accent-indigo-600"
-            checked={onlyMine}
-            onChange={(e) => setOnlyMine(e.target.checked)}
-          />
-          Somente minhas ações
-        </label>
-        <div className="flex rounded-lg border border-zinc-800 bg-zinc-900 p-0.5">
-          {periodOptions.map((p) => (
-            <button
-              key={p.key}
-              className={`rounded-md px-2.5 py-1 text-sm font-medium ${
-                periodKey === p.key
-                  ? 'bg-zinc-700 text-zinc-100'
-                  : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-              onClick={() => setPeriodKey(p.key)}
+    <div className="flex flex-col">
+      <ScreenHeader
+        title={t.nav.timeline}
+        actions={
+          <>
+            <select
+              className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-300"
+              value={projectKey}
+              onChange={(e) => setProjectKey(e.target.value)}
             >
-              {p.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {isLoading && <Spinner className="text-zinc-500" />}
-      {!isLoading && groups.length === 0 && (
-        <EmptyState message="Nenhuma atividade no período selecionado." />
-      )}
-
-      <div className="space-y-6">
-        {groups.map(({ day, items }) => (
-          <section key={day}>
-            <h3 className="mb-2 text-sm font-semibold text-zinc-400">{dayLabel(day)}</h3>
-            <div className="space-y-0.5 border-l border-zinc-800 pl-4">
-              {items.map((a) => (
-                <ActivityRow key={a.id} activity={a} showActor={!onlyMine} />
+              <option value="">Todos os projetos</option>
+              {selectedProjects.map((p) => (
+                <option key={p.key} value={p.key}>
+                  {p.key}
+                </option>
+              ))}
+            </select>
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-400">
+              <input
+                type="checkbox"
+                className="accent-indigo-600"
+                checked={onlyMine}
+                onChange={(e) => setOnlyMine(e.target.checked)}
+              />
+              Somente minhas ações
+            </label>
+            <div className="flex rounded-lg border border-zinc-800 bg-zinc-900 p-0.5">
+              {periodOptions.map((p) => (
+                <button
+                  key={p.key}
+                  className={`rounded-md px-2.5 py-1 text-sm font-medium ${
+                    periodKey === p.key
+                      ? 'bg-zinc-700 text-zinc-100'
+                      : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                  onClick={() => setPeriodKey(p.key)}
+                >
+                  {p.label}
+                </button>
               ))}
             </div>
-          </section>
-        ))}
+          </>
+        }
+      />
+      <PairTabs
+        tabs={[
+          { to: '/filtros', label: t.nav.filters },
+          { to: '/timeline', label: t.nav.timeline }
+        ]}
+      />
+      <div className="p-6">
+        {isLoading && <Spinner className="text-zinc-500" />}
+        {!isLoading && groups.length === 0 && (
+          <EmptyState message="Nenhuma atividade no período selecionado." />
+        )}
+
+        <div className="space-y-6">
+          {groups.map(({ day, items }) => (
+            <section key={day}>
+              <h3 className="mb-2 text-sm font-semibold text-zinc-400">{dayLabel(day)}</h3>
+              <div className="space-y-0.5 border-l border-zinc-800 pl-4">
+                {items.map((a) => (
+                  <ActivityRow key={a.id} activity={a} showActor={!onlyMine} />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
       </div>
     </div>
   )

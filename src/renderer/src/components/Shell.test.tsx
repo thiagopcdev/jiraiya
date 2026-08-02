@@ -31,10 +31,55 @@ describe('Shell', () => {
     installMockApi(baseHandlers())
     renderWithProviders(<Shell />)
     expect(screen.getByText('Jiraiya')).toBeInTheDocument()
-    expect(screen.getByText('Dashboard')).toBeInTheDocument()
+    expect(screen.getByText('Hoje')).toBeInTheDocument()
     expect(screen.getByText('Quadro')).toBeInTheDocument()
     expect(screen.getByText('Resumos')).toBeInTheDocument()
     expect(screen.getByText('Configurações')).toBeInTheDocument()
+  })
+
+  it('agrupa a nav em Entradas e Ferramentas, com os pares mesclados', async () => {
+    installMockApi(baseHandlers())
+    renderWithProviders(<Shell />)
+    expect(screen.getByText('Entradas')).toBeInTheDocument()
+    expect(screen.getByText('Ferramentas')).toBeInTheDocument()
+    expect(screen.getByText('Criar · Dividir')).toBeInTheDocument()
+    expect(screen.getByText('Filtros · Timeline')).toBeInTheDocument()
+    // os pares não deixam para trás os itens antigos separados
+    expect(screen.queryByText('Criar task')).not.toBeInTheDocument()
+    expect(screen.queryByText('Dividir task')).not.toBeInTheDocument()
+    expect(screen.queryByText('Timeline')).not.toBeInTheDocument()
+  })
+
+  it('"Criar · Dividir" fica ativo tanto em /criar quanto em /dividir', async () => {
+    installMockApi(baseHandlers())
+    renderWithProviders(<Shell />, { route: '/dividir' })
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: /Criar · Dividir/ })).toHaveAttribute(
+        'aria-current',
+        'page'
+      )
+    )
+  })
+
+  it('"Filtros · Timeline" fica ativo tanto em /filtros quanto em /timeline', async () => {
+    installMockApi(baseHandlers())
+    renderWithProviders(<Shell />, { route: '/timeline' })
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: /Filtros · Timeline/ })).toHaveAttribute(
+        'aria-current',
+        'page'
+      )
+    )
+  })
+
+  it('"Criar · Dividir" não fica ativo em outra rota', async () => {
+    installMockApi(baseHandlers())
+    renderWithProviders(<Shell />, { route: '/quadro' })
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: /Criar · Dividir/ })).not.toHaveAttribute(
+        'aria-current'
+      )
+    )
   })
 
   it('mostra badge de alertas só quando há alertas', async () => {
@@ -194,7 +239,7 @@ describe('Shell', () => {
   it('sem pendências na fila, o badge não aparece', async () => {
     installMockApi(baseHandlers())
     renderWithProviders(<Shell />)
-    await waitFor(() => expect(screen.getByText('Dashboard')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Hoje')).toBeInTheDocument())
     expect(screen.queryByTitle('ações aguardando sincronização')).not.toBeInTheDocument()
   })
 })

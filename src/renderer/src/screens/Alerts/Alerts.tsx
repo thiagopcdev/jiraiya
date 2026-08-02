@@ -5,7 +5,7 @@ import { AlertOctagon, AlertTriangle, ExternalLink, Info, X } from 'lucide-react
 import type { Alert, AlertSeverity } from '@shared/domain'
 import { invoke } from '../../api/client'
 import { useAlerts } from '../../api/hooks'
-import { Card, EmptyState, Spinner } from '../../components/ui'
+import { Card, CollapsedStats, EmptyState, ScreenHeader, Spinner } from '../../components/ui'
 import { IssueRow } from '../../components/IssueRow'
 import { t } from '../../strings/ptBR'
 import { useIssueDetail } from '../../components/issueDetail'
@@ -22,6 +22,12 @@ export default function Alerts(): React.JSX.Element {
   const groups = (['critical', 'warning', 'info'] as AlertSeverity[])
     .map((sev) => ({ sev, items: alerts.filter((a) => a.severity === sev) }))
     .filter((g) => g.items.length > 0)
+  // Os 3 contadores de severidade zeram juntos quando não há alerta algum —
+  // regra 1 do handoff: vira uma linha de ~26px em vez de empty state centralizado.
+  const severityCounts = (['critical', 'warning', 'info'] as AlertSeverity[]).map((sev) => ({
+    label: severityMeta[sev].label,
+    count: alerts.filter((a) => a.severity === sev).length
+  }))
 
   const { data: watchData, isLoading: watchLoading } = useQuery({
     queryKey: ['watch-list'],
@@ -30,32 +36,38 @@ export default function Alerts(): React.JSX.Element {
   const watched = watchData?.issues ?? []
 
   return (
-    <div className="p-6">
-      <h2 className="mb-5 text-xl font-semibold text-zinc-100">Alertas</h2>
-      {isLoading && <Spinner className="text-zinc-500" />}
-      {!isLoading && alerts.length === 0 && (
-        <EmptyState message="Nenhum alerta ativo. Tudo em ordem." />
-      )}
-      <div className="space-y-6">
-        {groups.map(({ sev, items }) => (
-          <AlertGroup key={sev} severity={sev} items={items} />
-        ))}
-      </div>
-
-      <div className="mt-6">
-        <Card title="Seguindo">
-          {watchLoading ? (
-            <Spinner className="text-zinc-500" />
-          ) : watched.length === 0 ? (
-            <EmptyState message="Você não segue nenhum card — use o olho na gaveta do card." />
-          ) : (
-            <div className="space-y-1">
-              {watched.map((issue) => (
-                <IssueRow key={issue.key} issue={issue} />
+    <div className="flex h-full flex-col">
+      <ScreenHeader title="Alertas" />
+      <div className="flex-1 overflow-y-auto p-6">
+        {isLoading && <Spinner className="text-zinc-500" />}
+        {!isLoading && (
+          <CollapsedStats
+            items={severityCounts}
+            allClearLabel="Nenhum alerta ativo. Tudo em ordem."
+          >
+            <div className="space-y-6 p-4">
+              {groups.map(({ sev, items }) => (
+                <AlertGroup key={sev} severity={sev} items={items} />
               ))}
             </div>
-          )}
-        </Card>
+          </CollapsedStats>
+        )}
+
+        <div className="mt-6">
+          <Card title="Seguindo">
+            {watchLoading ? (
+              <Spinner className="text-zinc-500" />
+            ) : watched.length === 0 ? (
+              <EmptyState message="Você não segue nenhum card — use o olho na gaveta do card." />
+            ) : (
+              <div className="space-y-1">
+                {watched.map((issue) => (
+                  <IssueRow key={issue.key} issue={issue} />
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
       </div>
     </div>
   )

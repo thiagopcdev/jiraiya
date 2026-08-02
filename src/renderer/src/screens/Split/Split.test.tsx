@@ -81,10 +81,10 @@ function baseHandlers(): MockHandlers {
   }
 }
 
-function setup(overrides?: (api: MockApiControl) => void): MockApiControl {
+function setup(overrides?: (api: MockApiControl) => void, route?: string): MockApiControl {
   const api = installMockApi(baseHandlers())
   overrides?.(api)
-  renderWithProviders(<Split />)
+  renderWithProviders(<Split />, { route })
   return api
 }
 
@@ -342,5 +342,21 @@ describe('Split', () => {
 
     await user.click(screen.getByTitle('Abrir BT-100 no Jira'))
     await waitFor(() => expect(api.lastPayload('shell:openIssue')).toEqual({ issueKey: 'BT-100' }))
+  })
+
+  it('a faixa de abas Criar/Dividir marca a aba ativa pela rota e navega ao clicar', async () => {
+    const user = userEvent.setup()
+    setup(undefined, '/dividir')
+    await waitReady()
+
+    const createTab = screen.getByRole('link', { name: 'Criar task' })
+    const splitTab = screen.getByRole('link', { name: 'Dividir task' })
+    expect(splitTab).toHaveAttribute('aria-current', 'page')
+    expect(createTab).not.toHaveAttribute('aria-current')
+    expect(createTab).toHaveAttribute('href', '/criar')
+
+    await user.click(createTab)
+    expect(createTab).toHaveAttribute('aria-current', 'page')
+    expect(splitTab).not.toHaveAttribute('aria-current')
   })
 })

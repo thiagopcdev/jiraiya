@@ -35,6 +35,12 @@ describe('Epics', () => {
     expect(document.querySelector('.animate-spin')).toBeInTheDocument()
   })
 
+  it('renderiza o título via ScreenHeader', async () => {
+    installMockApi({ 'epics:overview': () => ({ epics: [] }) })
+    renderWithProviders(<Epics />, { withIssueDetail: false })
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Épicos' })).toBeInTheDocument())
+  })
+
   it('estado vazio quando não há épicos', async () => {
     installMockApi({ 'epics:overview': () => ({ epics: [] }) })
     renderWithProviders(<Epics />, { withIssueDetail: false })

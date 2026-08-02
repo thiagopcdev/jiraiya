@@ -2,12 +2,17 @@ import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { invoke, IpcError } from '../../api/client'
-import { Button, Card, Spinner } from '../../components/ui'
+import { Button, Card, ScreenHeader, Spinner } from '../../components/ui'
+import { PairTabs } from '../../components/PairTabs'
 import { IssueRow } from '../../components/IssueRow'
 import { t } from '../../strings/ptBR'
 import type { Issue } from '@shared/domain'
 import type { IpcResponse } from '@shared/ipc-contract'
 
+/**
+ * Faixa de abas do par "Filtros · Timeline" (item único na sidebar, handoff Tela C).
+ * Navegação de verdade — não estado local: a aba ativa é a rota atual.
+ */
 type SavedFilter = IpcResponse<'filters:list'>['filters'][number]
 
 export default function Filters(): React.JSX.Element {
@@ -104,143 +109,154 @@ export default function Filters(): React.JSX.Element {
   const saveDisabled = saveBusy || !name.trim() || !jql.trim()
 
   return (
-    <div className="flex h-full">
-      <aside className="flex w-60 shrink-0 flex-col border-r border-zinc-800 p-3">
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-zinc-300">{t.filters.savedTitle}</h3>
-          <button
-            className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
-            title={t.filters.newFilter}
-            onClick={newFilter}
-          >
-            <Plus size={14} />
-          </button>
-        </div>
-        {filtersLoading ? (
-          <div className="flex items-center gap-2 px-1 text-xs text-zinc-500">
-            <Spinner /> {t.common.loading}
+    <div className="flex h-full flex-col">
+      <ScreenHeader title={t.filters.title} />
+      <PairTabs
+        tabs={[
+          { to: '/filtros', label: t.nav.filters },
+          { to: '/timeline', label: t.nav.timeline }
+        ]}
+      />
+      <div className="flex min-h-0 flex-1">
+        <aside className="flex w-60 shrink-0 flex-col border-r border-zinc-800 p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-zinc-300">{t.filters.savedTitle}</h3>
+            <button
+              className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+              title={t.filters.newFilter}
+              onClick={newFilter}
+            >
+              <Plus size={14} />
+            </button>
           </div>
-        ) : filters.length === 0 ? (
-          <p className="px-1 text-xs text-zinc-600">{t.filters.noSavedFilters}</p>
-        ) : (
-          <div className="space-y-0.5">
-            {filters.map((filter) => (
-              <div
-                key={filter.id}
-                className={`group flex items-center gap-1 rounded-md px-1.5 py-1 ${
-                  editingId === filter.id ? 'bg-zinc-800' : 'hover:bg-zinc-800/60'
-                }`}
-              >
-                <button
-                  className="min-w-0 flex-1 truncate text-left text-sm text-zinc-200"
-                  onClick={() => loadFilter(filter)}
-                  title={filter.jql}
-                >
-                  {filter.name}
-                </button>
-                {deleteConfirmId === filter.id ? (
-                  <span className="flex shrink-0 items-center gap-1 text-xs">
-                    <span className="text-zinc-500">{t.filters.deleteConfirm}</span>
-                    <button
-                      className="text-red-400 hover:underline light:text-red-600"
-                      onClick={() => void removeFilter(filter.id)}
-                    >
-                      {t.filters.yes}
-                    </button>
-                    <button
-                      className="text-zinc-500 hover:underline"
-                      onClick={() => setDeleteConfirmId(null)}
-                    >
-                      {t.filters.no}
-                    </button>
-                  </span>
-                ) : (
-                  <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                    <button
-                      className="rounded p-1 text-zinc-500 hover:text-zinc-200"
-                      title={t.filters.edit}
-                      onClick={() => loadFilter(filter)}
-                    >
-                      <Pencil size={12} />
-                    </button>
-                    <button
-                      className="rounded p-1 text-zinc-500 hover:text-red-400 light:hover:text-red-600"
-                      title={t.filters.delete}
-                      onClick={() => setDeleteConfirmId(filter.id)}
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </aside>
-
-      <div className="min-w-0 flex-1 space-y-4 overflow-y-auto p-6">
-        <h2 className="text-xl font-semibold text-zinc-100">{t.filters.title}</h2>
-
-        <Card>
-          <div className="space-y-3">
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-zinc-300">
-                {t.filters.nameLabel}
-              </span>
-              <input
-                className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 outline-none focus:border-indigo-500"
-                placeholder={t.filters.namePlaceholder}
-                value={name}
-                maxLength={80}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-zinc-300">
-                {t.filters.jqlLabel}
-              </span>
-              <textarea
-                className="h-24 w-full resize-y rounded-md border border-zinc-700 bg-zinc-900 p-3 font-mono text-sm text-zinc-100 outline-none focus:border-indigo-500"
-                value={jql}
-                onChange={(e) => setJql(e.target.value)}
-              />
-              <span className="mt-1 block text-xs text-zinc-500">{t.filters.jqlExamplesHint}</span>
-            </label>
-            <div className="flex items-center gap-2">
-              <Button variant="secondary" disabled={runDisabled} onClick={() => void runJql(jql)}>
-                {runBusy && <Spinner />}
-                {runBusy ? t.filters.running : t.filters.run}
-              </Button>
-              <Button disabled={saveDisabled} onClick={() => void save()}>
-                {saveBusy && <Spinner />}
-                {saveBusy ? t.filters.saving : t.filters.save}
-              </Button>
+          {filtersLoading ? (
+            <div className="flex items-center gap-2 px-1 text-xs text-zinc-500">
+              <Spinner /> {t.common.loading}
             </div>
-            {saveError && <p className="text-sm text-red-400 light:text-red-600">{saveError}</p>}
-          </div>
-        </Card>
-
-        <Card>
-          {runError ? (
-            <p className="text-sm text-red-400 light:text-red-600">{runError}</p>
-          ) : results === null ? (
-            <p className="text-sm text-zinc-500">{t.filters.runToSeeResults}</p>
-          ) : results.length === 0 ? (
-            <p className="text-sm text-zinc-500">{t.filters.empty}</p>
+          ) : filters.length === 0 ? (
+            <p className="px-1 text-xs text-zinc-600">{t.filters.noSavedFilters}</p>
           ) : (
-            <div className="space-y-1">
-              <p className="mb-2 text-xs text-zinc-500">{t.filters.resultsCount(results.length)}</p>
-              {results.map((issue) => (
-                <IssueRow key={issue.key} issue={issue} />
+            <div className="space-y-0.5">
+              {filters.map((filter) => (
+                <div
+                  key={filter.id}
+                  className={`group flex items-center gap-1 rounded-md px-1.5 py-1 ${
+                    editingId === filter.id ? 'bg-zinc-800' : 'hover:bg-zinc-800/60'
+                  }`}
+                >
+                  <button
+                    className="min-w-0 flex-1 truncate text-left text-sm text-zinc-200"
+                    onClick={() => loadFilter(filter)}
+                    title={filter.jql}
+                  >
+                    {filter.name}
+                  </button>
+                  {deleteConfirmId === filter.id ? (
+                    <span className="flex shrink-0 items-center gap-1 text-xs">
+                      <span className="text-zinc-500">{t.filters.deleteConfirm}</span>
+                      <button
+                        className="text-red-400 hover:underline light:text-red-600"
+                        onClick={() => void removeFilter(filter.id)}
+                      >
+                        {t.filters.yes}
+                      </button>
+                      <button
+                        className="text-zinc-500 hover:underline"
+                        onClick={() => setDeleteConfirmId(null)}
+                      >
+                        {t.filters.no}
+                      </button>
+                    </span>
+                  ) : (
+                    <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                      <button
+                        className="rounded p-1 text-zinc-500 hover:text-zinc-200"
+                        title={t.filters.edit}
+                        onClick={() => loadFilter(filter)}
+                      >
+                        <Pencil size={12} />
+                      </button>
+                      <button
+                        className="rounded p-1 text-zinc-500 hover:text-red-400 light:hover:text-red-600"
+                        title={t.filters.delete}
+                        onClick={() => setDeleteConfirmId(filter.id)}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </span>
+                  )}
+                </div>
               ))}
-              {truncated && (
-                <p className="mt-2 text-xs text-amber-400 light:text-amber-600">
-                  {t.filters.truncatedHint}
-                </p>
-              )}
             </div>
           )}
-        </Card>
+        </aside>
+
+        <div className="min-w-0 flex-1 space-y-4 overflow-y-auto p-6">
+          <Card>
+            <div className="space-y-3">
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-zinc-300">
+                  {t.filters.nameLabel}
+                </span>
+                <input
+                  className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 outline-none focus:border-indigo-500"
+                  placeholder={t.filters.namePlaceholder}
+                  value={name}
+                  maxLength={80}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-zinc-300">
+                  {t.filters.jqlLabel}
+                </span>
+                <textarea
+                  className="h-24 w-full resize-y rounded-md border border-zinc-700 bg-zinc-900 p-3 font-mono text-sm text-zinc-100 outline-none focus:border-indigo-500"
+                  value={jql}
+                  onChange={(e) => setJql(e.target.value)}
+                />
+                <span className="mt-1 block text-xs text-zinc-500">
+                  {t.filters.jqlExamplesHint}
+                </span>
+              </label>
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" disabled={runDisabled} onClick={() => void runJql(jql)}>
+                  {runBusy && <Spinner />}
+                  {runBusy ? t.filters.running : t.filters.run}
+                </Button>
+                <Button disabled={saveDisabled} onClick={() => void save()}>
+                  {saveBusy && <Spinner />}
+                  {saveBusy ? t.filters.saving : t.filters.save}
+                </Button>
+              </div>
+              {saveError && <p className="text-sm text-red-400 light:text-red-600">{saveError}</p>}
+            </div>
+          </Card>
+
+          <Card>
+            {runError ? (
+              <p className="text-sm text-red-400 light:text-red-600">{runError}</p>
+            ) : results === null ? (
+              <p className="text-sm text-zinc-500">{t.filters.runToSeeResults}</p>
+            ) : results.length === 0 ? (
+              <p className="text-sm text-zinc-500">{t.filters.empty}</p>
+            ) : (
+              <div className="space-y-1">
+                <p className="mb-2 text-xs text-zinc-500">
+                  {t.filters.resultsCount(results.length)}
+                </p>
+                {results.map((issue) => (
+                  <IssueRow key={issue.key} issue={issue} />
+                ))}
+                {truncated && (
+                  <p className="mt-2 text-xs text-amber-400 light:text-amber-600">
+                    {t.filters.truncatedHint}
+                  </p>
+                )}
+              </div>
+            )}
+          </Card>
+        </div>
       </div>
     </div>
   )

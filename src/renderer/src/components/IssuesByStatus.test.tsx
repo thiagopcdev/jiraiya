@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { Issue } from '@shared/domain'
 import { IssuesByStatus } from './IssuesByStatus'
@@ -92,5 +92,83 @@ describe('IssuesByStatus', () => {
     await user.click(screen.getByTitle('Abrir BT-42 no Jira'))
     expect(api.count('shell:openIssue')).toBe(1)
     expect(openIssue).not.toHaveBeenCalled()
+  })
+
+  describe('variant="primary" (painel "Em andamento" da Hoje)', () => {
+    beforeEach(() => localStorage.clear())
+
+    it('rótulo do grupo em azul, badge "sem sp" e idade além do stalledDays em âmbar', () => {
+      installMockApi()
+      const oldDate = new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString()
+      render(
+        <IssuesByStatus
+          issues={[
+            makeIssue({
+              key: 'BT-900',
+              status: 'Em desenvolvimento',
+              updatedAt: oldDate,
+              storyPoints: null
+            })
+          ]}
+          variant="primary"
+          stalledDays={3}
+        />
+      )
+      const header = screen.getByText('Em desenvolvimento')
+      expect(header.className).toContain('text-blue-300')
+      expect(screen.getByText('sem sp')).toBeInTheDocument()
+      const age = screen.getByText(/^há /)
+      expect(age.className).toContain('text-amber-400')
+    })
+
+    it('idade dentro do stalledDays não fica em âmbar', () => {
+      installMockApi()
+      const recentDate = new Date(Date.now() - 1 * 24 * 3600 * 1000).toISOString()
+      render(
+        <IssuesByStatus
+          issues={[makeIssue({ key: 'BT-901', updatedAt: recentDate })]}
+          variant="primary"
+          stalledDays={3}
+        />
+      )
+      const age = screen.getByText(/^há /)
+      expect(age.className).not.toContain('text-amber-400')
+    })
+
+    it('botão de timer inicia e pausa o card (lib/timer.ts, sem TimerControl)', async () => {
+      installMockApi()
+      const user = userEvent.setup()
+      render(
+        <IssuesByStatus issues={[makeIssue({ key: 'BT-902' })]} variant="primary" stalledDays={3} />
+      )
+      const startButton = screen.getByRole('button', { name: /iniciar/ })
+      await user.click(startButton)
+      // rodando: o botão troca o rótulo "iniciar" pelo cronômetro (formatTimer)
+      await waitFor(() =>
+        expect(screen.queryByRole('button', { name: /iniciar/ })).not.toBeInTheDocument()
+      )
+      const runningButton = screen.getByText(/^\d+:\d{2}$/).closest('button')
+      expect(runningButton).not.toBeNull()
+      await user.click(runningButton!)
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: /iniciar/ })).toBeInTheDocument()
+      )
+    })
+
+    it('clicar na issue abre a gaveta (não confunde com o clique no timer)', async () => {
+      const openIssue = vi.fn()
+      const user = userEvent.setup()
+      render(
+        <IssueDetailContext.Provider value={{ openIssue, close: vi.fn() }}>
+          <IssuesByStatus
+            issues={[makeIssue({ key: 'BT-903' })]}
+            variant="primary"
+            stalledDays={3}
+          />
+        </IssueDetailContext.Provider>
+      )
+      await user.click(screen.getByTitle('Abrir BT-903'))
+      expect(openIssue).toHaveBeenCalledWith('BT-903')
+    })
   })
 })

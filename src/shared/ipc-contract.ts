@@ -181,6 +181,7 @@ export const ipcContract = {
       prIntegration: z.boolean().optional(),
       prSearchScope: z.string().trim().max(200).optional(),
       theme: z.enum(['dark', 'light', 'system']).optional(),
+      density: z.enum(['comfortable', 'compact']).optional(),
       worklogReminder: z.boolean().optional(),
       worklogReminderTime: z
         .string()
@@ -685,6 +686,8 @@ export const ipcContract = {
         issues: Issue[]
         /** kanban com Backlog habilitado: o Jira esconde esta coluna do quadro (ausente = não é backlog) */
         isBacklog?: boolean
+        /** limite de WIP da coluna no Jira; ausente/null = board sem constraint configurada (caso comum) */
+        wipMax?: number | null
       }>
       /** cards do escopo cujo status não está em nenhuma coluna */
       unmapped: Issue[]

@@ -5,7 +5,7 @@ export const t = {
     updateAvailable: (version: string) => `v${version} disponível`
   },
   nav: {
-    dashboard: 'Dashboard',
+    dashboard: 'Hoje',
     board: 'Quadro',
     epics: 'Épicos',
     ask: 'Perguntar',
@@ -17,7 +17,59 @@ export const t = {
     summaries: 'Resumos',
     team: 'Time',
     alerts: 'Alertas',
-    settings: 'Configurações'
+    settings: 'Configurações',
+    /** pares agrupados: apontam para a 1ª rota e mostram a 2ª como aba na tela */
+    createSplit: 'Criar · Dividir',
+    filtersTimeline: 'Filtros · Timeline',
+    groupEntries: 'Entradas',
+    groupTools: 'Ferramentas'
+  },
+  density: {
+    label: 'Densidade',
+    comfortable: 'confortável',
+    compact: 'denso'
+  },
+  today: {
+    title: 'Hoje',
+    /** linha de contexto do cabeçalho: "quinta, 2 de agosto · Sprint 47 · 4 em andamento" */
+    context: (date: string, sprint: string | null, inProgress: number) =>
+      [date, sprint, `${inProgress} ${inProgress === 1 ? 'card seu' : 'cards seus'} em andamento`]
+        .filter(Boolean)
+        .join(' · '),
+    dailyReady: 'Daily pronta',
+    periodToday: 'Hoje',
+    period7d: '7 dias',
+    periodSprint: 'Sprint',
+    sprintNone: 'Sem sprint ativa',
+    sprintEnded: 'encerrada',
+    sprintEndsToday: 'termina hoje',
+    sprintEndsIn: (days: number) => `termina em ${days} dia${days === 1 ? '' : 's'}`,
+    statInSprint: 'na sprint',
+    statDone: 'concluídas',
+    statOpen: 'abertas',
+    statPointsLeft: 'sp restantes',
+    attentionRejected: 'Reprovados',
+    attentionStalled: 'Parados',
+    attentionNoEstimate: 'Sem estimativa',
+    allClear: 'Nada exigindo atenção',
+    inProgressTitle: 'Em andamento',
+    sortMostStalled: 'ordenar: mais parado',
+    startTimer: 'iniciar',
+    noStoryPoints: 'sem sp',
+    todoInSprint: 'A fazer nesta sprint',
+    footerTotal: (count: number, points: number) =>
+      `${count} card${count === 1 ? '' : 's'} · ${points} sp`,
+    openInBoard: 'abrir no quadro',
+    activityTitle: 'Sua atividade',
+    chipAll: 'Tudo',
+    chipDone: 'Concluí',
+    chipMoved: 'Movi',
+    chipCommented: 'Comentei',
+    activityEmpty: 'Nada registrado no período.',
+    whereTimeGoes: 'Onde seu tempo passa',
+    whereTimeGoesHint: (cards: number, days: number) =>
+      `média por status dos seus últimos ${cards} cards concluídos (${days} dias)`,
+    emptyInProgress: 'Nada em andamento atribuído a você.'
   },
   sync: {
     syncNow: 'Sincronizar',
@@ -206,7 +258,14 @@ export const t = {
     empty: 'Nenhum card nesta coluna.',
     backlogBadge: 'Backlog',
     backlogHint:
-      'Coluna de backlog do kanban — no Jira ela não aparece no quadro: o conteúdo fica na tela "Backlog"'
+      'Coluna de backlog do kanban — no Jira ela não aparece no quadro: o conteúdo fica na tela "Backlog"',
+    /** linha de contexto do ScreenHeader: "Bitcap · Sprint 47 (ativa) · 24 cards · 46 sp restantes" */
+    context: (board: string, sprint: string | null, cards: number, pointsLeft: number) =>
+      [board, sprint, `${cards} card${cards === 1 ? '' : 's'}`, `${pointsLeft} sp restantes`]
+        .filter(Boolean)
+        .join(' · '),
+    wipLimit: (current: number, limit: number) => `${current}/${limit}`,
+    columnSummary: (count: number, points: number) => `${count}·${points}sp`
   },
   detail: {
     openInJira: 'Abrir no Jira',
@@ -220,7 +279,6 @@ export const t = {
     timeInStatus: 'Tempo por status',
     cardTimeline: 'Timeline do card',
     noActivity: 'Nenhuma atividade registrada.',
-    commentsTitle: 'Comentários',
     noComments: 'Nenhum comentário ainda.',
     commentsOfflineHint: 'Sem conexão com o Jira — mostrando versão local em texto simples.',
     commentTitle: 'Comentar',
@@ -245,7 +303,6 @@ export const t = {
     originalEstimateLabel: 'Estimativa original',
     originalEstimatePlaceholder: '2d 4h',
     timeSpentRegistered: (value: string | null) => `Registrado: ${value ?? '—'}`,
-    timeSpentEstimated: (value: string) => `estimado: ${value}`,
     timeSpentPlaceholder: '1h 30m',
     timeSpentHint: 'Formato: 1w 2d 3h 30m',
     logWork: 'Registrar',
@@ -274,7 +331,13 @@ export const t = {
     deleteConfirm: 'Excluir?',
     yes: 'Sim',
     no: 'Não',
-    commentEditHint: 'salvar substitui a formatação original pela do editor (###, **, listas)'
+    commentEditHint: 'salvar substitui a formatação original pela do editor (###, **, listas)',
+    /** abas do painel docado / da gaveta */
+    tabComments: 'Comentários',
+    tabHistory: 'Histórico',
+    tabWorklogs: 'Worklogs',
+    tabPrs: 'PRs',
+    resizeHandle: 'Redimensionar painel'
   },
   palette: {
     placeholder: 'Buscar card por key, título ou texto…',
@@ -306,7 +369,6 @@ export const t = {
     actionLoading: 'Executando…'
   },
   changelog: {
-    title: 'Histórico',
     empty: 'Sem alterações registradas.',
     error: 'Não foi possível carregar o histórico (sem conexão?).',
     cleared: '(vazio)'

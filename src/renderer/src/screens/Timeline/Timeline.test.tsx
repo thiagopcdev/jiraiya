@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
 import type { IssueActivity, Project } from '@shared/domain'
@@ -150,6 +151,25 @@ describe('Timeline', () => {
     expect(api.lastPayload('shell:openIssue')).toEqual({ issueKey: 'BT-1' })
   })
 
+  it('a faixa de abas Filtros/Timeline marca a aba ativa pela rota e navega ao clicar', async () => {
+    installMockApi({
+      'activity:timeline': () => ({ activities: [] }),
+      'projects:list': () => ({ projects: [] })
+    })
+    const user = userEvent.setup()
+    renderWithProviders(<Timeline />, { withIssueDetail: false, route: '/timeline' })
+
+    const filtersTab = await screen.findByRole('link', { name: 'Filtros' })
+    const timelineTab = screen.getByRole('link', { name: 'Timeline' })
+    expect(timelineTab).toHaveAttribute('aria-current', 'page')
+    expect(filtersTab).not.toHaveAttribute('aria-current')
+    expect(filtersTab).toHaveAttribute('href', '/filtros')
+
+    await user.click(filtersTab)
+    expect(filtersTab).toHaveAttribute('aria-current', 'page')
+    expect(timelineTab).not.toHaveAttribute('aria-current')
+  })
+
   it('clicar na linha abre a gaveta com a key da atividade', async () => {
     installMockApi({
       'activity:timeline': () => ({ activities: [makeActivity()] }),
@@ -160,9 +180,11 @@ describe('Timeline', () => {
     const client = makeQueryClient()
     render(
       <QueryClientProvider client={client}>
-        <IssueDetailContext.Provider value={{ openIssue, close: vi.fn() }}>
-          <Timeline />
-        </IssueDetailContext.Provider>
+        <MemoryRouter initialEntries={['/timeline']}>
+          <IssueDetailContext.Provider value={{ openIssue, close: vi.fn() }}>
+            <Timeline />
+          </IssueDetailContext.Provider>
+        </MemoryRouter>
       </QueryClientProvider>
     )
     await waitFor(() => expect(screen.getByText('Ajustar layout')).toBeInTheDocument())

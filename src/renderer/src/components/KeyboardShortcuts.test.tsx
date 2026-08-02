@@ -50,7 +50,7 @@ describe('KeyboardShortcuts', () => {
     fireEvent.keyDown(window, { key: '?' })
     expect(screen.getByText('Atalhos de teclado')).toBeInTheDocument()
     expect(screen.getByText('g d')).toBeInTheDocument()
-    expect(screen.getByText('Dashboard')).toBeInTheDocument()
+    expect(screen.getByText('Hoje')).toBeInTheDocument()
 
     fireEvent.keyDown(window, { key: '?' })
     expect(screen.queryByText('Atalhos de teclado')).not.toBeInTheDocument()

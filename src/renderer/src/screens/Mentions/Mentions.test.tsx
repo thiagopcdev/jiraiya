@@ -32,6 +32,14 @@ describe('Mentions', () => {
     expect(document.querySelector('.animate-spin')).toBeInTheDocument()
   })
 
+  it('renderiza o título via ScreenHeader', async () => {
+    installMockApi({ 'mentions:list': () => ({ mentions: [], unreadCount: 0 }) })
+    renderWithProviders(<Mentions />, { withIssueDetail: false })
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Menções' })).toBeInTheDocument()
+    )
+  })
+
   it('estado vazio quando não há menções', async () => {
     installMockApi({ 'mentions:list': () => ({ mentions: [], unreadCount: 0 }) })
     renderWithProviders(<Mentions />, { withIssueDetail: false })

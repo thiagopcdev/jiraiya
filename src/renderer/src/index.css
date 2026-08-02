@@ -3,6 +3,9 @@
 /* variante para ajustes pontuais que só valem no tema claro (ex. light:text-indigo-600) */
 @custom-variant light (&:where([data-theme='light'], [data-theme='light'] *));
 
+/* densidade compacta: só padding/line-height (ex. py-2.5 compact:py-1.5) — nunca fonte/hierarquia */
+@custom-variant compact (&:where([data-density='compact'], [data-density='compact'] *));
+
 /*
  * Affordance de clique: o Tailwind 4 mudou o default de <button> para
  * cursor:default — devolvemos o pointer a tudo que é interativo e marcamos

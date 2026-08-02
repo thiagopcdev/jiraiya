@@ -62,7 +62,18 @@ describe('Alerts', () => {
     expect(document.querySelectorAll('.animate-spin').length).toBeGreaterThan(0)
   })
 
-  it('estado vazio quando não há alertas nem seguidos', async () => {
+  it('renderiza o título via ScreenHeader', async () => {
+    installMockApi({
+      'alerts:list': () => ({ alerts: [] }),
+      'watch:list': () => ({ issues: [] })
+    })
+    renderWithProviders(<Alerts />, { withIssueDetail: false })
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Alertas' })).toBeInTheDocument()
+    )
+  })
+
+  it('estado vazio quando não há alertas nem seguidos — vira a linha colapsada (regra 1)', async () => {
     installMockApi({
       'alerts:list': () => ({ alerts: [] }),
       'watch:list': () => ({ issues: [] })
@@ -71,6 +82,8 @@ describe('Alerts', () => {
     await waitFor(() =>
       expect(screen.getByText('Nenhum alerta ativo. Tudo em ordem.')).toBeInTheDocument()
     )
+    // resumo dos 3 contadores zerados (CollapsedStats), não um empty state por severidade
+    expect(screen.getByText('Críticos 0 · Atenção 0 · Informativos 0')).toBeInTheDocument()
     expect(
       screen.getByText('Você não segue nenhum card — use o olho na gaveta do card.')
     ).toBeInTheDocument()

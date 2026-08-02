@@ -283,4 +283,20 @@ describe('Create', () => {
       expect(screen.getByText('Adicionar à sprint ativa — Sprint 42')).toBeInTheDocument()
     )
   })
+
+  it('a faixa de abas Criar/Dividir marca a aba ativa pela rota e navega ao clicar', async () => {
+    const user = userEvent.setup()
+    setup(undefined, '/criar')
+    await waitReady()
+
+    const createTab = screen.getByRole('link', { name: 'Criar task' })
+    const splitTab = screen.getByRole('link', { name: 'Dividir task' })
+    expect(createTab).toHaveAttribute('aria-current', 'page')
+    expect(splitTab).not.toHaveAttribute('aria-current')
+    expect(splitTab).toHaveAttribute('href', '/dividir')
+
+    await user.click(splitTab)
+    expect(splitTab).toHaveAttribute('aria-current', 'page')
+    expect(createTab).not.toHaveAttribute('aria-current')
+  })
 })

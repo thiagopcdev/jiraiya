@@ -186,44 +186,6 @@ describe('IssueDetailProvider — painel Editar', () => {
     })
   })
 
-  it('registra tempo trabalhado e atualiza o total exibido', async () => {
-    const api = installMockApi({
-      ...baseHandlers(),
-      'issues:editMeta': () => makeEditMeta({ timeSpent: '1h', originalEstimate: null }),
-      'issues:assignable': () => ({ users: [] }),
-      'sprint:moveTargets': () => ({ sprints: [] }),
-      'issues:logWork': () => ({ ok: true, totalTimeSpent: '3h', queued: false })
-    })
-    renderWithProviders(<OpenIssueButton issueKey="BT-1" />)
-    await openCardAndEditPanel()
-
-    expect(screen.getByText('Registrado: 1h')).toBeInTheDocument()
-    await userEvent.type(screen.getByPlaceholderText('1h 30m'), '2h')
-    await userEvent.click(screen.getByRole('button', { name: 'Registrar' }))
-
-    await waitFor(() => expect(api.count('issues:logWork')).toBe(1))
-    expect(api.lastPayload('issues:logWork')).toEqual({ key: 'BT-1', timeSpent: '2h' })
-    await waitFor(() => expect(screen.getByText('Registrado: 3h')).toBeInTheDocument())
-  })
-
-  it('registro de tempo enfileirado offline mostra o aviso da fila', async () => {
-    installMockApi({
-      ...baseHandlers(),
-      'issues:editMeta': () => makeEditMeta({ timeSpent: null }),
-      'issues:assignable': () => ({ users: [] }),
-      'sprint:moveTargets': () => ({ sprints: [] }),
-      'issues:logWork': () => ({ ok: true, totalTimeSpent: null, queued: true })
-    })
-    renderWithProviders(<OpenIssueButton issueKey="BT-1" />)
-    await openCardAndEditPanel()
-
-    await userEvent.type(screen.getByPlaceholderText('1h 30m'), '1h')
-    await userEvent.click(screen.getByRole('button', { name: 'Registrar' }))
-
-    await waitFor(() =>
-      expect(
-        screen.getByText('Sem rede — a ação ficou na fila e será enviada quando a conexão voltar.')
-      ).toBeInTheDocument()
-    )
-  })
+  // o "Registrado: X" e o formulário de apontamento saíram daqui para a aba
+  // Worklogs — os testes correspondentes vivem em IssueDetailProvider.sections
 })

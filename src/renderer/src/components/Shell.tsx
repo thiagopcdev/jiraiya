@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { Link, Outlet, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   AlertTriangle,
   AtSign,
-  Calendar,
   Columns3,
   Filter,
   FileText,
@@ -14,7 +13,6 @@ import {
   MessageCircleQuestion,
   RefreshCw,
   Settings,
-  Split,
   SquarePen,
   Users,
   X
@@ -28,24 +26,104 @@ import KeyboardShortcuts from './KeyboardShortcuts'
 import { QueueBadge } from './QueueCenter'
 import TimerWidget from './TimerWidget'
 
-const navItems = [
-  { to: '/', label: t.nav.dashboard, icon: LayoutDashboard },
-  { to: '/quadro', label: t.nav.board, icon: Columns3 },
-  { to: '/epicos', label: t.nav.epics, icon: Layers },
-  { to: '/perguntar', label: t.nav.ask, icon: MessageCircleQuestion },
-  { to: '/filtros', label: t.nav.filters, icon: Filter },
-  { to: '/criar', label: t.nav.create, icon: SquarePen },
-  { to: '/dividir', label: t.nav.split, icon: Split },
-  { to: '/timeline', label: t.nav.timeline, icon: Calendar },
-  { to: '/mencoes', label: t.nav.mentions, icon: AtSign },
-  { to: '/resumos', label: t.nav.summaries, icon: FileText },
-  { to: '/time', label: t.nav.team, icon: Users },
-  { to: '/alertas', label: t.nav.alerts, icon: AlertTriangle },
-  { to: '/config', label: t.nav.settings, icon: Settings }
+interface NavItem {
+  to: string
+  label: string
+  icon: typeof LayoutDashboard
+  /**
+   * Rotas que devem acender este item (pares agrupados apontam para a 1ª
+   * rota mas ficam ativos na 2ª também, ex.: Criar · Dividir em /dividir).
+   */
+  activeMatches?: string[]
+}
+
+interface NavGroup {
+  title: string | null
+  items: NavItem[]
+}
+
+const navGroups: NavGroup[] = [
+  {
+    title: null,
+    items: [
+      { to: '/', label: t.nav.dashboard, icon: LayoutDashboard },
+      { to: '/quadro', label: t.nav.board, icon: Columns3 },
+      { to: '/epicos', label: t.nav.epics, icon: Layers },
+      { to: '/time', label: t.nav.team, icon: Users }
+    ]
+  },
+  {
+    title: t.nav.groupEntries,
+    items: [
+      { to: '/mencoes', label: t.nav.mentions, icon: AtSign },
+      { to: '/alertas', label: t.nav.alerts, icon: AlertTriangle },
+      { to: '/resumos', label: t.nav.summaries, icon: FileText }
+    ]
+  },
+  {
+    title: t.nav.groupTools,
+    items: [
+      { to: '/perguntar', label: t.nav.ask, icon: MessageCircleQuestion },
+      {
+        to: '/criar',
+        label: t.nav.createSplit,
+        icon: SquarePen,
+        activeMatches: ['/criar', '/dividir']
+      },
+      {
+        to: '/filtros',
+        label: t.nav.filtersTimeline,
+        icon: Filter,
+        activeMatches: ['/filtros', '/timeline']
+      }
+    ]
+  }
 ]
+
+// Configurações não faz parte de nenhum grupo — fica onde sempre esteve,
+// como último item da nav, antes do rodapé de sync/atalhos.
+const settingsItem: NavItem = { to: '/config', label: t.nav.settings, icon: Settings }
+
+function NavItemLink({
+  item,
+  pathname,
+  alertCount,
+  mentionsUnreadCount
+}: {
+  item: NavItem
+  pathname: string
+  alertCount: number
+  mentionsUnreadCount: number
+}): React.JSX.Element {
+  const isActive = (item.activeMatches ?? [item.to]).includes(pathname)
+  const Icon = item.icon
+  return (
+    <Link
+      to={item.to}
+      aria-current={isActive ? 'page' : undefined}
+      className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${
+        isActive ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-800/60'
+      }`}
+    >
+      <Icon size={16} />
+      <span className="flex-1">{item.label}</span>
+      {item.to === '/alertas' && alertCount > 0 && (
+        <span className="rounded-full bg-red-900/70 px-1.5 text-xs font-semibold text-red-200 light:bg-red-200 light:text-red-700">
+          {alertCount}
+        </span>
+      )}
+      {item.to === '/mencoes' && mentionsUnreadCount > 0 && (
+        <span className="rounded-full bg-indigo-900/70 px-1.5 text-xs font-semibold text-indigo-200 light:bg-indigo-200 light:text-indigo-700">
+          {mentionsUnreadCount}
+        </span>
+      )}
+    </Link>
+  )
+}
 
 export default function Shell(): React.JSX.Element {
   usePushInvalidation()
+  const location = useLocation()
   const { data: sync } = useSyncStatus()
   const { data: alertsData } = useAlerts()
   const { data: mentionsData } = useMentions()
@@ -86,31 +164,30 @@ export default function Shell(): React.JSX.Element {
           {t.app.name}
         </div>
         <nav className="flex-1 space-y-0.5 px-2">
-          {navItems.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === '/'}
-              className={({ isActive }) =>
-                `flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${
-                  isActive ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-800/60'
-                }`
-              }
-            >
-              <Icon size={16} />
-              <span className="flex-1">{label}</span>
-              {to === '/alertas' && alertCount > 0 && (
-                <span className="rounded-full bg-red-900/70 px-1.5 text-xs font-semibold text-red-200 light:bg-red-200 light:text-red-700">
-                  {alertCount}
-                </span>
+          {navGroups.map((group, index) => (
+            <div key={group.title ?? `group-${index}`}>
+              {group.title && (
+                <p className="mx-2.5 mt-2.5 mb-1 text-[11px] font-semibold uppercase tracking-[.06em] text-zinc-600">
+                  {group.title}
+                </p>
               )}
-              {to === '/mencoes' && mentionsUnreadCount > 0 && (
-                <span className="rounded-full bg-indigo-900/70 px-1.5 text-xs font-semibold text-indigo-200 light:bg-indigo-200 light:text-indigo-700">
-                  {mentionsUnreadCount}
-                </span>
-              )}
-            </NavLink>
+              {group.items.map((item) => (
+                <NavItemLink
+                  key={item.to}
+                  item={item}
+                  pathname={location.pathname}
+                  alertCount={alertCount}
+                  mentionsUnreadCount={mentionsUnreadCount}
+                />
+              ))}
+            </div>
           ))}
+          <NavItemLink
+            item={settingsItem}
+            pathname={location.pathname}
+            alertCount={alertCount}
+            mentionsUnreadCount={mentionsUnreadCount}
+          />
         </nav>
         <div className="border-t border-zinc-800 p-3">
           <QueueBadge />

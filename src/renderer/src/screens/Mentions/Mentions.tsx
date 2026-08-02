@@ -6,7 +6,7 @@ import { ExternalLink } from 'lucide-react'
 import type { Mention } from '@shared/domain'
 import { useMentions } from '../../api/hooks'
 import { invoke } from '../../api/client'
-import { EmptyState, Spinner } from '../../components/ui'
+import { EmptyState, ScreenHeader, Spinner } from '../../components/ui'
 import { useIssueDetail } from '../../components/issueDetail'
 
 export default function Mentions(): React.JSX.Element {
@@ -27,23 +27,24 @@ export default function Mentions(): React.JSX.Element {
   const groups = useMemo(() => groupByDay(data?.mentions ?? []), [data])
 
   return (
-    <div className="p-6">
-      <h2 className="mb-5 text-xl font-semibold text-zinc-100">Menções</h2>
+    <div className="flex h-full flex-col">
+      <ScreenHeader title="Menções" />
+      <div className="flex-1 overflow-y-auto p-6">
+        {isLoading && <Spinner className="text-zinc-500" />}
+        {!isLoading && groups.length === 0 && <EmptyState message="Nenhuma menção a você ainda." />}
 
-      {isLoading && <Spinner className="text-zinc-500" />}
-      {!isLoading && groups.length === 0 && <EmptyState message="Nenhuma menção a você ainda." />}
-
-      <div className="space-y-6">
-        {groups.map(({ day, items }) => (
-          <section key={day}>
-            <h3 className="mb-2 text-sm font-semibold text-zinc-400">{dayLabel(day)}</h3>
-            <div className="space-y-0.5 border-l border-zinc-800 pl-4">
-              {items.map((m) => (
-                <MentionRow key={m.id} mention={m} />
-              ))}
-            </div>
-          </section>
-        ))}
+        <div className="space-y-6">
+          {groups.map(({ day, items }) => (
+            <section key={day}>
+              <h3 className="mb-2 text-sm font-semibold text-zinc-400">{dayLabel(day)}</h3>
+              <div className="space-y-0.5 border-l border-zinc-800 pl-4">
+                {items.map((m) => (
+                  <MentionRow key={m.id} mention={m} />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
       </div>
     </div>
   )

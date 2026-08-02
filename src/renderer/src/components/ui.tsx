@@ -1,5 +1,5 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react'
-import { Loader2 } from 'lucide-react'
+import { CheckCircle2, Loader2 } from 'lucide-react'
 
 export function Button({
   variant = 'primary',
@@ -95,6 +95,66 @@ export function EmptyState({ message }: { message: string }): React.JSX.Element 
   return (
     <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
       <p className="text-sm text-zinc-500">{message}</p>
+    </div>
+  )
+}
+
+/**
+ * Cabeçalho único das 13 telas (handoff regra 5). Geometria fixa — não aceitar
+ * className extra aqui, senão cada tela volta a divergir em altura.
+ */
+export function ScreenHeader({
+  title,
+  context,
+  actions
+}: {
+  title: string
+  context?: ReactNode
+  actions?: ReactNode
+}): React.JSX.Element {
+  return (
+    <header className="flex items-end gap-4 border-b border-zinc-800 px-6 pt-[22px] pb-3.5">
+      <div className="flex flex-col gap-0.5">
+        <h2 className="text-[22px] font-[650] tracking-[-.3px] text-zinc-50">{title}</h2>
+        {context && <div className="text-[13px] text-zinc-500">{context}</div>}
+      </div>
+      {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
+    </header>
+  )
+}
+
+/**
+ * "Vazio não ocupa altura" (handoff regra 1): enquanto todo contador estiver
+ * zerado, os baldes viram uma linha de ~26px em vez de cards de empty state.
+ * Assim que qualquer contador passar de 0, quem chama decide o que `children`
+ * mostra — este componente só troca o invólucro para o tratamento de atenção.
+ */
+export function CollapsedStats({
+  items,
+  allClearLabel,
+  children
+}: {
+  items: Array<{ label: string; count: number }>
+  allClearLabel: string
+  children?: ReactNode
+}): React.JSX.Element {
+  const allClear = items.every((item) => item.count === 0)
+
+  if (allClear) {
+    return (
+      <div className="flex items-center gap-2.5 rounded-lg border border-zinc-800 px-3 py-1.5">
+        <CheckCircle2 size={13} className="text-green-400 light:text-green-600" />
+        <span className="text-xs text-zinc-500">{allClearLabel}</span>
+        <span className="text-xs text-zinc-400">
+          {items.map((item) => `${item.label} ${item.count}`).join(' · ')}
+        </span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-lg border border-red-900/55 bg-red-950/28 light:border-red-300 light:bg-red-50">
+      {children}
     </div>
   )
 }
