@@ -260,6 +260,8 @@ export const t = {
     linksTitle: 'Vinculados',
     linksOffline: 'Sem conexão com o Jira para listar vínculos.',
     assigneeLabel: 'Responsável',
+    reporterLabel: 'Relator',
+    reporter: (name: string) => `Relator: ${name}`,
     unassigned: 'Sem responsável',
     meSuffix: ' (eu)',
     attachmentsTitle: 'Anexos',

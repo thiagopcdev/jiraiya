@@ -26,6 +26,7 @@ import {
   Sparkles,
   Trash2,
   UserRound,
+  UserRoundPen,
   X,
   Zap
 } from 'lucide-react'
@@ -302,6 +303,10 @@ function IssueDetailDrawer({
     staleTime: 30_000,
     retry: 0
   })
+
+  // cards sincronizados antes da coluna reporter_name só têm o relator no
+  // payload ao vivo; o valor local vem primeiro para não piscar offline
+  const reporterName = issue?.reporterName ?? liveDescription?.reporterName ?? null
 
   const { data: aiStatus } = useAiStatus()
   const { data: sprintsData } = useSprintList()
@@ -740,8 +745,13 @@ function IssueDetailDrawer({
                 <EditableTitle issue={issue} issueKey={issueKey} />
                 <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
                   {issue.assigneeName && (
-                    <span className="flex items-center gap-1">
+                    <span className="flex items-center gap-1" title={t.detail.assigneeLabel}>
                       <UserRound size={12} /> {issue.assigneeName}
+                    </span>
+                  )}
+                  {reporterName && (
+                    <span className="flex items-center gap-1" title={t.detail.reporterLabel}>
+                      <UserRoundPen size={12} /> {t.detail.reporter(reporterName)}
                     </span>
                   )}
                   {issue.storyPoints !== null && (

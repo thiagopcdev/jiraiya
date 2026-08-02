@@ -190,7 +190,9 @@ export async function runSync(deps: SyncDeps, opts: { full?: boolean } = {}): Pr
           fields: {
             summary: raw.summary,
             created: raw.created_at ?? undefined,
-            reporter: raw.reporter_account_id ? { accountId: raw.reporter_account_id } : null
+            reporter: raw.reporter_account_id
+              ? { accountId: raw.reporter_account_id, displayName: raw.reporter_name ?? undefined }
+              : null
           }
         },
         changelog,
@@ -278,6 +280,7 @@ interface RawIssueRow {
   created_at: string | null
   updated_at: string | null
   reporter_account_id: string | null
+  reporter_name: string | null
 }
 
 function rawIssueByKey(
@@ -288,7 +291,7 @@ function rawIssueByKey(
   return (
     (db
       .prepare(
-        'SELECT jira_id, summary, created_at, updated_at, reporter_account_id FROM issue WHERE workspace_id = ? AND key = ?'
+        'SELECT jira_id, summary, created_at, updated_at, reporter_account_id, reporter_name FROM issue WHERE workspace_id = ? AND key = ?'
       )
       .get(workspaceId, key) as RawIssueRow | undefined) ?? null
   )

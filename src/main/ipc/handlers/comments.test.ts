@@ -65,26 +65,30 @@ beforeEach(() => {
 })
 
 describe('issues:description', () => {
-  it('devolve o ADF cru e o markdown', async () => {
-    const issueDescription = vi.fn(async () => paragraph('Olá **mundo**'))
-    setup({ issueDescription })
+  it('devolve o ADF cru, o markdown e o relator', async () => {
+    const issueLiveFields = vi.fn(async () => ({
+      description: paragraph('Olá **mundo**'),
+      reporter: { accountId: 'a1', displayName: 'Ana' }
+    }))
+    setup({ issueLiveFields })
 
     const data = ok(await invokeHandler('issues:description', { key: 'abc-1' }))
 
-    expect(issueDescription).toHaveBeenCalledWith('ABC-1')
+    expect(issueLiveFields).toHaveBeenCalledWith('ABC-1')
     expect(data.markdown).toBe('Olá **mundo**')
     expect(data.description).not.toBeNull()
+    expect(data.reporterName).toBe('Ana')
   })
 
   it('descrição vazia → markdown null', async () => {
-    setup({ issueDescription: async () => null })
+    setup({ issueLiveFields: async () => ({ description: null, reporter: null }) })
 
     const data = ok(await invokeHandler('issues:description', { key: 'ABC-1' }))
-    expect(data).toEqual({ description: null, markdown: null })
+    expect(data).toEqual({ description: null, markdown: null, reporterName: null })
   })
 
   it('ADF exótico → markdown cai no fallback null', async () => {
-    setup({ issueDescription: async () => exoticAdf })
+    setup({ issueLiveFields: async () => ({ description: exoticAdf, reporter: null }) })
 
     const data = ok(await invokeHandler('issues:description', { key: 'ABC-1' }))
     expect(data.markdown).toBeNull()
@@ -99,7 +103,7 @@ describe('issues:description', () => {
   })
 
   it('sem workspace → NOT_CONNECTED', async () => {
-    const t = setup({ issueDescription: async () => null })
+    const t = setup({ issueLiveFields: async () => ({ description: null, reporter: null }) })
     t.db.prepare('DELETE FROM workspace').run()
     expect(err(await invokeHandler('issues:description', { key: 'ABC-1' })).code).toBe(
       'NOT_CONNECTED'

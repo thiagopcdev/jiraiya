@@ -45,6 +45,7 @@ function yesterdayIssue(): IssueUpsert {
     assigneeAccountId: ME,
     assigneeName: 'Eu',
     reporterAccountId: null,
+    reporterName: null,
     storyPoints: null,
     sprintJiraId: null,
     labels: [],

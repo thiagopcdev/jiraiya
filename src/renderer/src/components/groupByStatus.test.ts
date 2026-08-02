@@ -20,6 +20,7 @@ function issue(
     assigneeAccountId: null,
     assigneeName: null,
     reporterAccountId: null,
+    reporterName: null,
     storyPoints: null,
     sprintJiraId: null,
     labels: [],

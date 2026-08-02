@@ -27,6 +27,7 @@ import type {
   JiraSearchResponse,
   JiraStatus,
   JiraTransitionsResponse,
+  JiraUserRef,
   JiraWorklog,
   JiraWorklogsResponse
 } from './types'
@@ -148,12 +149,21 @@ export class JiraClient {
     }
   }
 
-  /** Descrição da issue como ADF cru (null se vazia). */
-  async issueDescription(issueKey: string): Promise<AdfNode | null> {
-    const res = await this.http.get<{ fields?: { description?: AdfNode | null } }>(
-      `/rest/api/3/issue/${encodeURIComponent(issueKey)}?fields=description`
-    )
-    return res.fields?.description ?? null
+  /**
+   * Campos que a gaveta de detalhe lê ao vivo: descrição como ADF cru (null se
+   * vazia) e relator. O relator vem junto de graça (mesmo GET) e cobre os cards
+   * gravados antes da coluna `reporter_name`, que só é preenchida no sync.
+   */
+  async issueLiveFields(
+    issueKey: string
+  ): Promise<{ description: AdfNode | null; reporter: JiraUserRef | null }> {
+    const res = await this.http.get<{
+      fields?: { description?: AdfNode | null; reporter?: JiraUserRef | null }
+    }>(`/rest/api/3/issue/${encodeURIComponent(issueKey)}?fields=description,reporter`)
+    return {
+      description: res.fields?.description ?? null,
+      reporter: res.fields?.reporter ?? null
+    }
   }
 
   async issueComments(issueKey: string): Promise<JiraComment[]> {

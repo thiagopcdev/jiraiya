@@ -625,6 +625,8 @@ export const ipcContract = {
       description: unknown | null
       /** descrição convertida para markdown (para o editor preservar a formatação) */
       markdown: string | null
+      /** relator ao vivo — cobre cards cujo reporter_name local ainda está vazio */
+      reporterName: string | null
     }
   },
   'issues:comments': {

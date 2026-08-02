@@ -51,6 +51,7 @@ export function mapIssue(
     assigneeAccountId: f.assignee?.accountId ?? null,
     assigneeName: f.assignee?.displayName ?? null,
     reporterAccountId: f.reporter?.accountId ?? null,
+    reporterName: f.reporter?.displayName ?? null,
     storyPoints,
     sprintJiraId,
     labels: f.labels ?? [],

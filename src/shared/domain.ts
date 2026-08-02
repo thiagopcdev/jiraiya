@@ -57,6 +57,7 @@ export interface Issue {
   assigneeAccountId: string | null
   assigneeName: string | null
   reporterAccountId: string | null
+  reporterName: string | null
   storyPoints: number | null
   sprintJiraId: number | null
   labels: string[]

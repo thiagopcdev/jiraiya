@@ -24,6 +24,7 @@ function baseIssue(key: string, over: Partial<IssueUpsert> = {}): IssueUpsert {
     assigneeAccountId: OTHER,
     assigneeName: 'Outro',
     reporterAccountId: OTHER,
+    reporterName: null,
     storyPoints: 3,
     sprintJiraId: null,
     labels: [],

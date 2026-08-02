@@ -33,6 +33,7 @@ function makeIssue(overrides: Partial<Issue> = {}): Issue {
     assigneeAccountId: 'acc-1',
     assigneeName: 'Ana',
     reporterAccountId: null,
+    reporterName: null,
     storyPoints: null,
     sprintJiraId: null,
     labels: [],

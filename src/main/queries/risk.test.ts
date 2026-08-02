@@ -16,6 +16,7 @@ function baseIssue(over: Partial<Issue> = {}): Issue {
     assigneeAccountId: 'acc-me',
     assigneeName: 'Eu',
     reporterAccountId: 'acc-other',
+    reporterName: null,
     storyPoints: 3,
     sprintJiraId: null,
     labels: [],

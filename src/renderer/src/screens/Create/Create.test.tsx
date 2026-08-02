@@ -71,6 +71,7 @@ function baseHandlers(): MockHandlers {
         assigneeAccountId: null,
         assigneeName: null,
         reporterAccountId: null,
+        reporterName: null,
         storyPoints: null,
         sprintJiraId: null,
         labels: [],
@@ -83,7 +84,7 @@ function baseHandlers(): MockHandlers {
       }
     }),
     'issues:comments': () => ({ comments: [] }),
-    'issues:description': () => ({ description: null, markdown: null }),
+    'issues:description': () => ({ description: null, markdown: null, reporterName: null }),
     'issues:transitions': () => ({ transitions: [] }),
     'issues:children': () => ({ issues: [] }),
     'issues:links': () => ({ links: [] }),

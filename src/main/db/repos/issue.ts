@@ -14,6 +14,7 @@ export interface IssueUpsert {
   assigneeAccountId: string | null
   assigneeName: string | null
   reporterAccountId: string | null
+  reporterName: string | null
   storyPoints: number | null
   sprintJiraId: number | null
   labels: string[]
@@ -38,6 +39,7 @@ export interface IssueRow {
   assignee_account_id: string | null
   assignee_name: string | null
   reporter_account_id: string | null
+  reporter_name: string | null
   story_points: number | null
   sprint_jira_id: number | null
   labels_json: string
@@ -63,6 +65,7 @@ export function rowToIssue(row: IssueRow, siteUrl: string): Issue {
     assigneeAccountId: row.assignee_account_id,
     assigneeName: row.assignee_name,
     reporterAccountId: row.reporter_account_id,
+    reporterName: row.reporter_name,
     storyPoints: row.story_points,
     sprintJiraId: row.sprint_jira_id,
     labels: JSON.parse(row.labels_json) as string[],
@@ -80,12 +83,12 @@ export function upsertIssue(db: Database.Database, workspaceId: number, i: Issue
     `INSERT INTO issue (
       workspace_id, jira_id, key, project_key, summary, description_text, issue_type,
       status, status_category, priority, assignee_account_id, assignee_name,
-      reporter_account_id, story_points, sprint_jira_id, labels_json, parent_key,
+      reporter_account_id, reporter_name, story_points, sprint_jira_id, labels_json, parent_key,
       flagged, created_at, updated_at, resolved_at, last_synced_at
     ) VALUES (
       @workspaceId, @jiraId, @key, @projectKey, @summary, @descriptionText, @issueType,
       @status, @statusCategory, @priority, @assigneeAccountId, @assigneeName,
-      @reporterAccountId, @storyPoints, @sprintJiraId, @labelsJson, @parentKey,
+      @reporterAccountId, @reporterName, @storyPoints, @sprintJiraId, @labelsJson, @parentKey,
       @flagged, @createdAt, @updatedAt, @resolvedAt, @now
     )
     ON CONFLICT(workspace_id, key) DO UPDATE SET
@@ -93,7 +96,8 @@ export function upsertIssue(db: Database.Database, workspaceId: number, i: Issue
       description_text=excluded.description_text, issue_type=excluded.issue_type,
       status=excluded.status, status_category=excluded.status_category, priority=excluded.priority,
       assignee_account_id=excluded.assignee_account_id, assignee_name=excluded.assignee_name,
-      reporter_account_id=excluded.reporter_account_id, story_points=excluded.story_points,
+      reporter_account_id=excluded.reporter_account_id, reporter_name=excluded.reporter_name,
+      story_points=excluded.story_points,
       sprint_jira_id=excluded.sprint_jira_id, labels_json=excluded.labels_json,
       parent_key=excluded.parent_key, flagged=excluded.flagged,
       created_at=excluded.created_at, updated_at=excluded.updated_at,
@@ -112,6 +116,7 @@ export function upsertIssue(db: Database.Database, workspaceId: number, i: Issue
     assigneeAccountId: i.assigneeAccountId,
     assigneeName: i.assigneeName,
     reporterAccountId: i.reporterAccountId,
+    reporterName: i.reporterName,
     storyPoints: i.storyPoints,
     sprintJiraId: i.sprintJiraId,
     labelsJson: JSON.stringify(i.labels),

@@ -36,6 +36,7 @@ function upsertToIssue(u: IssueUpsert, siteUrl: string): Issue {
     assigneeAccountId: u.assigneeAccountId,
     assigneeName: u.assigneeName,
     reporterAccountId: u.reporterAccountId,
+    reporterName: u.reporterName,
     storyPoints: u.storyPoints,
     sprintJiraId: u.sprintJiraId,
     labels: u.labels,

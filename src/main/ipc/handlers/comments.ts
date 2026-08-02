@@ -49,8 +49,12 @@ export function registerCommentHandlers(ctx: AppContext): void {
   handle('issues:description', async ({ key }) => {
     requireWorkspace(ctx)
     const client = requireClient(ctx)
-    const description = await client.issueDescription(key.trim().toUpperCase())
-    return { description: description as unknown, markdown: safeMarkdown(description, null) }
+    const { description, reporter } = await client.issueLiveFields(key.trim().toUpperCase())
+    return {
+      description: description as unknown,
+      markdown: safeMarkdown(description, null),
+      reporterName: reporter?.displayName ?? null
+    }
   })
 
   handle('issues:comments', async ({ key }) => {
