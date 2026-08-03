@@ -78,6 +78,7 @@ export const t = {
     never: 'Nunca sincronizado',
     phases: {
       issues: 'Buscando issues…',
+      reconcile: 'Conferindo cards excluídos…',
       activities: 'Processando atividades…',
       sprints: 'Atualizando sprints…'
     } as Record<string, string>,
@@ -272,7 +273,7 @@ export const t = {
     share: 'Copiar link do card',
     shareCopied: 'Link copiado!',
     close: 'Fechar',
-    notSynced: 'Este card ainda não foi sincronizado localmente.',
+    notSynced: 'Este card não está aqui: ainda não sincronizou ou não existe mais no Jira.',
     storyPoints: (n: number) => `${n} pts`,
     description: 'Descrição',
     showAll: 'mostrar tudo',

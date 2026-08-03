@@ -131,7 +131,11 @@ export function registerEditHandlers(ctx: AppContext): void {
           return { ok: true as const, queued: true }
         }
         if (err instanceof JiraHttpError) {
-          throw new AppError('UPDATE_FAILED', 'O Jira recusou a edição: ' + parseCreateError(err))
+          throw new AppError(
+            'UPDATE_FAILED',
+            'O Jira recusou a edição: ' + parseCreateError(err),
+            err
+          )
         }
         throw err
       }
@@ -208,7 +212,8 @@ export function registerEditHandlers(ctx: AppContext): void {
       if (err instanceof JiraHttpError) {
         throw new AppError(
           'TRANSITION_FAILED',
-          'O Jira recusou a transição: ' + parseCreateError(err)
+          'O Jira recusou a transição: ' + parseCreateError(err),
+          err
         )
       }
       throw err
@@ -269,7 +274,11 @@ export function registerEditHandlers(ctx: AppContext): void {
         return { ok: true as const, totalTimeSpent: null, queued: true }
       }
       if (err instanceof JiraHttpError) {
-        throw new AppError('WORKLOG_FAILED', 'O Jira recusou o registro: ' + parseCreateError(err))
+        throw new AppError(
+          'WORKLOG_FAILED',
+          'O Jira recusou o registro: ' + parseCreateError(err),
+          err
+        )
       }
       throw err
     }
@@ -297,7 +306,11 @@ export function registerEditHandlers(ctx: AppContext): void {
       await client.updateIssue(issueKey, fields)
     } catch (err) {
       if (err instanceof JiraHttpError) {
-        throw new AppError('UPDATE_FAILED', 'O Jira recusou a edição: ' + parseCreateError(err))
+        throw new AppError(
+          'UPDATE_FAILED',
+          'O Jira recusou a edição: ' + parseCreateError(err),
+          err
+        )
       }
       throw err
     }
@@ -354,7 +367,11 @@ export function registerEditHandlers(ctx: AppContext): void {
       )
     } catch (err) {
       if (err instanceof JiraHttpError) {
-        throw new AppError('WORKLOG_FAILED', 'O Jira recusou o registro: ' + parseCreateError(err))
+        throw new AppError(
+          'WORKLOG_FAILED',
+          'O Jira recusou o registro: ' + parseCreateError(err),
+          err
+        )
       }
       throw err
     }
@@ -374,7 +391,11 @@ export function registerEditHandlers(ctx: AppContext): void {
       await client.deleteWorklog(issueKey, worklogId)
     } catch (err) {
       if (err instanceof JiraHttpError) {
-        throw new AppError('WORKLOG_FAILED', 'O Jira recusou a exclusão: ' + parseCreateError(err))
+        throw new AppError(
+          'WORKLOG_FAILED',
+          'O Jira recusou a exclusão: ' + parseCreateError(err),
+          err
+        )
       }
       throw err
     }
@@ -406,7 +427,7 @@ export function registerEditHandlers(ctx: AppContext): void {
       await client.createIssueLink(typeName, inwardKey, outwardKey)
     } catch (err) {
       if (err instanceof JiraHttpError) {
-        throw new AppError('LINK_FAILED', 'O Jira recusou o vínculo: ' + parseCreateError(err))
+        throw new AppError('LINK_FAILED', 'O Jira recusou o vínculo: ' + parseCreateError(err), err)
       }
       throw err
     }

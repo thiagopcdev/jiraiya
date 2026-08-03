@@ -152,7 +152,11 @@ export function registerCommentHandlers(ctx: AppContext): void {
       await client.updateComment(issue.key, commentId, markdownToAdf(body))
     } catch (err) {
       if (err instanceof JiraHttpError) {
-        throw new AppError('COMMENT_FAILED', 'O Jira recusou a edição: ' + parseCreateError(err))
+        throw new AppError(
+          'COMMENT_FAILED',
+          'O Jira recusou a edição: ' + parseCreateError(err),
+          err
+        )
       }
       throw err
     }
@@ -173,7 +177,11 @@ export function registerCommentHandlers(ctx: AppContext): void {
       await client.deleteComment(issue.key, commentId)
     } catch (err) {
       if (err instanceof JiraHttpError) {
-        throw new AppError('COMMENT_FAILED', 'O Jira recusou a exclusão: ' + parseCreateError(err))
+        throw new AppError(
+          'COMMENT_FAILED',
+          'O Jira recusou a exclusão: ' + parseCreateError(err),
+          err
+        )
       }
       throw err
     }

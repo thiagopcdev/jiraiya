@@ -416,4 +416,37 @@ describe('issues:commentDelete', () => {
       err(await invokeHandler('issues:commentDelete', { issueKey: 'ABC-9', commentId: 'c1' })).code
     ).toBe('NOT_FOUND')
   })
+
+  // 404 de comentário já apagado não pode ser confundido com card excluído
+  it('404 do comentário com o card vivo → COMMENT_FAILED, card intacto', async () => {
+    const t = setup({
+      deleteComment: async () => {
+        throw new JiraHttpError(404, 'Jira respondeu 404')
+      },
+      issueExists: async () => true
+    })
+    seedIssue(t.db, 'ABC-1')
+
+    expect(
+      err(await invokeHandler('issues:commentDelete', { issueKey: 'ABC-1', commentId: 'c1' })).code
+    ).toBe('COMMENT_FAILED')
+    expect(t.db.prepare('SELECT key FROM issue WHERE key = ?').get('ABC-1')).toEqual({
+      key: 'ABC-1'
+    })
+  })
+
+  it('404 com o card excluído no Jira → ISSUE_GONE', async () => {
+    const t = setup({
+      deleteComment: async () => {
+        throw new JiraHttpError(404, 'Jira respondeu 404')
+      },
+      issueExists: async () => false
+    })
+    seedIssue(t.db, 'ABC-1')
+
+    expect(
+      err(await invokeHandler('issues:commentDelete', { issueKey: 'ABC-1', commentId: 'c1' })).code
+    ).toBe('ISSUE_GONE')
+    expect(t.db.prepare('SELECT key FROM issue WHERE key = ?').get('ABC-1')).toBeUndefined()
+  })
 })

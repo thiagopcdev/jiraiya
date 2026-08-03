@@ -597,6 +597,41 @@ describe('Board', () => {
       expect(api.count('board:move')).toBe(1)
     })
 
+    // BT-907: mover card excluído no Jira devolvia 404 e o card voltava pra
+    // coluna; agora ele já saiu do cache do main e não deve piscar de volta
+    it('ISSUE_GONE explica e não devolve o card à coluna de origem', async () => {
+      let issues = [makeIssue({ key: 'BT-907', summary: 'Card fantasma' })]
+      installMockApi({
+        ...noAuth,
+        'board:view': () =>
+          makeBoardData({
+            columns: [
+              { name: 'A Fazer', statusIds: ['1'], statusNames: [], issues },
+              { name: 'Em andamento', statusIds: ['2'], statusNames: [], issues: [] },
+              { name: 'Concluído', statusIds: ['3'], statusNames: [], issues: [] }
+            ]
+          }),
+        'board:move': () => {
+          // o main purga o card antes de responder: o refetch não o traz mais
+          issues = []
+          throw new MockIpcFailure('ISSUE_GONE', 'BT-907 não existe mais no Jira')
+        }
+      })
+      renderWithProviders(<Board />, { withIssueDetail: false })
+      await waitFor(() => expect(screen.getByText('Card fantasma')).toBeInTheDocument())
+
+      const card = screen.getByText('Card fantasma').closest('div[draggable]')!
+      const targetColumn = screen.getByText('Em andamento').closest('div')!.parentElement!
+      const dt = makeDataTransfer()
+      fireEvent.dragStart(card, { dataTransfer: dt })
+      fireEvent.drop(targetColumn, { dataTransfer: dt })
+
+      await waitFor(() =>
+        expect(screen.getByText('BT-907 não existe mais no Jira')).toBeInTheDocument()
+      )
+      await waitFor(() => expect(screen.queryByText('Card fantasma')).not.toBeInTheDocument())
+    })
+
     it('clicar num card (sem arrastar) abre a gaveta com a key certa', async () => {
       installMockApi({
         ...noAuth,

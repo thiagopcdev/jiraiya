@@ -244,6 +244,43 @@ export function updateIssueFields(
   )
 }
 
+/**
+ * Apaga o card do cache local e o que só existe por causa dele (atividades,
+ * menções, alertas, follow). Usado quando o Jira responde que a issue não existe
+ * mais: o SQLite aqui é cache derivado do Jira, então manter o card fantasma é
+ * pior do que apagar — ele aparece nas telas e toda ação nele devolve 404.
+ *
+ * O que NÃO é apagado de propósito: `issue_note` (texto escrito pelo usuário,
+ * nunca subiu pro Jira e não tem como recuperar) e `pending_action` (a fila
+ * precisa reportar a falha para quem criou a ação). Ambos são inofensivos
+ * órfãos: só são lidos a partir de um card existente.
+ *
+ * Devolve true se havia um card com essa key.
+ */
+export function purgeIssue(db: Database.Database, workspaceId: number, key: string): boolean {
+  const purge = db.transaction((): boolean => {
+    for (const table of ['issue_activity', 'mention', 'alert', 'watch']) {
+      db.prepare(`DELETE FROM ${table} WHERE workspace_id = ? AND issue_key = ?`).run(
+        workspaceId,
+        key
+      )
+    }
+    const info = db
+      .prepare('DELETE FROM issue WHERE workspace_id = ? AND key = ?')
+      .run(workspaceId, key)
+    return info.changes > 0
+  })
+  return purge()
+}
+
+/** Keys de todos os cards em cache (base da reconciliação do sync completo). */
+export function allIssueKeys(db: Database.Database, workspaceId: number): string[] {
+  const rows = db
+    .prepare('SELECT key FROM issue WHERE workspace_id = ? ORDER BY key')
+    .all(workspaceId) as Array<{ key: string }>
+  return rows.map((r) => r.key)
+}
+
 export function markChangelogSynced(db: Database.Database, workspaceId: number, key: string): void {
   db.prepare(
     `UPDATE issue SET changelog_synced_at = updated_at WHERE workspace_id = ? AND key = ?`

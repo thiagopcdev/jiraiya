@@ -5,11 +5,14 @@ import { deriveActivities } from './deriveActivities'
 import { mapIssue } from './mapIssue'
 import { insertActivities } from '../db/repos/activity'
 import {
+  allIssueKeys,
   getIssueByKey,
   issuesNeedingChangelog,
   markChangelogSynced,
+  purgeIssue,
   upsertIssue
 } from '../db/repos/issue'
+import { isMaybeIssueGoneError } from '../issues/gone'
 import { isFreshAssignmentToMe } from './assignment'
 import { extractMentions } from './mentions'
 import { insertMentions } from '../db/repos/mentions'
@@ -57,6 +60,8 @@ export interface AfterSyncInfo {
 export interface SyncResult {
   issuesProcessed: number
   activitiesIssues: number
+  /** cards que não existem mais no Jira e saíram do cache nesta rodada */
+  purgedIssues: string[]
 }
 
 const RESOURCE = 'issues'
@@ -135,6 +140,26 @@ export async function runSync(deps: SyncDeps, opts: { full?: boolean } = {}): Pr
       }
     })
 
+    // fase 1.5 (só no sync completo): cards excluídos no Jira. A busca
+    // incremental nunca devolve quem foi apagado, então sem essa reconciliação o
+    // card fantasma fica no cache para sempre. É bulkfetch em lotes de 100, por
+    // isso roda apenas no sync completo (o incremental segue barato).
+    const purged: string[] = []
+    if (opts.full) {
+      const localKeys = allIssueKeys(db, workspace.id)
+      if (localKeys.length > 0) {
+        onProgress?.({ phase: 'reconcile', done: 0, total: localKeys.length })
+        try {
+          for (const key of await client.missingIssueKeys(localKeys)) {
+            if (purgeIssue(db, workspace.id, key)) purged.push(key)
+          }
+        } catch {
+          // reconciliação é oportunista: falha aqui não derruba o sync
+        }
+        onProgress?.({ phase: 'reconcile', done: localKeys.length, total: localKeys.length })
+      }
+    }
+
     // fase 2: changelogs + comentários -> activities.
     // Além das issues desta rodada, recupera pendências de rodadas que
     // falharam no meio (issue gravada, activity não derivada).
@@ -164,7 +189,16 @@ export async function runSync(deps: SyncDeps, opts: { full?: boolean } = {}): Pr
           raw.updated_at !== null && raw.created_at !== null && raw.updated_at !== raw.created_at
         changelog = hadChanges ? await client.issueChangelog(key).catch(() => []) : []
       }
-      const comments = await client.issueComments(key)
+      // card apagado no Jira entre a busca e agora: 404 aqui derrubava o sync
+      // inteiro — purga e segue para o próximo
+      let comments: Awaited<ReturnType<typeof client.issueComments>>
+      try {
+        comments = await client.issueComments(key)
+      } catch (err) {
+        if (!isMaybeIssueGoneError(err)) throw err
+        if (purgeIssue(db, workspace.id, key)) purged.push(key)
+        continue
+      }
       const mentions = extractMentions({
         issueKey: key,
         comments,
@@ -254,7 +288,7 @@ export async function runSync(deps: SyncDeps, opts: { full?: boolean } = {}): Pr
 
     setSyncState(db, workspace.id, RESOURCE, { status: 'idle', success: true, error: null })
     deps.onAfterSync?.({ assignedToMe, newMentions })
-    return { issuesProcessed: processed, activitiesIssues: activitiesDone }
+    return { issuesProcessed: processed, activitiesIssues: activitiesDone, purgedIssues: purged }
   } catch (err) {
     setSyncState(db, workspace.id, RESOURCE, {
       status: 'error',

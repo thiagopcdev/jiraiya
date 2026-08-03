@@ -10,7 +10,8 @@ import {
   useOpenRouterModels,
   usePrefs,
   usePrStatus,
-  useProjects
+  useProjects,
+  useSyncStatus
 } from '../../api/hooks'
 import { Button, Card, Input, Spinner } from '../../components/ui'
 import { CommandLogModal } from '../../components/CommandLogModal'
@@ -197,6 +198,7 @@ function ProjectsSection(): React.JSX.Element {
 function SyncSection(): React.JSX.Element {
   const queryClient = useQueryClient()
   const { data: prefs } = usePrefs()
+  const { data: sync } = useSyncStatus()
 
   const update = async (patch: Partial<Prefs>): Promise<void> => {
     await invoke('prefs:set', patch)
@@ -286,6 +288,25 @@ function SyncSection(): React.JSX.Element {
             onChange={(e) => void update({ morningBriefing: e.target.checked })}
           />
         </label>
+
+        {/* a sincronização normal é incremental: ela nunca vê o que foi apagado
+            no Jira. A completa reconcilia o cache e remove os cards excluídos. */}
+        <div className="flex items-center justify-between gap-4 border-t border-zinc-800 pt-4">
+          <span className="text-sm text-zinc-300">
+            Sincronização completa
+            <span className="mt-0.5 block text-xs text-zinc-500">
+              Refaz a janela de histórico e remove do app os cards que foram excluídos no Jira.
+            </span>
+          </span>
+          <Button
+            variant="secondary"
+            className="shrink-0"
+            disabled={sync?.running === true}
+            onClick={() => void invoke('sync:run', { full: true })}
+          >
+            {sync?.running ? 'Sincronizando…' : 'Sincronizar tudo'}
+          </Button>
+        </div>
       </div>
     </Card>
   )

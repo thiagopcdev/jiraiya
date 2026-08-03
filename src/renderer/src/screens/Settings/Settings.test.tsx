@@ -47,6 +47,13 @@ function baseHandlers(prefsState: Prefs): MockHandlers {
       ]
     }),
     'projects:setSelected': () => ({ ok: true as const }),
+    'sync:status': () => ({
+      running: false,
+      lastSuccessAt: null,
+      lastError: null,
+      progress: null
+    }),
+    'sync:run': () => ({ started: true as const }),
     'prs:status': () => ({ ghAvailable: true, enabled: true }),
     'ai:status': () => ({
       providers: [
@@ -245,6 +252,30 @@ describe('Settings', () => {
 
       await user.click(screen.getByRole('checkbox', { name: /daily no primeiro uso/ }))
       await waitFor(() => expect(api.lastPayload('prefs:set')).toEqual({ morningBriefing: false }))
+    })
+
+    // é a sincronização completa que reconcilia o cache e remove cards excluídos
+    it('"Sincronizar tudo" dispara sync completo', async () => {
+      const user = userEvent.setup()
+      const api = setup()
+      await waitReady()
+
+      await user.click(screen.getByRole('button', { name: 'Sincronizar tudo' }))
+      await waitFor(() => expect(api.lastPayload('sync:run')).toEqual({ full: true }))
+    })
+
+    it('sync em andamento desabilita o botão', async () => {
+      setup((api) => {
+        api.set('sync:status', () => ({
+          running: true,
+          lastSuccessAt: null,
+          lastError: null,
+          progress: { phase: 'reconcile', done: 0, total: 10 }
+        }))
+      })
+      await waitReady()
+
+      expect(screen.getByRole('button', { name: 'Sincronizando…' })).toBeDisabled()
     })
   })
 

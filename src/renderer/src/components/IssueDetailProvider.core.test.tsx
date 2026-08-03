@@ -42,7 +42,9 @@ describe('IssueDetailProvider — núcleo (abrir/fechar/navegação)', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText('Este card ainda não foi sincronizado localmente.')
+        screen.getByText(
+          'Este card não está aqui: ainda não sincronizou ou não existe mais no Jira.'
+        )
       ).toBeInTheDocument()
     )
     const openButtons = screen.getAllByRole('button', { name: 'Abrir no Jira' })

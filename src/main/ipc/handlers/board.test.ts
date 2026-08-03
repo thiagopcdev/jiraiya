@@ -469,6 +469,55 @@ describe('board:move', () => {
     ).toBe('NOT_CONNECTED')
   })
 
+  // BT-907: card excluído no Jira continuava no quadro e respondia 404 a cada
+  // tentativa de mover
+  it('card excluído no Jira → ISSUE_GONE e sai do cache local', async () => {
+    const t = setup({
+      issueTransitions: async () => transitions,
+      doTransition: async () => {
+        throw new JiraHttpError(404, 'Jira respondeu 404')
+      },
+      issueExists: async () => false
+    })
+    seedIssue(t.db, 'ABC-1')
+
+    const e = err(
+      await invokeHandler('board:move', {
+        issueKey: 'ABC-1',
+        targetStatusIds: ['5'],
+        targetColumnName: 'Pronto'
+      })
+    )
+    expect(e.code).toBe('ISSUE_GONE')
+    expect(e.message).toContain('ABC-1')
+    expect(t.db.prepare('SELECT key FROM issue WHERE key = ?').get('ABC-1')).toBeUndefined()
+    expect(t.pushes).toEqual([{ channel: 'push:issue-gone', payload: { key: 'ABC-1' } }])
+  })
+
+  it('404 com o card ainda vivo no Jira → erro original, cache intacto', async () => {
+    const t = setup({
+      issueTransitions: async () => transitions,
+      doTransition: async () => {
+        throw new JiraHttpError(404, 'Jira respondeu 404')
+      },
+      issueExists: async () => true
+    })
+    seedIssue(t.db, 'ABC-1')
+
+    expect(
+      err(
+        await invokeHandler('board:move', {
+          issueKey: 'ABC-1',
+          targetStatusIds: ['5'],
+          targetColumnName: 'Pronto'
+        })
+      ).code
+    ).toBe('TRANSITION_FAILED')
+    expect(t.db.prepare('SELECT key FROM issue WHERE key = ?').get('ABC-1')).toEqual({
+      key: 'ABC-1'
+    })
+  })
+
   it('lista de status vazia → INVALID_PAYLOAD', async () => {
     setup()
     expect(

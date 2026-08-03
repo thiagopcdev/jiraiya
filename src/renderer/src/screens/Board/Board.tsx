@@ -124,7 +124,10 @@ export default function Board(): React.JSX.Element {
       return { previous, queryKey }
     },
     onError: (err, _vars, context) => {
-      if (context) queryClient.setQueryData(context.queryKey, context.previous)
+      // card excluído no Jira: o main já tirou do cache local — devolver o card
+      // à coluna de origem só o faria piscar até o refetch do onSettled
+      const gone = err instanceof IpcError && err.code === 'ISSUE_GONE'
+      if (context && !gone) queryClient.setQueryData(context.queryKey, context.previous)
       setMoveError(err instanceof IpcError ? err.message : t.common.error)
       if (errorTimerRef.current) clearTimeout(errorTimerRef.current)
       errorTimerRef.current = setTimeout(() => setMoveError(null), 6000)

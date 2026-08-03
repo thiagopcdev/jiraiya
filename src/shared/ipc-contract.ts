@@ -983,6 +983,8 @@ export interface PushEvents {
   'push:update-progress': { percent: number }
   /** fila offline mudou (enfileirou, drenou, falhou, descartou) */
   'push:queue-changed': { pending: number; failed: number }
+  /** card não existe mais no Jira e saiu do cache local (excluído ou sem acesso) */
+  'push:issue-gone': { key: string }
 }
 export type PushChannel = keyof PushEvents
 
@@ -996,7 +998,8 @@ export const PUSH_CHANNELS: PushChannel[] = [
   'push:briefing-ready',
   'push:open-issue',
   'push:update-progress',
-  'push:queue-changed'
+  'push:queue-changed',
+  'push:issue-gone'
 ]
 
 /** Superfície exposta no preload como window.api */

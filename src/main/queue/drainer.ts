@@ -2,6 +2,7 @@ import { Notification } from 'electron'
 import type { AppContext } from '../appContext'
 import { getWorkspaceRow } from '../db/repos/workspace'
 import { isRetryableNetworkError } from './classify'
+import { isMaybeIssueGoneError, purgeIfIssueGone } from '../issues/gone'
 import { performAction, revertAction } from './perform'
 import {
   markFailed,
@@ -68,11 +69,16 @@ export async function drainQueue(ctx: AppContext): Promise<{ sent: number; faile
           removeAction(ctx.db, row.id)
           sent++
         } catch (err) {
-          const message = errorMessage(err)
+          let message = errorMessage(err)
           if (isRetryableNetworkError(err)) {
             // ainda sem rede: devolve para a fila e para o drain por completo
             markPendingAgain(ctx.db, row.id, message)
             return { sent, failed }
+          }
+          // card excluído no Jira: a ação nunca vai passar — falha com mensagem
+          // que explica o motivo e tira o card fantasma do cache
+          if (isMaybeIssueGoneError(err)) {
+            message = (await purgeIfIssueGone(ctx, workspace.id, row.issue_key)) ?? message
           }
           markFailed(ctx.db, row.id, message)
           revertAction(ctx, workspace.id, row)

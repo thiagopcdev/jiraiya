@@ -268,12 +268,18 @@ export function usePushInvalidation(): void {
     const offAuth = window.api.on('push:auth-invalid', () => {
       void queryClient.invalidateQueries({ queryKey: ['auth'] })
     })
+    // card excluído no Jira saiu do cache local: qualquer tela que o mostrasse
+    // (quadro, dashboard, épicos, busca) precisa recarregar
+    const offIssueGone = window.api.on('push:issue-gone', () => {
+      void queryClient.invalidateQueries()
+    })
     return () => {
       offProgress()
       offComplete()
       offAlerts()
       offMentions()
       offAuth()
+      offIssueGone()
     }
   }, [queryClient])
 }

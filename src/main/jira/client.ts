@@ -1,4 +1,4 @@
-import { JiraHttp } from './http'
+import { JiraAuthError, JiraHttp, JiraHttpError } from './http'
 import type { BoardTransition } from '../queries/board'
 import type {
   AdfNode,
@@ -92,6 +92,51 @@ export class JiraClient {
       if (!res.nextPageToken || issues.length === 0) return total
       nextPageToken = res.nextPageToken
     }
+  }
+
+  /**
+   * A issue existe e está visível para esta conta? GET mínimo na issue: o Jira
+   * responde 404 tanto para card excluído quanto para card sem permissão de
+   * leitura — os dois casos significam "não dá para trabalhar nele daqui".
+   * Erros que não sejam 404 propagam: com eles não se conclui nada.
+   */
+  async issueExists(issueKey: string): Promise<boolean> {
+    try {
+      await this.http.get<{ key: string }>(
+        `/rest/api/3/issue/${encodeURIComponent(issueKey)}?fields=summary`
+      )
+      return true
+    } catch (err) {
+      if (err instanceof JiraHttpError && !(err instanceof JiraAuthError) && err.status === 404) {
+        return false
+      }
+      throw err
+    }
+  }
+
+  /**
+   * Das keys informadas, quais o Jira não devolve (excluídas ou sem acesso).
+   * Usa o bulkfetch (teto de 100 por request) em vez de um GET por card.
+   *
+   * Guarda contra falso positivo: se um lote inteiro voltar vazio, o mais
+   * provável é problema sistêmico (permissão do endpoint, lote inválido) e não
+   * 100 cards apagados de uma vez — nesse caso o lote é ignorado.
+   */
+  async missingIssueKeys(issueKeys: string[]): Promise<string[]> {
+    const missing: string[] = []
+    for (let i = 0; i < issueKeys.length; i += 100) {
+      const batch = issueKeys.slice(i, i + 100)
+      const res = await this.http.post<{ issues?: Array<{ key?: string }> }>(
+        '/rest/api/3/issue/bulkfetch',
+        { issueIdsOrKeys: batch, fields: ['summary'] }
+      )
+      const found = new Set((res.issues ?? []).map((issue) => issue.key?.toUpperCase()))
+      if (found.size === 0) continue
+      for (const key of batch) {
+        if (!found.has(key.toUpperCase())) missing.push(key)
+      }
+    }
+    return missing
   }
 
   /** Changelogs em lote (até 1000 issues por request, paginado por token). */

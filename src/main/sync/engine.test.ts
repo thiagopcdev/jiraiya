@@ -6,6 +6,7 @@ import { runMigrations } from '../db/migrations'
 import { listBoards, setSelectedProjects, upsertBoards, upsertProjects } from '../db/repos/catalog'
 import { getSyncCursor, setPrefs, setSyncState } from '../db/repos/misc'
 import { getWorkspaceRow } from '../db/repos/workspace'
+import { JiraHttpError } from '../jira/http'
 import { runSync, type SyncDeps, type SyncProgress } from './engine'
 
 vi.mock('electron', async () => (await import('../testing/electronMock')).createElectronMock())
@@ -60,6 +61,9 @@ interface ClientOpts {
   sprints?: Array<Record<string, unknown>>
   boards?: Array<Record<string, unknown>>
   issueChangelog?: (key: string) => Promise<JiraChangelogHistory[]>
+  /** keys que o Jira não devolve mais (cards excluídos) */
+  missingKeys?: string[]
+  issueComments?: (key: string) => Promise<JiraComment[]>
 }
 
 interface FakeSyncClient {
@@ -70,6 +74,7 @@ interface FakeSyncClient {
   issueComments: ReturnType<typeof vi.fn>
   listSprints: ReturnType<typeof vi.fn>
   listBoards: ReturnType<typeof vi.fn>
+  missingIssueKeys: ReturnType<typeof vi.fn>
 }
 
 function makeClient(opts: ClientOpts = {}): {
@@ -88,9 +93,12 @@ function makeClient(opts: ClientOpts = {}): {
     ),
     bulkChangelogs: vi.fn(async () => opts.changelogs ?? new Map()),
     issueChangelog: vi.fn(opts.issueChangelog ?? (async () => [])),
-    issueComments: vi.fn(async (key: string) => opts.commentsByKey?.[key] ?? []),
+    issueComments: vi.fn(
+      opts.issueComments ?? (async (key: string) => opts.commentsByKey?.[key] ?? [])
+    ),
     listSprints: vi.fn(async () => opts.sprints ?? []),
-    listBoards: vi.fn(async () => opts.boards ?? [])
+    listBoards: vi.fn(async () => opts.boards ?? []),
+    missingIssueKeys: vi.fn(async () => opts.missingKeys ?? [])
   }
   return { client, calls }
 }
@@ -596,5 +604,90 @@ describe('runSync — estado do sync', () => {
 
     await expect(runSync(deps(client, { onAfterSync }))).rejects.toThrow()
     expect(onAfterSync).not.toHaveBeenCalled()
+  })
+})
+
+describe('runSync — cards excluídos no Jira', () => {
+  /** grava um card em cache já com o changelog em dia (não entra na fase 2) */
+  const seedSynced = (key: string): void => {
+    db.prepare(
+      `INSERT INTO issue (workspace_id, jira_id, key, project_key, summary, updated_at, created_at, changelog_synced_at)
+       VALUES (1, ?, ?, 'BT', ?, '2026-07-01T00:00:00.000Z', '2026-07-01T00:00:00.000Z', '2026-07-01T00:00:00.000Z')`
+    ).run(key, key, `Card ${key}`)
+  }
+
+  const keysInCache = (): string[] =>
+    (db.prepare('SELECT key FROM issue ORDER BY key').all() as Array<{ key: string }>).map(
+      (r) => r.key
+    )
+
+  it('sync completo remove do cache os cards que o Jira não devolve mais', async () => {
+    seedSynced('BT-907')
+    seedSynced('BT-908')
+    const { client } = makeClient({ missingKeys: ['BT-907'] })
+
+    const res = await runSync(deps(client), { full: true })
+
+    expect(client.missingIssueKeys).toHaveBeenCalledWith(['BT-907', 'BT-908'])
+    expect(keysInCache()).toEqual(['BT-908'])
+    expect(res.purgedIssues).toEqual(['BT-907'])
+  })
+
+  it('sync incremental não paga o custo da reconciliação', async () => {
+    seedSynced('BT-907')
+    const { client } = makeClient({ missingKeys: ['BT-907'] })
+
+    const res = await runSync(deps(client))
+
+    expect(client.missingIssueKeys).not.toHaveBeenCalled()
+    expect(keysInCache()).toEqual(['BT-907'])
+    expect(res.purgedIssues).toEqual([])
+  })
+
+  it('falha na reconciliação não derruba o sync', async () => {
+    seedSynced('BT-907')
+    const { client } = makeClient()
+    client.missingIssueKeys.mockImplementation(async () => {
+      throw new Error('bulkfetch fora do ar')
+    })
+
+    const res = await runSync(deps(client), { full: true })
+
+    expect(res.purgedIssues).toEqual([])
+    expect(keysInCache()).toEqual(['BT-907'])
+  })
+
+  it('cache vazio não chama o Jira', async () => {
+    const { client } = makeClient()
+    await runSync(deps(client), { full: true })
+    expect(client.missingIssueKeys).not.toHaveBeenCalled()
+  })
+
+  it('404 nos comentários (card apagado no meio do sync) purga e segue', async () => {
+    const { client } = makeClient({
+      pages: [[rawIssue({ id: '1', key: 'BT-907' }), rawIssue({ id: '2', key: 'BT-908' })]],
+      issueComments: async (key: string) => {
+        if (key === 'BT-907') throw new JiraHttpError(404, 'Jira respondeu 404')
+        return []
+      }
+    })
+
+    const res = await runSync(deps(client))
+
+    expect(keysInCache()).toEqual(['BT-908'])
+    expect(res.purgedIssues).toEqual(['BT-907'])
+    expect(res.activitiesIssues).toBe(1)
+  })
+
+  it('erro que não é 404 nos comentários ainda derruba o sync', async () => {
+    const { client } = makeClient({
+      pages: [[rawIssue({ id: '1', key: 'BT-907' })]],
+      issueComments: async () => {
+        throw new JiraHttpError(400, 'Jira respondeu 400')
+      }
+    })
+
+    await expect(runSync(deps(client))).rejects.toThrow('400')
+    expect(keysInCache()).toEqual(['BT-907'])
   })
 })

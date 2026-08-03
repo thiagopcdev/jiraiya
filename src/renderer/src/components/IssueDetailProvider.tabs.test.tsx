@@ -234,7 +234,9 @@ describe('IssueDetailProvider — posição do composer', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText('Este card ainda não foi sincronizado localmente.')
+        screen.getByText(
+          'Este card não está aqui: ainda não sincronizou ou não existe mais no Jira.'
+        )
       ).toBeInTheDocument()
     )
     expect(
