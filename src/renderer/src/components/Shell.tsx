@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query'
 import {
   AlertTriangle,
   AtSign,
-  ChevronsUpDown,
   Columns3,
   Download,
   Filter,
@@ -37,6 +36,7 @@ import { readNavCollapsed, writeNavCollapsed } from '../lib/nav'
 import { useQueue } from '../lib/queue'
 import { t } from '../strings/ptBR'
 import KeyboardShortcuts from './KeyboardShortcuts'
+import { ProjectPicker } from './ProjectPicker'
 import TimerWidget from './TimerWidget'
 
 interface NavItem {
@@ -575,16 +575,9 @@ export default function Shell(): React.JSX.Element {
                 <div className="mt-px truncate text-[11px] text-zinc-500">{workspaceLabel}</div>
               )}
             </div>
-            {/* o seletor de projeto vive em Configurações — o chevron leva até lá */}
-            <Link
-              to={SETTINGS_ROUTE}
-              className={`${iconButton} ml-auto`}
-              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              aria-label="Projetos acompanhados"
-              title="Projetos acompanhados"
-            >
-              <ChevronsUpDown size={14} />
-            </Link>
+            <div className="ml-auto">
+              <ProjectPicker />
+            </div>
           </div>
           <button
             type="button"
