@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { cleanup, screen, waitFor } from '@testing-library/react'
+import { cleanup, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { Issue } from '@shared/domain'
 import {
@@ -78,10 +78,10 @@ describe('Filters', () => {
     expect(screen.getByText('Execute o JQL para ver os resultados.')).toBeInTheDocument()
   })
 
-  it('renderiza o título via ScreenHeader', async () => {
+  it('renderiza o título do par no ScreenHeader', async () => {
     setup()
     await waitFor(() =>
-      expect(screen.getByRole('heading', { name: 'Filtros' })).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Filtros · Timeline' })).toBeInTheDocument()
     )
   })
 
@@ -100,8 +100,24 @@ describe('Filters', () => {
     const jqlInput = screen.getAllByRole('textbox')[1]
     expect(jqlInput).toHaveValue('priority = Highest')
 
-    await waitFor(() => expect(screen.getByText('1 resultado')).toBeInTheDocument())
+    // o contador da faixa tem que bater com o número de linhas renderizadas
+    const heading = await screen.findByRole('heading', { name: /Resultados/ })
+    expect(within(heading).getByText('1')).toBeInTheDocument()
     expect(screen.getByText('Corrigir bug crítico no login')).toBeInTheDocument()
+    expect(screen.getByText(/rodou em \d+ ms/)).toBeInTheDocument()
+  })
+
+  it('o filtro ativo destaca a linha e só ele mostra lápis e lixeira', async () => {
+    const user = userEvent.setup()
+    setup()
+    await waitReady()
+
+    expect(screen.queryByTitle('Editar')).not.toBeInTheDocument()
+    expect(screen.queryByTitle('Excluir')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Bugs críticos' }))
+    expect(screen.getByTitle('Editar')).toBeInTheDocument()
+    expect(screen.getByTitle('Excluir')).toBeInTheDocument()
   })
 
   it('mostra dica de truncamento quando o resultado é maior que o limite', async () => {
@@ -118,7 +134,8 @@ describe('Filters', () => {
     await user.type(jqlTextarea, 'project = BT')
     await user.click(screen.getByRole('button', { name: 'Executar' }))
 
-    await waitFor(() => expect(screen.getByText('2 resultados')).toBeInTheDocument())
+    const heading = await screen.findByRole('heading', { name: /Resultados/ })
+    expect(within(heading).getByText('2')).toBeInTheDocument()
     expect(screen.getByText('Mostrando os primeiros 50.')).toBeInTheDocument()
   })
 
@@ -183,8 +200,9 @@ describe('Filters', () => {
     const api = setup()
     await waitReady()
 
-    await user.click(screen.getByTitle('Editar'))
+    await user.click(screen.getByRole('button', { name: 'Bugs críticos' }))
     await waitFor(() => expect(api.count('filters:run')).toBe(1))
+    await user.click(screen.getByTitle('Editar'))
 
     const nameInput = screen.getByPlaceholderText('Ex.: Bugs críticos abertos') as HTMLInputElement
     expect(nameInput.value).toBe('Bugs críticos')
@@ -201,19 +219,19 @@ describe('Filters', () => {
     )
   })
 
-  it('+ Novo filtro reseta o formulário', async () => {
+  it('Novo filtro reseta o formulário', async () => {
     const user = userEvent.setup()
     setup()
     await waitReady()
 
-    await user.click(screen.getByTitle('Editar'))
+    await user.click(screen.getByRole('button', { name: 'Bugs críticos' }))
     await waitFor(() =>
       expect(
         (screen.getByPlaceholderText('Ex.: Bugs críticos abertos') as HTMLInputElement).value
       ).toBe('Bugs críticos')
     )
 
-    await user.click(screen.getByTitle('+ Novo filtro'))
+    await user.click(screen.getByRole('button', { name: 'Novo filtro' }))
     expect(
       (screen.getByPlaceholderText('Ex.: Bugs críticos abertos') as HTMLInputElement).value
     ).toBe('')
@@ -226,6 +244,7 @@ describe('Filters', () => {
     const api = setup()
     await waitReady()
 
+    await user.click(screen.getByRole('button', { name: 'Bugs críticos' }))
     await user.click(screen.getByTitle('Excluir'))
     expect(screen.getByText('Excluir?')).toBeInTheDocument()
 

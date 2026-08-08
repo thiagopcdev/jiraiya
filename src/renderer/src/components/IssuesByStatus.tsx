@@ -35,13 +35,13 @@ export function IssuesByStatus({
       <div className="flex flex-col gap-3">
         {groups.map((group) => (
           <div key={group.status} className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-2 px-0.5">
-              <span className="text-[11px] font-[650] tracking-[.06em] text-blue-300 uppercase light:text-blue-700">
+            <div className="flex items-center gap-2 px-1">
+              <span className="text-[11px] font-bold tracking-[.06em] text-blue-300 uppercase light:text-blue-700">
                 {group.status}
               </span>
               <span className="text-[11px] text-zinc-600">{group.issues.length}</span>
             </div>
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-2">
               {group.issues.map((issue) => (
                 <PrimaryIssueRow key={issue.key} issue={issue} stalledDays={stalledDays} />
               ))}
@@ -75,12 +75,12 @@ function IssueLine({ issue }: { issue: Issue }): React.JSX.Element {
 
   return (
     <button
-      className="group flex w-full items-center gap-2 rounded px-1.5 py-1 text-left hover:bg-zinc-800/70"
+      className="group flex w-full items-center gap-2.5 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-zinc-800/70"
       onClick={() => openIssue(issue.key)}
       title={`Abrir ${issue.key}`}
     >
-      <span className="shrink-0 font-mono text-xs text-zinc-500">{issue.key}</span>
-      <span className="min-w-0 flex-1 truncate text-sm text-zinc-300">{issue.summary}</span>
+      <span className="shrink-0 font-mono text-[11.5px] text-zinc-500">{issue.key}</span>
+      <span className="min-w-0 flex-1 truncate text-[13.5px] text-zinc-300">{issue.summary}</span>
       {issue.storyPoints !== null && <Badge color="indigo">{issue.storyPoints}</Badge>}
       <span
         role="button"
@@ -121,9 +121,11 @@ function PrimaryIssueRow({
     : null
 
   return (
+    // o card com timer rodando é o único destaque de marca da lista: borda e
+    // fundo de indigo com alfa, para não brigar com o azul do rótulo de status
     <div
-      className={`group flex items-center gap-2.5 rounded-lg border px-3 py-2.5 compact:py-1.5 ${
-        timer.running ? 'border-zinc-700 bg-zinc-950' : 'border-zinc-800 bg-zinc-950/70'
+      className={`group flex items-center gap-2.5 rounded-md border px-3 py-2.5 compact:py-1.5 ${
+        timer.running ? 'border-indigo-600/45 bg-indigo-600/8' : 'border-zinc-800 bg-zinc-900'
       }`}
     >
       <button
@@ -131,18 +133,24 @@ function PrimaryIssueRow({
         onClick={() => openIssue(issue.key)}
         title={`Abrir ${issue.key}`}
       >
-        <span className="shrink-0 font-mono text-xs text-zinc-400">{issue.key}</span>
         <span
-          className={`min-w-0 flex-1 truncate text-sm ${
-            timer.running ? 'font-medium text-zinc-100' : 'text-zinc-200'
+          className={`shrink-0 font-mono text-[11.5px] ${
+            timer.running ? 'font-semibold text-indigo-400' : 'text-zinc-500'
+          }`}
+        >
+          {issue.key}
+        </span>
+        <span
+          className={`min-w-0 flex-1 truncate text-[13.5px] ${
+            timer.running ? 'font-semibold text-zinc-50' : 'text-zinc-200'
           }`}
         >
           {issue.summary}
         </span>
         {ageLabel && (
           <span
-            className={`shrink-0 text-xs ${
-              isStalled ? 'text-amber-400 light:text-amber-600' : 'text-zinc-500'
+            className={`shrink-0 text-[11.5px] ${
+              isStalled ? 'font-semibold text-amber-400 light:text-amber-600' : 'text-zinc-500'
             }`}
           >
             {ageLabel}
@@ -158,7 +166,7 @@ function PrimaryIssueRow({
         className={
           timer.running
             ? 'flex shrink-0 items-center gap-1.5 rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-semibold text-white'
-            : 'flex shrink-0 items-center gap-1.5 rounded-md border border-zinc-700 px-2.5 py-1 text-xs font-medium text-zinc-300 hover:bg-zinc-800'
+            : 'flex shrink-0 items-center gap-1.5 rounded-md border border-zinc-700 px-2.5 py-1 text-xs font-medium text-zinc-300 transition-colors hover:bg-zinc-800'
         }
         onClick={() => (timer.running ? timer.pause() : timer.start())}
       >

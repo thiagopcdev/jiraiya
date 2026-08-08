@@ -1,7 +1,6 @@
 export const t = {
   app: {
     name: 'Jiraiya',
-    paletteHint: '⌘K busca',
     updateAvailable: (version: string) => `v${version} disponível`
   },
   nav: {
@@ -113,7 +112,6 @@ export const t = {
     cancel: 'Cancelar',
     copy: 'Copiar',
     copied: 'Copiado!',
-    export: 'Exportar .md',
     delete: 'Excluir',
     dismiss: 'Dispensar',
     loading: 'Carregando…',
@@ -123,23 +121,18 @@ export const t = {
   },
   authInvalid: 'Credenciais do Jira expiraram — reconecte em Configurações.',
   create: {
-    title: 'Criar task',
-    whereTitle: 'Onde',
     project: 'Projeto',
     issueType: 'Tipo',
     loadingIssueTypes: 'Carregando tipos…',
     noIssueTypes: 'Não é possível criar issues neste projeto por aqui.',
-    aiTitle: 'Gerar com IA',
     ideaLabel: 'Descreva a ideia da task',
     ideaPlaceholder:
       'Ex.: contexto (onde/por que isso importa), o que precisa ser feito e o comportamento esperado ao final.',
-    generate: 'Gerar título e descrição',
     generating: 'Gerando…',
     aiUnavailableHint: (provider: string | null) =>
       provider
         ? `${provider} indisponível — verifique em Ajustes`
         : 'Configure um provider de IA em Ajustes (Claude, Gemini, Codex ou OpenRouter)',
-    cardTitle: 'Card',
     summary: 'Título',
     description: 'Descrição',
     descriptionHint:
@@ -147,8 +140,6 @@ export const t = {
     assignToMe: 'Atribuir a mim',
     addToActiveSprint: (sprintName: string) => `Adicionar à sprint ativa — ${sprintName}`,
     storyPoints: 'Story points',
-    storyPointsHint: 'Opcional',
-    submit: 'Criar no Jira',
     submitting: 'Criando…',
     createdTitle: (key: string) => `Task ${key} criada`,
     createdHint: 'Ela aparece no app após a sincronização (alguns segundos).',
@@ -156,8 +147,6 @@ export const t = {
     createAnother: 'Criar outra'
   },
   split: {
-    title: 'Dividir task',
-    whichCardTitle: 'Qual card dividir?',
     selectLabel: 'Meus cards abertos',
     selectPlaceholder: 'Selecione um card',
     orManualKey: 'ou informe a key',
@@ -172,8 +161,6 @@ export const t = {
       provider
         ? `${provider} indisponível — verifique em Ajustes`
         : 'Configure um provider de IA em Ajustes (Claude, Gemini, Codex ou OpenRouter)',
-    rationaleTitle: 'Critério da divisão',
-    itemsTitle: 'Itens da divisão',
     itemTitleLabel: 'Título',
     itemDescriptionLabel: 'Descrição',
     removeItem: 'Remover item',
@@ -181,10 +168,6 @@ export const t = {
     feedbackLabel: 'Feedback para a IA',
     feedbackPlaceholder: 'Ex.: junte os itens 2 e 3; adicione um item de testes e2e',
     refine: (provider: string | null) => `Refinar com ${provider ?? 'IA'}`,
-    refining: 'Analisando… pode levar alguns minutos',
-    structureTitle: 'Estrutura',
-    modeSubtask: 'Subtarefas do card original',
-    modeSibling: 'Cards irmãos (mesmo projeto)',
     noSubtaskType: 'Este projeto não tem tipo de subtarefa',
     issueType: 'Tipo',
     assignToMe: 'Atribuir a mim',
@@ -215,9 +198,7 @@ export const t = {
     ] as string[]
   },
   filters: {
-    title: 'Filtros',
     savedTitle: 'Salvos',
-    newFilter: '+ Novo filtro',
     noSavedFilters: 'Nenhum filtro salvo ainda.',
     nameLabel: 'Nome',
     namePlaceholder: 'Ex.: Bugs críticos abertos',

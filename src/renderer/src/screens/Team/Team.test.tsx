@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, screen, waitFor } from '@testing-library/react'
+import { cleanup, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { Issue, SprintTrend, TeamMemberSummary } from '@shared/domain'
 import { standupReference } from '@shared/periods'
@@ -114,43 +114,79 @@ describe('Team', () => {
     )
   })
 
-  it('renderiza os membros com contadores, bloqueados e parados', async () => {
+  const anaWithWork = {
+    'team:summary': () => ({
+      members: [
+        makeMember({
+          accountId: 'acc-1',
+          name: 'Ana',
+          isMe: true,
+          movedCount: 2,
+          commentedCount: 1,
+          inProgress: [
+            makeIssue({ key: 'BT-1', priority: 'Highest', flagged: false }),
+            makeIssue({ key: 'BT-2', priority: 'Medium' })
+          ],
+          done: [makeIssue({ key: 'BT-3', storyPoints: 3 })],
+          stalled: [{ ...makeIssue({ key: 'BT-4' }), stalledDays: 5 }]
+        })
+      ],
+      periodLabel: '7 dias',
+      syncMode: 'project' as const
+    })
+  }
+
+  it('linha da pessoa traz os três números, os sinais de risco e o contexto do cabeçalho', async () => {
+    installMockApi({ ...aiInactive, ...noRisk, ...fewTrends, ...noVelocity, ...anaWithWork })
+    renderWithProviders(<Team />, { withIssueDetail: false })
+    await waitFor(() => expect(screen.getByText('Ana')).toBeInTheDocument())
+
+    expect(screen.getByText('7 dias · 1 pessoa · 2 cards em andamento')).toBeInTheDocument()
+
+    const row = screen.getByTitle('Ver os cards')
+    expect(within(row).getByText('você · 2 movida(s) · 1 comentada(s)')).toBeInTheDocument()
+    expect(within(row).getByText('em andamento')).toBeInTheDocument()
+    expect(within(row).getByText('concluídas')).toBeInTheDocument()
+    // sp da linha = story points do que a pessoa concluiu
+    expect(within(row).getByText('3')).toBeInTheDocument()
+    expect(within(row).getByText('1 bloqueado(s)')).toBeInTheDocument()
+    expect(within(row).getByText('1 parado(s)')).toBeInTheDocument()
+  })
+
+  it('a lista de cards da pessoa fica recolhida e abre no clique da linha', async () => {
+    installMockApi({ ...aiInactive, ...noRisk, ...fewTrends, ...noVelocity, ...anaWithWork })
+    const user = userEvent.setup()
+    renderWithProviders(<Team />, { withIssueDetail: false })
+    await waitFor(() => expect(screen.getByText('Ana')).toBeInTheDocument())
+
+    expect(screen.queryByText('Bloqueado')).not.toBeInTheDocument()
+
+    await user.click(screen.getByTitle('Ver os cards'))
+    expect(screen.getByText('Bloqueado')).toBeInTheDocument()
+    expect(screen.getByText('Parado')).toBeInTheDocument()
+    expect(screen.getByText('BT-4')).toBeInTheDocument()
+    expect(screen.getByText('5d')).toBeInTheDocument()
+  })
+
+  it('pessoa sem movimentação e sem cards mostra o subtítulo de fallback', async () => {
     installMockApi({
       ...aiInactive,
       ...noRisk,
       ...fewTrends,
       ...noVelocity,
       'team:summary': () => ({
-        members: [
-          makeMember({
-            accountId: 'acc-1',
-            name: 'Ana',
-            isMe: true,
-            movedCount: 2,
-            commentedCount: 1,
-            inProgress: [
-              makeIssue({ key: 'BT-1', priority: 'Highest', flagged: false }),
-              makeIssue({ key: 'BT-2', priority: 'Medium' })
-            ],
-            done: [makeIssue({ key: 'BT-3' })],
-            stalled: [{ ...makeIssue({ key: 'BT-4' }), stalledDays: 5 }]
-          })
-        ],
-        periodLabel: '7 dias',
-        syncMode: 'project'
+        members: [makeMember({ accountId: 'acc-2', name: 'Bruno', isMe: false })],
+        periodLabel: 'hoje',
+        syncMode: 'project' as const
       })
     })
+    const user = userEvent.setup()
     renderWithProviders(<Team />, { withIssueDetail: false })
-    await waitFor(() => expect(screen.getByText('Ana')).toBeInTheDocument())
-    expect(screen.getByText('você')).toBeInTheDocument()
-    expect(screen.getByText('2 em andamento')).toBeInTheDocument()
-    expect(screen.getByText('1 concluída(s)')).toBeInTheDocument()
-    expect(screen.getByText('2 movida(s)')).toBeInTheDocument()
-    expect(screen.getByText('1 comentada(s)')).toBeInTheDocument()
-    expect(screen.getByText('Bloqueado')).toBeInTheDocument()
-    expect(screen.getByText('Parado')).toBeInTheDocument()
-    expect(screen.getByText('BT-4')).toBeInTheDocument()
-    expect(screen.getByText('5d')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('Bruno')).toBeInTheDocument())
+    expect(screen.getByText('sem movimentações no período')).toBeInTheDocument()
+
+    await user.click(screen.getByTitle('Ver os cards'))
+    expect(screen.getByText('Nada em andamento.')).toBeInTheDocument()
   })
 
   it('banner de modo pessoal aparece quando syncMode é "personal"', async () => {
@@ -271,7 +307,10 @@ describe('Team', () => {
         })
       })
       renderWithProviders(<Team />, { withIssueDetail: false })
-      await waitFor(() => expect(screen.getByText(/No período: 3 SP seus/)).toBeInTheDocument())
+      // números em negrito são <span>, então a asserção olha os pedaços da legenda
+      await waitFor(() => expect(screen.getByText('3 SP')).toBeInTheDocument())
+      expect(screen.getByText('8 SP')).toBeInTheDocument()
+      expect(screen.getByText(/do time · 4 cards/)).toBeInTheDocument()
     })
 
     it('sem sprints e sem loading, não mostra o card de entregas', async () => {
@@ -302,9 +341,13 @@ describe('Team', () => {
         'team:trends': () => ({ sprints: [] })
       })
       renderWithProviders(<Team />, { withIssueDetail: false })
+      // sem material para comparar é linha de ~26px, não cartão (regra 3)
       await waitFor(() =>
-        expect(screen.getByText('Poucas sprints fechadas para tendências.')).toBeInTheDocument()
+        expect(screen.getByText('poucas sprints fechadas para comparar')).toBeInTheDocument()
       )
+      expect(
+        screen.queryByRole('heading', { name: 'Tendências (últimas sprints)' })
+      ).not.toBeInTheDocument()
     })
 
     it('com 2+ sprints mostra a tabela de tendências', async () => {
@@ -383,8 +426,10 @@ describe('Team', () => {
       const user = userEvent.setup()
       renderWithProviders(<Team />, { withIssueDetail: false })
       await waitFor(() => expect(screen.getByText('Card arriscado')).toBeInTheDocument())
-      expect(screen.getByText('sem estimativa')).toBeInTheDocument()
-      expect(screen.getByText('parado')).toBeInTheDocument()
+      expect(screen.getByText('BT-9')).toBeInTheDocument()
+      // score >= 2 pinta os sinais de âmbar — é o que separa risco de ruído
+      const signals = screen.getByText('sem estimativa · parado')
+      expect(signals.className).toContain('text-amber-400')
 
       await user.click(screen.getByText(/Explicar com/))
       await waitFor(() => expect(screen.getByText('Risco alto por atraso.')).toBeInTheDocument())

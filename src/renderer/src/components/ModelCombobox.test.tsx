@@ -16,15 +16,18 @@ const models = [
 function Harness({
   initialValue = '',
   hasKey = true,
-  loading = false
+  loading = false,
+  id
 }: {
   initialValue?: string
   hasKey?: boolean
   loading?: boolean
+  id?: string
 }): React.JSX.Element {
   const [value, setValue] = useState(initialValue)
   return (
     <ModelCombobox
+      id={id}
       value={value}
       onChange={setValue}
       models={models}
@@ -45,6 +48,16 @@ describe('ModelCombobox', () => {
     await userEvent.type(input, 'meu/modelo-livre')
     await userEvent.tab()
     expect(input).toHaveValue('meu/modelo-livre')
+  })
+
+  it('o id vai para o input, que é o que a linha de configuração rotula', () => {
+    render(
+      <div>
+        <label htmlFor="modelo-resumos">Resumos</label>
+        <Harness id="modelo-resumos" />
+      </div>
+    )
+    expect(screen.getByLabelText('Resumos')).toBe(screen.getByPlaceholderText(/id do modelo/))
   })
 
   it('foco abre a lista completa de modelos', async () => {

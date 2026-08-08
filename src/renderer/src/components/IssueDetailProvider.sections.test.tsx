@@ -386,6 +386,25 @@ describe('IssueDetailProvider — timer do header', () => {
     )
   })
 
+  it('rodando, o timer vira pílula preenchida de marca (indigo-600 + text-white)', async () => {
+    installMockApi(baseHandlers())
+    renderWithProviders(<OpenIssueButton issueKey="BT-1" />)
+    await openCard()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Iniciar timer' }))
+    const pause = await screen.findByRole('button', { name: 'Pausar timer' })
+    const pill = pause.parentElement as HTMLElement
+    expect(pill.className).toContain('bg-indigo-600')
+    expect(pill.className).toContain('text-white')
+
+    // o timer é global (mesmo estado entre montagens): pausa antes de sair para
+    // não vazar "rodando" para o próximo teste
+    await userEvent.click(pause)
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Iniciar timer' })).toBeInTheDocument()
+    )
+  })
+
   it('descarta o tempo acumulado com confirmação', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     installMockApi(baseHandlers())
@@ -435,8 +454,8 @@ describe('IssueDetailProvider — pull requests', () => {
     renderWithProviders(<OpenIssueButton issueKey="BT-1" />)
     await openCard()
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'PRs' })).toBeInTheDocument())
-    await userEvent.click(screen.getByRole('button', { name: 'PRs' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /^PRs/ })).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: /^PRs/ }))
 
     expect(screen.getByText(/Corrige bug do login/)).toBeInTheDocument()
     expect(screen.getByText('aberto')).toBeInTheDocument()
@@ -452,7 +471,7 @@ describe('IssueDetailProvider — pull requests', () => {
     await openCard()
 
     await waitFor(() => expect(screen.getByText('Comentários')).toBeInTheDocument())
-    expect(screen.queryByRole('button', { name: 'PRs' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^PRs/ })).not.toBeInTheDocument()
   })
 
   it('não mostra a aba quando a integração está ligada mas o card não tem PR', async () => {
@@ -465,7 +484,7 @@ describe('IssueDetailProvider — pull requests', () => {
     await openCard()
 
     await waitFor(() => expect(screen.getByText('Comentários')).toBeInTheDocument())
-    expect(screen.queryByRole('button', { name: 'PRs' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^PRs/ })).not.toBeInTheDocument()
   })
 })
 

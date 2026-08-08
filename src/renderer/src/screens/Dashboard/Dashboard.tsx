@@ -18,7 +18,7 @@ import { useAuthStatus, useIssues, useLeadTime, usePrefs } from '../../api/hooks
 import { computeBurndown } from '../../lib/burndown'
 import { BurndownChart } from '../../components/BurndownChart'
 import { applyDensityPref } from '../../lib/density'
-import { Badge, CollapsedStats, ScreenHeader } from '../../components/ui'
+import { Badge, Card, CollapsedStats, ScreenHeader } from '../../components/ui'
 import { IssuesByStatus } from '../../components/IssuesByStatus'
 import { useIssueDetail } from '../../components/issueDetail'
 import { t } from '../../strings/ptBR'
@@ -91,18 +91,20 @@ export default function Dashboard(): React.JSX.Element {
 
   return (
     <div className="flex h-full flex-col">
+      {/* flush: quem fecha o bloco do cabeçalho é a faixa de abas de período */}
       <ScreenHeader
         title={t.today.title}
         context={contextLine}
+        flush
         actions={
           <>
-            <PeriodSegmented tab={tab} onChange={setTab} />
             <DensityToggle density={prefs?.density ?? 'comfortable'} />
             <BriefingButton />
           </>
         }
       />
-      <div className="flex flex-1 flex-col gap-3.5 overflow-y-auto px-6 pt-4 pb-5">
+      <PeriodTabs tab={tab} onChange={setTab} />
+      <div className="flex flex-1 flex-col gap-3.5 overflow-y-auto px-6 py-[18px]">
         <SprintStrip sprint={sprint} issues={sprintScopeIssues} />
 
         <CollapsedStats
@@ -120,7 +122,7 @@ export default function Dashboard(): React.JSX.Element {
           />
         </CollapsedStats>
 
-        <div className="grid flex-1 grid-cols-1 items-start gap-4 min-[1100px]:grid-cols-[minmax(0,1.75fr)_340px]">
+        <div className="grid grid-cols-1 items-start gap-3.5 min-[1100px]:grid-cols-[minmax(0,1.75fr)_340px]">
           <InProgressPanel
             issues={sortedInProgress}
             stalledDays={prefs?.stalledDays ?? 3}
@@ -129,7 +131,7 @@ export default function Dashboard(): React.JSX.Element {
             totalCount={mySprintIssues.length}
             totalPoints={mySprintPoints}
           />
-          <div className="flex flex-col gap-3">
+          <div className="flex min-w-0 flex-col gap-3.5">
             <ActivityCard period={tab.period} />
             <LeadTimeCard />
           </div>
@@ -155,7 +157,12 @@ function formatTodayLabel(now: Date): string {
   return `${weekday}, ${day}`
 }
 
-function PeriodSegmented({
+/**
+ * Período como faixa de abas sublinhadas (mesma geometria do `PairTabs`), e não
+ * como segmented nas ações: o período reorganiza a tela inteira, então merece a
+ * linha própria abaixo do título — as ações do cabeçalho ficam para controles.
+ */
+function PeriodTabs({
   tab,
   onChange
 }: {
@@ -163,19 +170,26 @@ function PeriodSegmented({
   onChange: (next: (typeof periodTabs)[number]) => void
 }): React.JSX.Element {
   return (
-    <div className="flex rounded-lg border border-zinc-800 bg-zinc-900 p-0.5">
-      {periodTabs.map((item) => (
-        <button
-          key={item.key}
-          className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${
-            tab.key === item.key ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'
-          }`}
-          onClick={() => onChange(item)}
-        >
-          {item.label}
-        </button>
-      ))}
-    </div>
+    <nav aria-label="Período" className="flex border-b border-zinc-800 bg-zinc-900 px-5">
+      {periodTabs.map((item) => {
+        const active = tab.key === item.key
+        return (
+          <button
+            key={item.key}
+            type="button"
+            aria-current={active ? 'page' : undefined}
+            className={`-mb-px border-b-2 px-3.5 pt-2 pb-2.5 text-[13px] transition-colors ${
+              active
+                ? 'border-indigo-500 font-semibold text-indigo-400'
+                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+            }`}
+            onClick={() => onChange(item)}
+          >
+            {item.label}
+          </button>
+        )
+      })}
+    </nav>
   )
 }
 
@@ -192,7 +206,7 @@ function DensityToggle({ density }: { density: DensityPref }): React.JSX.Element
 
   return (
     <button
-      className="flex items-center gap-1.5 rounded-lg border border-zinc-800 px-2.5 py-[5px] text-[13px] text-zinc-400 hover:text-zinc-200"
+      className="flex items-center gap-1.5 rounded-md border border-zinc-800 px-2.5 py-[5px] text-[12.5px] text-zinc-400 transition-colors hover:text-zinc-200"
       onClick={() => void toggle()}
       title={t.density.label}
     >
@@ -230,7 +244,7 @@ function BriefingButton(): React.JSX.Element | null {
 
   return (
     <button
-      className="flex items-center gap-1.5 rounded-lg border border-zinc-800 px-2.5 py-[5px] text-[13px] text-zinc-300 hover:bg-zinc-800/60"
+      className="flex items-center gap-1.5 rounded-md border border-indigo-600/45 bg-indigo-600/12 px-2.5 py-[5px] text-[12.5px] font-semibold text-indigo-400"
       onClick={() => {
         // ver = ciente: dispensa junto, senão o atalho fica lá até o dia
         // seguinte mesmo depois de o usuário já ter visto a daily
@@ -239,7 +253,7 @@ function BriefingButton(): React.JSX.Element | null {
         void navigate('/resumos')
       }}
     >
-      <FileText size={14} className="text-indigo-400 light:text-indigo-600" />
+      <FileText size={14} />
       {t.today.dailyReady}
     </button>
   )
@@ -272,14 +286,14 @@ function SprintStrip({
   )
 
   return (
-    <div className="flex items-center gap-5 rounded-[10px] border border-zinc-800 bg-zinc-900/60 px-4 py-3">
+    <Card bodyClassName="flex items-center gap-6 px-4 py-3">
       <div className="flex min-w-[130px] flex-col gap-0.5">
-        <span className="text-sm font-[650] text-zinc-100">
-          {sprint?.name ?? t.today.sprintNone}
-        </span>
+        <span className="text-sm font-bold text-zinc-50">{sprint?.name ?? t.today.sprintNone}</span>
         {daysLeft !== null && (
           <span
-            className={`text-xs ${daysLeft <= 2 ? 'text-amber-400 light:text-amber-600' : 'text-zinc-500'}`}
+            className={`text-xs font-semibold ${
+              daysLeft <= 2 ? 'text-amber-400 light:text-amber-600' : 'text-zinc-500'
+            }`}
           >
             {daysLeft < 0
               ? t.today.sprintEnded
@@ -289,7 +303,7 @@ function SprintStrip({
           </span>
         )}
       </div>
-      <div className="flex gap-5">
+      <div className="flex gap-6">
         <MiniStat value={issues.length} label={t.today.statInSprint} />
         <MiniStat value={done} label={t.today.statDone} />
         <MiniStat value={open} label={t.today.statOpen} />
@@ -307,26 +321,28 @@ function SprintStrip({
         )}
         {pct !== null && (
           <div
-            className="relative h-11 w-11 shrink-0 rounded-full"
+            className="relative size-11 shrink-0 rounded-full"
+            // sem transição de propósito: o anel remontaria a cada refetch do
+            // TanStack Query e piscaria a cada 30s
             style={{
               background: `conic-gradient(var(--chart-accent) 0% ${pct}%, var(--color-zinc-800) ${pct}% 100%)`
             }}
           >
-            <div className="absolute inset-[5px] flex items-center justify-center rounded-full bg-zinc-950 text-xs font-[650] text-zinc-200">
+            <div className="absolute inset-[5px] flex items-center justify-center rounded-full bg-zinc-900 text-[11.5px] font-bold text-zinc-50">
               {pct}%
             </div>
           </div>
         )}
       </div>
-    </div>
+    </Card>
   )
 }
 
 function MiniStat({ value, label }: { value: number; label: string }): React.JSX.Element {
   return (
     <div>
-      <div className="text-lg font-[650] text-zinc-100">{value}</div>
-      <div className="text-[11px] text-zinc-500">{label}</div>
+      <div className="text-[18px] font-bold text-zinc-50">{value}</div>
+      <div className="text-[11px] text-zinc-400">{label}</div>
     </div>
   )
 }
@@ -356,23 +372,25 @@ function AttentionSections({
 function AttentionGroup({ title, issues }: { title: string; issues: Issue[] }): React.JSX.Element {
   const { openIssue } = useIssueDetail()
   return (
-    <div className="px-3 py-2">
-      <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-red-300 light:text-red-700">
+    <div className="px-3.5 py-2.5">
+      <div className="mb-1 flex items-center gap-2 text-[11px] font-bold tracking-[.06em] text-red-300 uppercase light:text-red-700">
         {title}
-        <span className="rounded bg-red-900/50 px-1.5 text-xs text-red-200 light:bg-red-200 light:text-red-800">
+        <span className="rounded-full bg-red-900/50 px-2 text-[11px] font-bold text-red-200 light:bg-red-200 light:text-red-800">
           {issues.length}
         </span>
       </div>
-      <div className="space-y-0.5">
+      <div className="flex flex-col">
         {issues.map((issue) => (
           <button
             key={issue.key}
-            className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left hover:bg-red-900/20"
+            className="flex w-full items-center gap-2.5 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-red-900/20"
             onClick={() => openIssue(issue.key)}
             title={`Abrir ${issue.key}`}
           >
-            <span className="shrink-0 font-mono text-xs text-zinc-500">{issue.key}</span>
-            <span className="min-w-0 flex-1 truncate text-sm text-zinc-200">{issue.summary}</span>
+            <span className="shrink-0 font-mono text-[11.5px] text-zinc-500">{issue.key}</span>
+            <span className="min-w-0 flex-1 truncate text-[13.5px] text-zinc-200">
+              {issue.summary}
+            </span>
           </button>
         ))}
       </div>
@@ -396,24 +414,29 @@ function InProgressPanel({
   totalPoints: number
 }): React.JSX.Element {
   return (
-    <section className="flex flex-col overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900/60">
-      <div className="flex items-center gap-2.5 border-b border-zinc-800 px-3.5 py-3">
-        <h3 className="text-[15px] font-[650] text-zinc-100">{t.today.inProgressTitle}</h3>
-        <span className="rounded bg-zinc-700 px-1.5 py-px text-xs font-semibold text-zinc-100">
-          {issues.length}
+    // a hierarquia do painel primário vem do peso do título e do contador em
+    // pílula de marca — a borda continua zinc-800, igual à dos outros cartões
+    <Card
+      className="min-w-0"
+      title={
+        <span className="flex items-center gap-2.5">
+          <span className="text-[14.5px]">{t.today.inProgressTitle}</span>
+          <Badge color="brand">{issues.length}</Badge>
         </span>
-        <span className="ml-auto text-xs text-zinc-500">{t.today.sortMostStalled}</span>
-      </div>
+      }
+      actions={<span className="text-xs text-zinc-500">{t.today.sortMostStalled}</span>}
+      bodyClassName=""
+    >
       <div className="flex flex-col gap-3 p-3">
         {issues.length === 0 ? (
-          <p className="px-1.5 py-2 text-sm text-zinc-500">{t.today.emptyInProgress}</p>
+          <p className="px-1.5 py-2 text-[13.5px] text-zinc-500">{t.today.emptyInProgress}</p>
         ) : (
           <IssuesByStatus issues={issues} variant="primary" stalledDays={stalledDays} />
         )}
         {todoInSprint.length > 0 && (
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-2 px-0.5">
-              <span className="text-[11px] font-[650] tracking-[.06em] text-zinc-500 uppercase">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2 px-1 pb-0.5">
+              <span className="text-[11px] font-bold tracking-[.06em] text-zinc-500 uppercase">
                 {t.today.todoInSprint}
               </span>
               <span className="text-[11px] text-zinc-600">
@@ -428,14 +451,14 @@ function InProgressPanel({
           </div>
         )}
       </div>
-      <div className="flex items-center gap-2 border-t border-zinc-800 px-3.5 py-2.5 text-[13px] text-zinc-500">
+      <div className="flex items-center gap-2 border-t border-zinc-800 px-4 py-2.5 text-[12.5px] text-zinc-400">
         <Columns3 size={13} />
         <span>{t.today.footerTotal(totalCount, totalPoints)}</span>
-        <Link to="/quadro" className="ml-auto text-[13px] hover:underline">
+        <Link to="/quadro" className="ml-auto font-semibold text-indigo-400 hover:underline">
           {t.today.openInBoard}
         </Link>
       </div>
-    </section>
+    </Card>
   )
 }
 
@@ -443,12 +466,12 @@ function TodoRow({ issue }: { issue: Issue }): React.JSX.Element {
   const { openIssue } = useIssueDetail()
   return (
     <button
-      className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left compact:py-1.5 hover:bg-zinc-800/40"
+      className="flex items-center gap-2.5 rounded-md px-2.5 py-[7px] text-left transition-colors compact:py-1 hover:bg-zinc-800/40"
       onClick={() => openIssue(issue.key)}
       title={`Abrir ${issue.key}`}
     >
-      <span className="shrink-0 font-mono text-xs text-zinc-600">{issue.key}</span>
-      <span className="min-w-0 flex-1 truncate text-sm text-zinc-400">{issue.summary}</span>
+      <span className="shrink-0 font-mono text-[11.5px] text-zinc-600">{issue.key}</span>
+      <span className="min-w-0 flex-1 truncate text-[13px] text-zinc-400">{issue.summary}</span>
       {issue.storyPoints !== null ? (
         <Badge color="zinc">{issue.storyPoints}</Badge>
       ) : (
@@ -486,45 +509,44 @@ function ActivityCard({ period }: { period: Period }): React.JSX.Element {
   const visible = filter === 'all' ? merged : merged.filter((e) => e.kind === filter)
 
   return (
-    <section className="flex flex-col overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900/60">
-      <div className="flex flex-col gap-2 border-b border-zinc-800 px-3.5 py-3">
-        <h3 className="text-sm font-semibold text-zinc-300">{t.today.activityTitle}</h3>
-        <div className="flex flex-wrap gap-1.5">
-          <ActivityChip
-            label={`${t.today.chipAll} ${merged.length}`}
-            active={filter === 'all'}
-            disabled={false}
-            onClick={() => setFilter('all')}
-          />
-          <ActivityChip
-            label={`${t.today.chipDone} ${counts.done}`}
-            active={filter === 'done'}
-            disabled={counts.done === 0}
-            onClick={() => setFilter('done')}
-          />
-          <ActivityChip
-            label={`${t.today.chipMoved} ${counts.moved}`}
-            active={filter === 'moved'}
-            disabled={counts.moved === 0}
-            onClick={() => setFilter('moved')}
-          />
-          <ActivityChip
-            label={`${t.today.chipCommented} ${counts.commented}`}
-            active={filter === 'commented'}
-            disabled={counts.commented === 0}
-            onClick={() => setFilter('commented')}
-          />
-        </div>
+    // os chips não cabem na faixa de título (que é uma linha só): ficam no topo
+    // do corpo, fechados por uma borda própria
+    <Card title={t.today.activityTitle} bodyClassName="">
+      <div className="flex flex-wrap gap-1.5 border-b border-zinc-800 px-3.5 py-2.5">
+        <ActivityChip
+          label={`${t.today.chipAll} ${merged.length}`}
+          active={filter === 'all'}
+          disabled={false}
+          onClick={() => setFilter('all')}
+        />
+        <ActivityChip
+          label={`${t.today.chipDone} ${counts.done}`}
+          active={filter === 'done'}
+          disabled={counts.done === 0}
+          onClick={() => setFilter('done')}
+        />
+        <ActivityChip
+          label={`${t.today.chipMoved} ${counts.moved}`}
+          active={filter === 'moved'}
+          disabled={counts.moved === 0}
+          onClick={() => setFilter('moved')}
+        />
+        <ActivityChip
+          label={`${t.today.chipCommented} ${counts.commented}`}
+          active={filter === 'commented'}
+          disabled={counts.commented === 0}
+          onClick={() => setFilter('commented')}
+        />
       </div>
-      <div className="flex flex-col gap-0.5 p-2">
+      <div className="flex flex-col p-1.5">
         {visible.length === 0 && (
-          <p className="px-2 py-3 text-sm text-zinc-500">{t.today.activityEmpty}</p>
+          <p className="px-2 py-3 text-[13px] text-zinc-500">{t.today.activityEmpty}</p>
         )}
         {visible.map((entry) => (
           <ActivityRow key={`${entry.kind}-${entry.issue.key}`} entry={entry} />
         ))}
       </div>
-    </section>
+    </Card>
   )
 }
 
@@ -549,7 +571,7 @@ const activityMeta: Record<
   },
   commented: {
     icon: MessageSquare,
-    color: 'text-indigo-400 light:text-indigo-600',
+    color: 'text-indigo-400',
     verb: t.today.chipCommented
   }
 }
@@ -563,14 +585,14 @@ function ActivityRow({ entry }: { entry: ActivityEntry }): React.JSX.Element {
 
   return (
     <button
-      className="flex w-full items-start gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-zinc-800/60"
+      className="flex w-full items-start gap-2.5 rounded-md px-2 py-[7px] text-left transition-colors hover:bg-zinc-800/60"
       onClick={() => openIssue(entry.issue.key)}
       title={`Abrir ${entry.issue.key}`}
     >
       <Icon size={14} className={`mt-0.5 shrink-0 ${meta.color}`} />
       <div className="min-w-0 flex-1">
-        <div className="text-[13px] leading-[1.45] text-zinc-200">
-          {meta.verb} <span className="font-mono text-xs text-zinc-500">{entry.issue.key}</span>{' '}
+        <div className="text-[12.5px] leading-[1.45] text-zinc-200">
+          {meta.verb} <span className="font-mono text-[11px] text-zinc-500">{entry.issue.key}</span>{' '}
           {entry.issue.summary}
         </div>
         <div className="text-[11px] text-zinc-600">
@@ -594,15 +616,15 @@ function ActivityChip({
   onClick: () => void
 }): React.JSX.Element {
   const styles = disabled
-    ? 'border border-zinc-800 text-zinc-600'
+    ? 'border-zinc-800 text-zinc-600'
     : active
-      ? 'bg-zinc-700 text-zinc-100'
-      : 'border border-zinc-700 text-zinc-300 hover:bg-zinc-800'
+      ? 'border-indigo-600 bg-indigo-600 text-white'
+      : 'border-zinc-700 text-zinc-300 hover:bg-zinc-800'
   return (
     <button
       disabled={disabled}
       onClick={onClick}
-      className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${styles}`}
+      className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${styles}`}
     >
       {label}
     </button>
@@ -618,28 +640,27 @@ function LeadTimeCard(): React.JSX.Element | null {
   const max = Math.max(...top.map((s) => s.avgDays))
 
   return (
-    <section className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3.5 py-3">
-      <h3 className="text-sm font-semibold text-zinc-300">{t.today.whereTimeGoes}</h3>
-      <p className="mt-0.5 mb-2.5 text-[11px] text-zinc-500">
+    <Card title={t.today.whereTimeGoes} bodyClassName="px-3.5 py-3">
+      <p className="mb-2.5 text-[11px] text-zinc-500">
         {t.today.whereTimeGoesHint(leadTime.cardCount, leadTime.windowDays)}
       </p>
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-[7px]">
         {top.map((s) => (
           <div key={s.status} className="flex items-center gap-2">
-            <div className="w-[92px] shrink-0 truncate text-xs text-zinc-300">{s.status}</div>
+            <div className="w-24 shrink-0 truncate text-[11.5px] text-zinc-200">{s.status}</div>
             <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-800">
               <div
-                className="h-full rounded-full bg-indigo-900/60 light:bg-indigo-500"
+                className="h-full rounded-full bg-indigo-600"
                 style={{ width: `${max > 0 ? (s.avgDays / max) * 100 : 0}%` }}
               />
             </div>
-            <div className="w-[38px] shrink-0 text-right text-xs text-zinc-300">
+            <div className="w-[38px] shrink-0 text-right text-[11.5px] text-zinc-200">
               {formatDaysPtBr(s.avgDays)}d
             </div>
           </div>
         ))}
       </div>
-    </section>
+    </Card>
   )
 }
 

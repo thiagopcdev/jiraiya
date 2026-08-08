@@ -217,8 +217,9 @@ describe('Board', () => {
       })
       renderWithProviders(<Board />, { withIssueDetail: false })
       const badge = await screen.findByText(t.board.wipLimit(2, 2))
-      expect(badge.className).toContain('bg-amber-900/50')
-      expect(badge.className).toContain('text-amber-300')
+      expect(badge.className).toContain('rounded-full')
+      expect(badge.className).toContain('bg-amber-600/16')
+      expect(badge.className).toContain('text-amber-400')
     })
 
     it('coluna com contagem acima do wipMax mostra o badge em vermelho (estouro)', async () => {
@@ -245,8 +246,8 @@ describe('Board', () => {
       })
       renderWithProviders(<Board />, { withIssueDetail: false })
       const badge = await screen.findByText(t.board.wipLimit(3, 2))
-      expect(badge.className).toContain('bg-red-900/50')
-      expect(badge.className).toContain('text-red-300')
+      expect(badge.className).toContain('bg-red-600/16')
+      expect(badge.className).toContain('text-red-400')
     })
   })
 
@@ -305,6 +306,103 @@ describe('Board', () => {
     expect(column.className).not.toContain('w-72')
     // o container das colunas mantém a rolagem horizontal
     expect(column.parentElement?.className).toContain('overflow-x-auto')
+  })
+
+  it('calha da coluna é painel in-flow (bg-zinc-800/60, sem sombra) e o piso de 236px vale com o padding', async () => {
+    installMockApi({
+      ...noAuth,
+      'board:view': () =>
+        makeBoardData({
+          columns: [
+            {
+              name: 'A Fazer',
+              statusIds: ['1'],
+              statusNames: [],
+              issues: [makeIssue({ key: 'BT-1', summary: 'Card na calha' })]
+            },
+            { name: 'Em andamento', statusIds: ['2'], statusNames: [], issues: [] },
+            { name: 'Concluído', statusIds: ['3'], statusNames: [], issues: [] }
+          ]
+        })
+    })
+    renderWithProviders(<Board />, { withIssueDetail: false })
+    await waitFor(() => expect(screen.getByText('Card na calha')).toBeInTheDocument())
+
+    const column = screen.getByText('A Fazer').closest('div')!.parentElement!
+    expect(column.className).toContain('rounded-lg')
+    expect(column.className).toContain('bg-zinc-800/60')
+    expect(column.className).toContain('p-2')
+    // painel in-flow não leva a sombra de cartão
+    expect(column.className).not.toContain('shadow-card')
+    // nada furando o box-sizing do preflight (o piso conta o padding)
+    expect(column.getAttribute('style')).toBeNull()
+  })
+
+  describe('pele do card do quadro', () => {
+    function withCards(): void {
+      installMockApi({
+        ...noAuth,
+        'board:view': () =>
+          makeBoardData({
+            columns: [
+              {
+                name: 'A Fazer',
+                statusIds: ['1'],
+                statusNames: [],
+                issues: [
+                  makeIssue({ key: 'BT-1', summary: 'Cartão a fazer', statusCategory: 'new' })
+                ]
+              },
+              {
+                name: 'Em andamento',
+                statusIds: ['2'],
+                statusNames: [],
+                issues: [
+                  makeIssue({
+                    key: 'BT-2',
+                    summary: 'Cartão em andamento',
+                    statusCategory: 'indeterminate'
+                  })
+                ]
+              },
+              {
+                name: 'Concluído',
+                statusIds: ['3'],
+                statusNames: [],
+                issues: [
+                  makeIssue({ key: 'BT-3', summary: 'Cartão concluído', statusCategory: 'done' })
+                ]
+              }
+            ]
+          })
+      })
+    }
+
+    const cardOf = (summary: string): HTMLElement =>
+      screen.getByText(summary).closest('div[draggable]') as HTMLElement
+
+    it('acento de 3px na borda esquerda por categoria de status', async () => {
+      withCards()
+      renderWithProviders(<Board />, { withIssueDetail: false })
+      await waitFor(() => expect(screen.getByText('Cartão a fazer')).toBeInTheDocument())
+
+      expect(cardOf('Cartão a fazer').className).toContain('border-l-zinc-700')
+      expect(cardOf('Cartão em andamento').className).toContain('border-l-indigo-600')
+      expect(cardOf('Cartão concluído').className).toContain('border-l-green-600')
+      // superfície sólida com sombra de 1px e o acento de 3px
+      expect(cardOf('Cartão a fazer').className).toContain('bg-zinc-900')
+      expect(cardOf('Cartão a fazer').className).toContain('shadow-card')
+      expect(cardOf('Cartão a fazer').className).toContain('border-l-[3px]')
+    })
+
+    it('sem card aberto nenhum cartão fica selecionado', async () => {
+      withCards()
+      renderWithProviders(<Board />, { withIssueDetail: false })
+      await waitFor(() => expect(screen.getByText('Cartão a fazer')).toBeInTheDocument())
+
+      expect(cardOf('Cartão a fazer').className).toContain('border-zinc-800')
+      expect(cardOf('Cartão a fazer').className).not.toContain('ring-2')
+    })
   })
 
   it('cabeçalho usa ScreenHeader com o título e o contexto de board/sprint/cards/sp restantes', async () => {
@@ -720,6 +818,40 @@ describe('Board', () => {
       const contentWrapper = columnsRow.parentElement! // wrapper com padding/scroll vertical
       const dockedRoot = handle.parentElement!
       expect(dockedRoot.parentElement).toBe(contentWrapper.parentElement)
+    })
+
+    it('o card aberto no painel fica marcado como selecionado no quadro', async () => {
+      installMockApi({
+        ...baseHandlers(),
+        'board:view': () =>
+          makeBoardData({
+            columns: [
+              {
+                name: 'A Fazer',
+                statusIds: ['1'],
+                statusNames: [],
+                issues: [
+                  makeIssue({ key: 'BT-1', summary: 'Card selecionado' }),
+                  makeIssue({ key: 'BT-2', summary: 'Card vizinho' })
+                ]
+              },
+              { name: 'Em andamento', statusIds: ['2'], statusNames: [], issues: [] },
+              { name: 'Concluído', statusIds: ['3'], statusNames: [], issues: [] }
+            ]
+          })
+      })
+      renderWithProviders(<Board />)
+      await waitFor(() => expect(screen.getByText('Card selecionado')).toBeInTheDocument())
+
+      await userEvent.click(screen.getByText('Card selecionado'))
+      await screen.findByRole('separator', { name: t.detail.resizeHandle })
+
+      const selected = screen.getByText('Card selecionado').closest('div[draggable]')!
+      const other = screen.getByText('Card vizinho').closest('div[draggable]')!
+      expect(selected.className).toContain('border-indigo-600/60')
+      expect(selected.className).toContain('ring-2')
+      expect(other.className).toContain('border-zinc-800')
+      expect(other.className).not.toContain('ring-2')
     })
   })
 })

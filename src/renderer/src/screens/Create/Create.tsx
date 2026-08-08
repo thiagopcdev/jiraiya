@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, ExternalLink, Sparkles } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ExternalLink, Sparkles } from 'lucide-react'
 import { invoke, IpcError } from '../../api/client'
 import {
   useAiStatus,
@@ -10,7 +11,7 @@ import {
   useProjects,
   unavailableAiProviderLabel
 } from '../../api/hooks'
-import { Badge, Button, Card, EmptyState, Input, ScreenHeader, Spinner } from '../../components/ui'
+import { Badge, Button, Card, EmptyState, ScreenHeader, Spinner, Toggle } from '../../components/ui'
 import { PairTabs } from '../../components/PairTabs'
 import { MarkdownToolbar } from '../../components/MarkdownToolbar'
 import { statusColor } from '../../components/statusColor'
@@ -31,6 +32,23 @@ function buildDuplicateQuery(text: string): string {
     .slice(0, 6)
     .join(' ')
 }
+
+const FIELD_CLASS =
+  'w-full rounded-md border border-zinc-700 bg-zinc-950/60 px-2.5 py-1.5 text-[13px] text-zinc-200 placeholder-zinc-600 outline-none focus:border-indigo-500'
+const SELECT_CLASS =
+  'w-full rounded-md border border-zinc-700 bg-zinc-950/60 px-2.5 py-1 text-[12.5px] text-zinc-200 outline-none focus:border-indigo-500 disabled:text-zinc-500'
+
+/** Rótulo de campo do formulário — versalete miúdo, o padrão do handoff. */
+function FieldLabel({ children }: { children: ReactNode }): React.JSX.Element {
+  return (
+    <span className="mb-1.5 block text-[10px] font-bold tracking-[.06em] text-zinc-600 uppercase">
+      {children}
+    </span>
+  )
+}
+
+/** Escala usada nos boards da Biud — o campo antes era numérico livre. */
+const STORY_POINT_OPTIONS = ['1', '2', '3', '5', '8', '13', '21']
 
 export default function Create(): React.JSX.Element {
   const queryClient = useQueryClient()
@@ -97,6 +115,7 @@ export default function Create(): React.JSX.Element {
   const activeDuplicateQuery = duplicateQuery.length < 3 ? '' : debouncedDuplicateQuery
   const { data: duplicatesData } = useGlobalSearch(activeDuplicateQuery)
   const duplicates = (duplicatesData?.results ?? []).slice(0, 5)
+  const showDuplicates = activeDuplicateQuery.length >= 3 && duplicates.length > 0
 
   const resetForm = (): void => {
     setIdea('')
@@ -160,27 +179,28 @@ export default function Create(): React.JSX.Element {
   const submitDisabled = createBusy || !projectKey || !selectedIssueType || !summary.trim()
 
   return (
-    <div className="flex flex-col">
-      <ScreenHeader title={t.create.title} />
+    <div className="flex h-full flex-col">
+      <ScreenHeader title={t.nav.createSplit} flush />
       <PairTabs
         tabs={[
           { to: '/criar', label: t.nav.create },
           { to: '/dividir', label: t.nav.split }
         ]}
       />
-      <div className="max-w-2xl space-y-5 p-6">
-        {createdKey ? (
-          <Card className="border-green-900 bg-green-950/30 light:border-green-300 light:bg-green-50">
+
+      {createdKey ? (
+        <div className="max-w-[720px] p-[18px_24px]">
+          <Card className="border-green-600/35 bg-green-600/10">
             <div className="flex items-start gap-3">
               <CheckCircle2
                 className="mt-0.5 shrink-0 text-green-400 light:text-green-600"
                 size={20}
               />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-zinc-100">
+                <p className="text-[13.5px] font-semibold text-zinc-50">
                   {t.create.createdTitle(createdKey)}
                 </p>
-                <p className="mt-1 text-sm text-zinc-400">{t.create.createdHint}</p>
+                <p className="mt-1 text-[12.5px] text-zinc-400">{t.create.createdHint}</p>
                 <div className="mt-3 flex gap-2">
                   <Button variant="secondary" onClick={() => openIssue(createdKey)}>
                     Ver card
@@ -199,188 +219,223 @@ export default function Create(): React.JSX.Element {
               </div>
             </div>
           </Card>
-        ) : (
-          <>
-            <Card title={t.create.whereTitle}>
-              <div className="flex flex-wrap items-end gap-3">
-                <label className="block">
-                  <span className="mb-1 block text-xs font-medium text-zinc-400">
-                    {t.create.project}
-                  </span>
-                  <select
-                    className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
-                    value={projectKey ?? ''}
-                    onChange={(e) => {
-                      setProjectKeyChoice(e.target.value)
-                      setIssueTypeIdChoice(null)
-                    }}
-                  >
-                    {projects.map((p) => (
-                      <option key={p.key} value={p.key}>
-                        {p.key} — {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-xs font-medium text-zinc-400">
-                    {t.create.issueType}
-                  </span>
-                  <select
-                    className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
-                    value={issueTypeId ?? ''}
-                    disabled={issueTypesLoading || issueTypes.length === 0}
-                    onChange={(e) => setIssueTypeIdChoice(e.target.value)}
-                  >
-                    {issueTypes.map((it) => (
-                      <option key={it.id} value={it.id}>
-                        {it.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {issueTypesLoading && (
-                  <span className="flex items-center gap-2 pb-1.5 text-sm text-zinc-400">
-                    <Spinner /> {t.create.loadingIssueTypes}
-                  </span>
-                )}
-              </div>
-              {!issueTypesLoading && projectKey && issueTypes.length === 0 && (
-                <EmptyState message={t.create.noIssueTypes} />
-              )}
-            </Card>
-
-            <Card title={t.create.aiTitle}>
-              <label className="block">
-                <span className="mb-1 block text-xs font-medium text-zinc-400">
-                  {t.create.ideaLabel}
+        </div>
+      ) : (
+        <div className="flex min-h-0 flex-1 items-start gap-3.5 overflow-y-auto p-[18px_24px]">
+          <div className="flex min-w-0 flex-1 flex-col gap-3.5">
+            <Card
+              title={
+                <span className="flex items-center gap-2.5">
+                  <Sparkles size={15} className="text-indigo-400" />
+                  Comece pela ideia
                 </span>
-                <textarea
-                  className="h-24 w-full resize-y rounded-md border border-zinc-800 bg-zinc-950 p-3 text-sm text-zinc-200 outline-none focus:border-indigo-600"
+              }
+              actions={
+                <span className="text-[11.5px] text-zinc-500">ou preencha à mão abaixo</span>
+              }
+              bodyClassName="px-4 py-3"
+            >
+              <div className="flex items-center gap-2.5">
+                <input
+                  className={FIELD_CLASS}
+                  aria-label={t.create.ideaLabel}
                   placeholder={t.create.ideaPlaceholder}
                   value={idea}
                   onChange={(e) => setIdea(e.target.value)}
                 />
-              </label>
-              <div className="mt-3 flex items-center gap-3">
                 <Button
-                  variant="secondary"
+                  className="shrink-0"
                   disabled={draftDisabled}
                   onClick={() => void generateDraft()}
                 >
-                  {draftBusy ? <Spinner /> : <Sparkles size={14} />}
-                  {draftBusy ? t.create.generating : t.create.generate}
+                  {draftBusy ? <Spinner /> : <Sparkles size={13} />}
+                  {draftBusy ? t.create.generating : 'Rascunhar'}
                 </Button>
-                {!aiStatus?.active && (
-                  <span className="text-xs text-amber-400 light:text-amber-600">
-                    {t.create.aiUnavailableHint(unavailableAiProviderLabel(aiStatus))}
-                  </span>
-                )}
               </div>
+              {!aiStatus?.active && (
+                <p className="mt-2 text-[11.5px] text-amber-400 light:text-amber-600">
+                  {t.create.aiUnavailableHint(unavailableAiProviderLabel(aiStatus))}
+                </p>
+              )}
               {draftError && (
-                <p className="mt-2 text-sm text-amber-400 light:text-amber-600">{draftError}</p>
+                <p className="mt-2 text-[11.5px] text-amber-400 light:text-amber-600">
+                  {draftError}
+                </p>
               )}
             </Card>
 
-            <Card title={t.create.cardTitle}>
-              <div className="space-y-3">
-                <Input
-                  label={t.create.summary}
-                  value={summary}
-                  maxLength={255}
-                  onChange={(e) => setSummary(e.target.value)}
-                  hint={`${summary.length}/255`}
-                />
-                <label className="block">
-                  <span className="mb-1 block text-sm font-medium text-zinc-300">
-                    {t.create.description}
+            <Card>
+              <div className="flex flex-col gap-3">
+                <div className="flex gap-2.5">
+                  <label className="min-w-0 flex-1">
+                    <FieldLabel>{t.create.project}</FieldLabel>
+                    <select
+                      className={SELECT_CLASS}
+                      value={projectKey ?? ''}
+                      onChange={(e) => {
+                        setProjectKeyChoice(e.target.value)
+                        setIssueTypeIdChoice(null)
+                      }}
+                    >
+                      {projects.map((p) => (
+                        <option key={p.key} value={p.key}>
+                          {p.key} · {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="min-w-0 flex-1">
+                    <FieldLabel>{t.create.issueType}</FieldLabel>
+                    <select
+                      className={SELECT_CLASS}
+                      value={issueTypeId ?? ''}
+                      disabled={issueTypesLoading || issueTypes.length === 0}
+                      onChange={(e) => setIssueTypeIdChoice(e.target.value)}
+                    >
+                      {issueTypes.map((it) => (
+                        <option key={it.id} value={it.id}>
+                          {it.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="w-[110px] shrink-0">
+                    <FieldLabel>{t.create.storyPoints}</FieldLabel>
+                    <select
+                      className={SELECT_CLASS}
+                      value={storyPoints}
+                      onChange={(e) => setStoryPoints(e.target.value)}
+                    >
+                      <option value="">—</option>
+                      {STORY_POINT_OPTIONS.map((value) => (
+                        <option key={value} value={value}>
+                          {value}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                {issueTypesLoading && (
+                  <span className="flex items-center gap-2 text-[12.5px] text-zinc-400">
+                    <Spinner /> {t.create.loadingIssueTypes}
                   </span>
-                  <MarkdownToolbar
-                    textareaRef={descriptionRef}
-                    value={description}
-                    onChange={setDescription}
-                    aiContext="description"
+                )}
+                {!issueTypesLoading && projectKey && issueTypes.length === 0 && (
+                  <EmptyState message={t.create.noIssueTypes} />
+                )}
+
+                <label className="block">
+                  <FieldLabel>{t.create.summary}</FieldLabel>
+                  <input
+                    className={FIELD_CLASS}
+                    value={summary}
+                    maxLength={255}
+                    onChange={(e) => setSummary(e.target.value)}
                   />
+                </label>
+
+                <div>
+                  <div className="flex items-center gap-2">
+                    <FieldLabel>{t.create.description}</FieldLabel>
+                    <div className="mb-1.5 ml-auto">
+                      <MarkdownToolbar
+                        className=""
+                        textareaRef={descriptionRef}
+                        value={description}
+                        onChange={setDescription}
+                        aiContext="description"
+                      />
+                    </div>
+                  </div>
                   <textarea
                     ref={descriptionRef}
-                    className="h-64 w-full resize-y rounded-md border border-zinc-700 bg-zinc-900 p-3 font-mono text-sm text-zinc-100 outline-none focus:border-indigo-500"
+                    aria-label={t.create.description}
+                    className="h-[150px] w-full resize-y rounded-md border border-zinc-700 bg-zinc-950/60 px-3 py-2.5 font-mono text-[12.5px] leading-[1.6] text-zinc-300 outline-none focus:border-indigo-500"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                   />
-                  <span className="mt-1 block text-xs text-zinc-500">
+                  <span className="mt-1 block text-[11.5px] text-zinc-500">
                     {t.create.descriptionHint}
                   </span>
-                </label>
-                <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-300">
-                  <input
-                    type="checkbox"
-                    className="accent-indigo-600"
-                    checked={assignToMe}
-                    onChange={(e) => setAssignToMe(e.target.checked)}
-                  />
-                  {t.create.assignToMe}
-                </label>
-                {activeSprint && (
-                  <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-300">
-                    <input
-                      type="checkbox"
-                      className="accent-indigo-600"
-                      checked={addToActiveSprint}
-                      onChange={(e) => setAddToActiveSprint(e.target.checked)}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
+                  <span className="flex items-center gap-2.5 text-[13px] text-zinc-200">
+                    <Toggle
+                      checked={assignToMe}
+                      onChange={setAssignToMe}
+                      aria-label={t.create.assignToMe}
                     />
-                    {t.create.addToActiveSprint(activeSprint.name ?? '')}
-                  </label>
+                    {t.create.assignToMe}
+                  </span>
+                  {activeSprint && (
+                    <span className="flex items-center gap-2.5 text-[13px] text-zinc-200">
+                      <Toggle
+                        checked={addToActiveSprint}
+                        onChange={setAddToActiveSprint}
+                        aria-label={t.create.addToActiveSprint(activeSprint.name ?? '')}
+                      />
+                      {t.create.addToActiveSprint(activeSprint.name ?? '')}
+                    </span>
+                  )}
+                  <Button
+                    className="ml-auto"
+                    disabled={submitDisabled}
+                    onClick={() => void submit()}
+                  >
+                    {createBusy && <Spinner />}
+                    {createBusy ? t.create.submitting : 'Criar card'}
+                  </Button>
+                </div>
+
+                {createError && (
+                  <p className="text-[12.5px] text-red-400 light:text-red-600">{createError}</p>
                 )}
-                <Input
-                  label={t.create.storyPoints}
-                  type="number"
-                  min={0}
-                  step="1"
-                  className="max-w-32"
-                  value={storyPoints}
-                  onChange={(e) => setStoryPoints(e.target.value)}
-                  hint={t.create.storyPointsHint}
-                />
               </div>
             </Card>
+          </div>
 
-            {activeDuplicateQuery.length >= 3 && duplicates.length > 0 && (
-              <div className="rounded-md border border-amber-900/50 bg-amber-950/20 p-2 light:border-amber-300 light:bg-amber-50">
-                <p className="text-xs font-medium text-amber-400 light:text-amber-700">
-                  Cards parecidos já existem:
-                </p>
-                <div className="mt-1.5 space-y-1">
-                  {duplicates.map((result) => (
-                    <div key={result.key} className="flex items-center gap-2">
+          {showDuplicates && (
+            <div className="w-[320px] shrink-0">
+              <Card
+                title={
+                  <span className="flex items-center gap-2.5">
+                    <AlertTriangle size={15} className="text-amber-400 light:text-amber-600" />
+                    Possíveis duplicados
+                  </span>
+                }
+                actions={<Badge color="amber">{duplicates.length}</Badge>}
+                bodyClassName="px-4 py-0.5"
+              >
+                {duplicates.map((result) => (
+                  <div
+                    key={result.key}
+                    className="flex flex-col gap-1 border-b border-zinc-800/60 py-2.5 last:border-0"
+                  >
+                    <div className="flex items-center gap-2">
                       <button
-                        className="shrink-0 font-mono text-xs text-indigo-400 hover:underline light:text-indigo-600"
+                        className="font-mono text-[11px] text-indigo-400 hover:underline"
                         onClick={() => openIssue(result.key)}
                       >
                         {result.key}
                       </button>
-                      <span className="min-w-0 flex-1 truncate text-xs text-zinc-400 light:text-zinc-600">
-                        {result.summary}
-                      </span>
                       {result.status && (
-                        <Badge color={statusColor(result.statusCategory)}>{result.status}</Badge>
+                        <span className="ml-auto">
+                          <Badge color={statusColor(result.statusCategory)}>{result.status}</Badge>
+                        </span>
                       )}
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {createError && (
-              <p className="text-sm text-red-400 light:text-red-600">{createError}</p>
-            )}
-
-            <Button className="w-full" disabled={submitDisabled} onClick={() => void submit()}>
-              {createBusy && <Spinner />}
-              {createBusy ? t.create.submitting : t.create.submit}
-            </Button>
-          </>
-        )}
-      </div>
+                    <div className="text-[12.5px] leading-[1.4] text-zinc-200">
+                      {result.summary}
+                    </div>
+                  </div>
+                ))}
+              </Card>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

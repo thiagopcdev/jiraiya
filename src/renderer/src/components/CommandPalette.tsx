@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus } from 'lucide-react'
+import { Plus, Search } from 'lucide-react'
 import { invoke, IpcError } from '../api/client'
 import { useAuthStatus, useGlobalSearch } from '../api/hooks'
 import { Badge, Spinner } from './ui'
@@ -24,8 +24,14 @@ export default function CommandPalette(): React.JSX.Element | null {
         setOpen((v) => !v)
       }
     }
+    // ponte para o campo de busca da sidebar (mesmo gatilho do ⌘K)
+    const openFromUi = (): void => setOpen(true)
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    window.addEventListener('jiraiya:open-palette', openFromUi)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('jiraiya:open-palette', openFromUi)
+    }
   }, [])
 
   if (!open) return null
@@ -561,10 +567,11 @@ function PaletteModal({ onClose }: { onClose: () => void }): React.JSX.Element {
   return (
     <div className="fixed inset-0 z-50 bg-black/50" onClick={onClose}>
       <div
-        className="mx-auto mt-24 w-[640px] max-w-[90vw] overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl"
+        className="mx-auto mt-24 w-[640px] max-w-[90vw] overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 border-b border-zinc-800 px-3 py-2.5">
+          <Search size={14} className="shrink-0 text-zinc-500" />
           <input
             ref={inputRef}
             className="w-full bg-transparent text-sm text-zinc-100 placeholder-zinc-500 outline-none"

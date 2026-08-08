@@ -100,8 +100,11 @@ describe('IssueDetailProvider — abas do card', () => {
 
     await waitFor(() => expect(screen.getByText('Oi mundo')).toBeInTheDocument())
     const commentsTab = screen.getByRole('button', { name: /Comentários/ })
-    expect(within(commentsTab).getByText('(1)')).toBeInTheDocument()
+    expect(within(commentsTab).getByText('1')).toBeInTheDocument()
+    // aba ativa no padrão sublinhado do PairTabs
     expect(commentsTab.className).toContain('border-indigo-500')
+    expect(commentsTab.className).toContain('text-indigo-400')
+    expect(commentsTab.className).toContain('font-semibold')
   })
 
   it('trocar de aba troca o conteúdo: Histórico esconde os comentários', async () => {
@@ -179,8 +182,8 @@ describe('IssueDetailProvider — abas do card', () => {
     // a lista de PRs não vaza para a aba de Comentários
     expect(screen.queryByText(/Corrige bug do login/)).not.toBeInTheDocument()
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'PRs' })).toBeInTheDocument())
-    await userEvent.click(screen.getByRole('button', { name: 'PRs' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /^PRs/ })).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: /^PRs/ }))
 
     expect(screen.getByText(/Corrige bug do login/)).toBeInTheDocument()
     expect(screen.queryByText('Nenhum comentário ainda.')).not.toBeInTheDocument()

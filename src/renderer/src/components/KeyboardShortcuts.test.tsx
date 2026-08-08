@@ -56,6 +56,15 @@ describe('KeyboardShortcuts', () => {
     expect(screen.queryByText('Atalhos de teclado')).not.toBeInTheDocument()
   })
 
+  it('a ajuda documenta o ⌘B da barra lateral', () => {
+    installMockApi()
+    renderWithProviders(<Harness />, { withIssueDetail: false })
+    fireEvent.keyDown(window, { key: '?' })
+    expect(screen.getByText('Barra lateral')).toBeInTheDocument()
+    expect(screen.getByText('⌘B')).toBeInTheDocument()
+    expect(screen.getByText('Recolher / fixar o menu')).toBeInTheDocument()
+  })
+
   it('Escape fecha o modal de ajuda', () => {
     installMockApi()
     renderWithProviders(<Harness />, { withIssueDetail: false })

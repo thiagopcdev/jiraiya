@@ -62,7 +62,9 @@ describe('IssueDetailProvider — comentários', () => {
     await openCard()
 
     await waitFor(() => expect(screen.getByText('Oi mundo')).toBeInTheDocument())
-    expect(screen.getByText('(2)')).toBeInTheDocument()
+    // a contagem vive na própria aba, ao lado do rótulo
+    const commentsTab = screen.getByRole('button', { name: /Comentários/ })
+    expect(within(commentsTab).getByText('2')).toBeInTheDocument()
   })
 
   it('sem comentários mostra o estado vazio', async () => {

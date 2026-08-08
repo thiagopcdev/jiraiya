@@ -5,6 +5,7 @@ import type { IpcResponse } from '@shared/ipc-contract'
 import { invoke, IpcError } from '../../api/client'
 import { useAuthStatus, useBoard } from '../../api/hooks'
 import { useIssueDetail } from '../../components/issueDetail'
+import { useOpenIssueKey } from '../../components/IssueDetailProvider'
 import { Badge, EmptyState, ScreenHeader, Spinner } from '../../components/ui'
 import { t } from '../../strings/ptBR'
 import { getSessionBoardId, setSessionBoardId } from './boardSession'
@@ -33,11 +34,16 @@ function shortName(name: string): string {
   return name.trim().split(/\s+/)[0]
 }
 
+/** Acento de 3px na borda esquerda do card, por categoria de status. */
 function borderAccent(category: Issue['statusCategory']): string {
   if (category === 'done') return 'border-l-green-600'
-  if (category === 'indeterminate') return 'border-l-indigo-500'
+  if (category === 'indeterminate') return 'border-l-indigo-600'
   return 'border-l-zinc-700'
 }
+
+/** `<select>` do cabeçalho — mesma pele dos selects do resto do app. */
+const HEADER_SELECT_CLASS =
+  'rounded-md border border-zinc-700 bg-zinc-950/60 px-2.5 py-1 text-[12.5px] text-zinc-200'
 
 export default function Board(): React.JSX.Element {
   const [boardId, setBoardId] = useState<number | undefined>(getSessionBoardId())
@@ -54,6 +60,8 @@ export default function Board(): React.JSX.Element {
   const { data, isLoading, error } = useBoard(boardId, sprintId)
   const { data: authData } = useAuthStatus()
   const { openIssue, DockedPanel } = useIssueDetail()
+  // card aberto no painel/gaveta: é ele que ganha a moldura de seleção no quadro
+  const openKey = useOpenIssueKey()
   const myAccountId = authData?.workspace?.accountId ?? null
 
   useEffect(
@@ -280,13 +288,14 @@ export default function Board(): React.JSX.Element {
   return (
     <div className="flex h-full flex-col">
       <ScreenHeader
+        flush
         title={t.board.title}
         context={t.board.context(boardLabel, sprintLabel, allIssues.length, remainingPoints)}
         actions={
           <>
             {data.boards.length > 1 && (
               <select
-                className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
+                className={HEADER_SELECT_CLASS}
                 value={data.board.jiraId}
                 onChange={(e) => {
                   setBoardId(Number(e.target.value))
@@ -303,7 +312,7 @@ export default function Board(): React.JSX.Element {
 
             {showSprintSelect && (
               <select
-                className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
+                className={HEADER_SELECT_CLASS}
                 value={sprintId ?? data.sprint?.jiraId ?? ''}
                 onChange={(e) => setSprintId(Number(e.target.value))}
               >
@@ -322,25 +331,31 @@ export default function Board(): React.JSX.Element {
             )}
 
             {data.readOnly && <Badge color="amber">{t.board.readOnlyBadge}</Badge>}
-
-            <AssigneeChips
-              people={people}
-              hasUnassigned={hasUnassigned}
-              myAccountId={myAccountId}
-              filter={effectiveFilter}
-              onToggle={toggleAssignee}
-              onClearAll={() => setAssigneeFilter(new Set())}
-            />
           </>
         }
       />
 
+      {/* faixa de filtro de responsável: linha própria abaixo do título (o
+          ScreenHeader vai `flush` e quem fecha o bloco é esta borda) */}
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-zinc-800 bg-zinc-900 px-5 pb-3">
+        <AssigneeChips
+          people={people}
+          hasUnassigned={hasUnassigned}
+          myAccountId={myAccountId}
+          filter={effectiveFilter}
+          onToggle={toggleAssignee}
+          onClearAll={() => setAssigneeFilter(new Set())}
+        />
+      </div>
+
       {/* linha cheia abaixo do cabeçalho: área de colunas (rola vertical e vira
           irmã do painel docado) + o painel em si, ambos esticando a altura toda */}
       <div className="flex min-h-0 flex-1">
-        <div className="min-w-0 flex-1 overflow-y-auto p-6">
+        {/* p-4 (16px) não é decoração: 1360 − 216 (nav) − 380 (painel) − 32
+            (este padding) − 24 (gaps) = 708 = exatamente 3 colunas de 236 */}
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden p-4">
           {data.columnsSource === 'fallback' && (
-            <div className="mb-3 rounded-md border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-500">
+            <div className="mb-3 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs text-zinc-500">
               {t.board.fallbackBanner}
             </div>
           )}
@@ -354,7 +369,7 @@ export default function Board(): React.JSX.Element {
           {showNoActiveSprint ? (
             <EmptyState message={t.board.noActiveSprint} />
           ) : (
-            <div className="flex gap-3 overflow-x-auto pb-3">
+            <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto">
               {data.columns.map((col) => {
                 const issues = filterIssues(col.issues)
                 const sumPoints = issues.reduce((sum, i) => sum + (i.storyPoints ?? 0), 0)
@@ -377,19 +392,21 @@ export default function Board(): React.JSX.Element {
                     canDrag={canDrag}
                     didDragRef={didDragRef}
                     onOpen={openIssue}
+                    openKey={openKey}
                   />
                 )
               })}
               {unmappedFiltered.length > 0 && (
                 <ColumnView
                   title={t.board.outOfBoard}
-                  titleClassName="text-zinc-600"
+                  titleClassName="text-zinc-400"
                   issues={unmappedFiltered}
                   sumPoints={unmappedFiltered.reduce((sum, i) => sum + (i.storyPoints ?? 0), 0)}
                   pendingKeys={pendingKeys}
                   canDrag={canDrag}
                   didDragRef={didDragRef}
                   onOpen={openIssue}
+                  openKey={openKey}
                 />
               )}
             </div>
@@ -416,25 +433,31 @@ function AssigneeChips({
   onToggle: (key: string) => void
   onClearAll: () => void
 }): React.JSX.Element {
-  const chipClass = (selected: boolean): string =>
-    `flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs font-medium transition-colors ${
+  // chip com avatar tem padding menor à esquerda (o avatar já dá o respiro);
+  // o de texto puro fica simétrico
+  const chipClass = (selected: boolean, withAvatar: boolean): string =>
+    `flex items-center gap-1.5 rounded-full border py-[3px] text-xs transition-colors ${
+      withAvatar ? 'pr-2.5 pl-1' : 'px-3'
+    } ${
       selected
-        ? 'border-indigo-600 bg-indigo-950/60 text-indigo-200 light:bg-indigo-50 light:text-indigo-700'
-        : 'border-zinc-700 text-zinc-300 hover:border-zinc-600'
+        ? 'border-indigo-500 bg-indigo-600/12 font-semibold text-indigo-400'
+        : 'border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
     }`
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <>
       {people.map((p) => (
         <button
           key={p.accountId}
           title={p.accountId === myAccountId ? `${p.name} (você)` : p.name}
           onClick={() => onToggle(p.accountId)}
-          className={chipClass(filter.has(p.accountId))}
+          className={chipClass(filter.has(p.accountId), true)}
         >
           <span
-            className={`flex size-4 items-center justify-center rounded-full text-[9px] font-semibold ${
-              p.accountId === myAccountId ? 'bg-indigo-600 text-white' : 'bg-zinc-700 text-zinc-200'
+            className={`flex size-[19px] items-center justify-center rounded-full text-[9px] font-bold ${
+              p.accountId === myAccountId
+                ? 'bg-indigo-600 text-white'
+                : 'bg-indigo-900 text-indigo-400'
             }`}
           >
             {initials(p.name)}
@@ -443,14 +466,33 @@ function AssigneeChips({
         </button>
       ))}
       {hasUnassigned && (
-        <button onClick={() => onToggle('')} className={chipClass(filter.has(''))}>
+        <button onClick={() => onToggle('')} className={chipClass(filter.has(''), false)}>
           {t.board.noAssignee}
         </button>
       )}
-      <button onClick={onClearAll} className={chipClass(filter.size === 0)}>
+      <button onClick={onClearAll} className={chipClass(filter.size === 0, false)}>
         {t.board.all}
       </button>
-    </div>
+    </>
+  )
+}
+
+/**
+ * Limite de WIP da coluna. Estouro usa o vermelho de atenção do app (o Jira
+ * também destaca a coluna quando passa do configurado); dentro do limite é a
+ * pílula âmbar do design system.
+ */
+function WipBadge({ over, children }: { over: boolean; children: string }): React.JSX.Element {
+  return (
+    <span
+      className={`shrink-0 rounded-full px-1.5 text-[10.5px] font-bold ${
+        over
+          ? 'bg-red-600/16 text-red-400 light:text-red-600'
+          : 'bg-amber-600/16 text-amber-400 light:text-amber-600'
+      }`}
+    >
+      {children}
+    </span>
   )
 }
 
@@ -468,7 +510,8 @@ function ColumnView({
   pendingKeys,
   canDrag,
   didDragRef,
-  onOpen
+  onOpen,
+  openKey
 }: {
   title: string
   titleClassName?: string
@@ -485,50 +528,48 @@ function ColumnView({
   canDrag: boolean
   didDragRef: React.MutableRefObject<boolean>
   onOpen: (key: string) => void
+  /** card aberto no painel de detalhe — ganha a moldura de seleção */
+  openKey: string | null
 }): React.JSX.Element {
   const overWip = wipMax != null && issues.length > wipMax
   return (
+    // a calha é painel in-flow: sem sombra. O piso de 236px só fecha a conta de
+    // largura porque o box-sizing:border-box do preflight conta o p-2 — não
+    // sobrescreva.
     <div
-      className={`flex-1 basis-[236px] min-w-[236px] rounded-lg p-2 ${
-        isBacklog ? 'border border-dashed border-zinc-700 bg-zinc-900/30' : 'bg-zinc-900/60'
-      } ${isDragOver ? 'ring-1 ring-indigo-500' : ''}`}
+      className={`flex min-w-[236px] flex-1 basis-[236px] flex-col rounded-lg p-2 ${
+        isBacklog ? 'border border-dashed border-zinc-700 bg-zinc-800/30' : 'bg-zinc-800/60'
+      } ${isDragOver ? 'ring-2 ring-indigo-500/70' : ''}`}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
-      <div className="mb-2 flex items-center justify-between px-1">
-        <span className="flex items-center gap-1.5">
-          <span
-            className={`text-xs font-semibold uppercase ${
-              titleClassName ?? (isBacklog ? 'text-zinc-500' : 'text-zinc-400')
-            }`}
-          >
-            {title}
-          </span>
-          {isBacklog && (
-            <span
-              title={t.board.backlogHint}
-              className="cursor-help rounded-full border border-zinc-700 px-1.5 py-px text-[10px] font-medium text-zinc-500"
-            >
-              {t.board.backlogBadge}
-            </span>
-          )}
-          {wipMax != null && (
-            // estouro do limite: mesmo tratamento de atenção usado no resto do app
-            // (vermelho), em vez do âmbar neutro — o Jira também destaca a coluna
-            // quando o WIP passa do configurado.
-            <Badge color={overWip ? 'red' : 'amber'}>
-              {t.board.wipLimit(issues.length, wipMax)}
-            </Badge>
-          )}
+      <div className="flex items-center gap-2 px-1.5 pt-0.5 pb-2.5">
+        <span
+          className={`truncate text-[12.5px] font-bold ${
+            titleClassName ?? (isBacklog ? 'text-zinc-400' : 'text-zinc-50')
+          }`}
+        >
+          {title}
         </span>
-        <span className="text-xs text-zinc-500">
+        {isBacklog && (
+          <span
+            title={t.board.backlogHint}
+            className="shrink-0 cursor-help rounded-full border border-zinc-700 px-1.5 text-[10.5px] font-medium text-zinc-500"
+          >
+            {t.board.backlogBadge}
+          </span>
+        )}
+        {wipMax != null && (
+          <WipBadge over={overWip}>{t.board.wipLimit(issues.length, wipMax)}</WipBadge>
+        )}
+        <span className="ml-auto shrink-0 text-[11px] text-zinc-400">
           {t.board.columnSummary(issues.length, sumPoints)}
         </span>
       </div>
-      <div className="min-h-24 space-y-2">
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
         {issues.length === 0 ? (
-          <div className="flex h-16 items-center justify-center rounded-md border border-dashed border-zinc-800 text-xs text-zinc-600">
+          <div className="flex h-16 items-center justify-center rounded-md border border-dashed border-zinc-700 text-xs text-zinc-500">
             {t.board.empty}
           </div>
         ) : (
@@ -537,6 +578,7 @@ function ColumnView({
               key={issue.key}
               issue={issue}
               pending={pendingKeys.has(issue.key)}
+              selected={issue.key === openKey}
               draggable={canDrag}
               didDragRef={didDragRef}
               onOpen={onOpen}
@@ -551,12 +593,14 @@ function ColumnView({
 function CardItem({
   issue,
   pending,
+  selected,
   draggable,
   didDragRef,
   onOpen
 }: {
   issue: Issue
   pending: boolean
+  selected: boolean
   draggable: boolean
   didDragRef: React.MutableRefObject<boolean>
   onOpen: (key: string) => void
@@ -577,33 +621,51 @@ function CardItem({
       onClick={() => {
         if (!didDragRef.current) onOpen(issue.key)
       }}
-      className={`cursor-pointer rounded-md border border-zinc-800 border-l-2 bg-zinc-950 p-2.5 hover:border-zinc-600 ${borderAccent(
-        issue.statusCategory
-      )} ${pending ? 'opacity-60' : ''}`}
+      // a ordem importa: `border-l-*` sai depois de `border-*` na folha do
+      // Tailwind, então o acento de categoria sobrevive à cor de seleção
+      className={`cursor-pointer rounded-md border border-l-[3px] bg-zinc-900 p-2.5 shadow-card transition-colors ${
+        selected
+          ? 'border-indigo-600/60 ring-2 ring-indigo-600/15'
+          : 'border-zinc-800 hover:border-zinc-700'
+      } ${borderAccent(issue.statusCategory)} ${pending ? 'opacity-60' : ''}`}
     >
       <div className="flex items-center gap-1.5">
-        <span className="font-mono text-xs text-zinc-500">{issue.key}</span>
+        <span className="font-mono text-[11px] font-semibold text-indigo-400">{issue.key}</span>
         {issue.flagged && (
-          <span className="text-xs text-red-500" title="Sinalizado">
+          <span className="text-xs text-red-400 light:text-red-600" title="Sinalizado">
             ⚑
           </span>
         )}
-        {pending && <Spinner className="ml-auto text-zinc-500" />}
+        {pending ? (
+          <Spinner className="ml-auto text-zinc-500" />
+        ) : (
+          issue.storyPoints !== null && (
+            <span className="ml-auto rounded-full bg-zinc-800 px-[7px] text-[10.5px] font-bold text-zinc-400">
+              {issue.storyPoints}
+            </span>
+          )
+        )}
       </div>
-      <p className="mt-1 line-clamp-2 text-sm text-zinc-200">{issue.summary}</p>
-      <div className="mt-2 flex items-center justify-between">
-        {issue.assigneeName ? (
+      <p
+        className={`mt-1.5 line-clamp-2 text-[12.5px] leading-[1.4] ${
+          selected ? 'font-semibold text-zinc-50' : 'text-zinc-200'
+        }`}
+      >
+        {issue.summary}
+      </p>
+      {issue.assigneeName && (
+        <div className="mt-1.5 flex items-center gap-1.5">
           <span
             title={issue.assigneeName}
-            className="flex size-5 items-center justify-center rounded-full bg-zinc-700 text-[10px] font-semibold text-zinc-200"
+            className="flex size-[18px] shrink-0 items-center justify-center rounded-full bg-indigo-900 text-[9px] font-bold text-indigo-400"
           >
             {initials(issue.assigneeName)}
           </span>
-        ) : (
-          <span />
-        )}
-        {issue.storyPoints !== null && <Badge color="indigo">{issue.storyPoints}</Badge>}
-      </div>
+          <span className="min-w-0 truncate text-[11px] text-zinc-400">
+            {shortName(issue.assigneeName)}
+          </span>
+        </div>
+      )}
     </div>
   )
 }

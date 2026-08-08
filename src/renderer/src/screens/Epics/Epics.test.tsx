@@ -41,6 +41,22 @@ describe('Epics', () => {
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Épicos' })).toBeInTheDocument())
   })
 
+  it('contexto do cabeçalho bate com a grade: abertos, concluídos e SP somados', async () => {
+    installMockApi({
+      'epics:overview': () => ({
+        epics: [
+          makeEpic({ key: 'BT-100', statusCategory: 'indeterminate', spTotal: 20 }),
+          makeEpic({ key: 'BT-101', statusCategory: 'new', spTotal: 5 }),
+          makeEpic({ key: 'BT-200', statusCategory: 'done', spTotal: 13 })
+        ]
+      })
+    })
+    renderWithProviders(<Epics />, { withIssueDetail: false })
+    await waitFor(() =>
+      expect(screen.getByText('2 abertos · 1 concluído · 38 sp no total')).toBeInTheDocument()
+    )
+  })
+
   it('estado vazio quando não há épicos', async () => {
     installMockApi({ 'epics:overview': () => ({ epics: [] }) })
     renderWithProviders(<Epics />, { withIssueDetail: false })

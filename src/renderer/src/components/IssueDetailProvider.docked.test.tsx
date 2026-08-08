@@ -138,6 +138,43 @@ describe('IssueDetailProvider — painel docado', () => {
     expect(overlayEl()).toBeNull()
   })
 
+  it('em 380px o cabeçalho mantém o botão de branch e encolhe o select de status', async () => {
+    installMockApi({
+      ...baseHandlers(),
+      'issues:transitions': () => ({
+        transitions: [
+          {
+            id: '11',
+            name: 'Iniciar',
+            toStatusName: 'Em andamento',
+            toCategoryKey: 'indeterminate' as const
+          }
+        ]
+      })
+    })
+    renderWithProviders(<BoardLike />)
+    await openCard()
+
+    // copiar o nome do branch não tem outro caminho na UI: fica nos dois modos.
+    // Quem cede largura no docado é o <select> de status, verificado abaixo.
+    expect(screen.getByRole('button', { name: 'Copiar nome do branch' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Abrir no Jira' })).toBeInTheDocument()
+
+    const select = await screen.findByRole('combobox')
+    expect(select.className).toContain('text-[11px]')
+    expect(select.className).toContain('px-[7px]')
+    expect(select.className).toContain('flex-1')
+  })
+
+  it('na gaveta sobreposta o botão de branch continua no cabeçalho', async () => {
+    wide = false
+    installMockApi(baseHandlers())
+    renderWithProviders(<BoardLike />)
+    await openCard()
+
+    expect(screen.getByRole('button', { name: 'Copiar nome do branch' })).toBeInTheDocument()
+  })
+
   it('mostra os metadados como grade de rótulo + valor', async () => {
     installMockApi(baseHandlers())
     renderWithProviders(<BoardLike />)

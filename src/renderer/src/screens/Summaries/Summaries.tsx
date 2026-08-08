@@ -9,13 +9,23 @@ import {
   subMonths,
   subWeeks
 } from 'date-fns'
-import { Check, Copy, Download, Save, Sparkles, Trash2 } from 'lucide-react'
+import { ptBR as ptBRLocale } from 'date-fns/locale'
+import { Check, Copy, Download, Pencil, Save, Sparkles, Trash2 } from 'lucide-react'
 import type { Period } from '@shared/periods'
 import type { AiGeneratedBy, SummaryTemplate } from '@shared/domain'
 import type { IpcResponse } from '@shared/ipc-contract'
 import { invoke } from '../../api/client'
 import { useAiStatus, useSprintList } from '../../api/hooks'
-import { Button, Card, EmptyState, Spinner } from '../../components/ui'
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  ScreenHeader,
+  SegmentedControl,
+  Spinner,
+  Toggle
+} from '../../components/ui'
 import { useIssueDetail } from '../../components/issueDetail'
 import { t } from '../../strings/ptBR'
 
@@ -41,6 +51,21 @@ const summaryKindOptions: Array<{ key: SummaryKind; label: string }> = [
   ...templateOptions,
   { key: 'sprint_retro', label: 'Retro de sprint' }
 ]
+
+/**
+ * Uma cor por template na pílula do histórico — é o que deixa a coluna
+ * escaneável. Sem `accent`: pelo contrato ele é exclusivo do crachá de menções.
+ */
+const templatePillClass: Record<SummaryTemplate, string> = {
+  standup: 'bg-indigo-600/16 text-indigo-400',
+  weekly: 'bg-green-600/16 text-green-400 light:text-green-600',
+  one_on_one: 'bg-amber-600/16 text-amber-400 light:text-amber-600',
+  monthly: 'bg-blue-600/16 text-blue-400 light:text-blue-600'
+}
+
+function templateLabel(template: SummaryTemplate): string {
+  return templateOptions.find((o) => o.key === template)?.label ?? template
+}
 
 type WorklogPeriodKey = 'this_week' | 'last_week' | 'this_month' | 'last_month'
 
@@ -90,6 +115,9 @@ function truncate(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max)}…` : text
 }
 
+const selectClass =
+  'rounded-md border border-zinc-700 bg-zinc-950/60 px-2.5 py-1 text-[12.5px] text-zinc-200'
+
 /**
  * Label do provider que gerou um resumo salvo: usa o label do status ATUAL se o id do
  * provider ainda bater com algum da lista (renomeou/mudou de detail sem perder o nome
@@ -116,6 +144,10 @@ export default function Summaries(): React.JSX.Element {
   const [busy, setBusy] = useState(false)
   const [copied, setCopied] = useState(false)
   const [aiFellBack, setAiFellBack] = useState(false)
+  const [editing, setEditing] = useState(false)
+  /** o que a FAIXA do resultado descreve — congelado no momento em que o texto entrou na tela */
+  const [resultKind, setResultKind] = useState<SummaryKind>('standup')
+  const [resultAt, setResultAt] = useState<string | null>(null)
 
   const period = periodOptions.find((p) => p.key === periodKey)!.period
   const isSprintRetro = template === 'sprint_retro'
@@ -127,6 +159,7 @@ export default function Summaries(): React.JSX.Element {
   })
   const { data: sprintList } = useSprintList()
   const sprints = useMemo(() => sprintList?.sprints ?? [], [sprintList])
+  const saved = history?.summaries ?? []
 
   // Default: sprint fechada mais recente; senão a ativa.
   const defaultSprintId = useMemo(() => {
@@ -152,6 +185,9 @@ export default function Summaries(): React.JSX.Element {
         : await invoke('summaries:generate', { period, template, useClaude: wantAi })
       setContent(res.markdown)
       setGeneratedBy(res.generatedBy)
+      setResultKind(template)
+      setResultAt(new Date().toISOString())
+      setEditing(false)
       if (wantAi && res.generatedBy === 'template') setAiFellBack(true)
     } finally {
       setBusy(false)
@@ -233,285 +269,455 @@ export default function Summaries(): React.JSX.Element {
         escapeCsv(r.comment ?? '')
       ].join(',')
     )
-    const content = [header, ...lines].join('\n')
+    const csv = [header, ...lines].join('\n')
     const name = `worklogs-${worklogRangeUsed.start}-a-${worklogRangeUsed.end}.csv`
-    await invoke('export:file', { content, suggestedName: name })
+    await invoke('export:file', { content: csv, suggestedName: name })
   }
 
+  const resultTitle = [
+    summaryKindOptions.find((o) => o.key === resultKind)?.label ?? resultKind,
+    resultAt ? format(new Date(resultAt), "d 'de' MMMM", { locale: ptBRLocale }) : null
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
   return (
-    <div className="space-y-5 p-6">
-      <h2 className="text-xl font-semibold text-zinc-100">Resumos</h2>
+    <div className="flex h-full flex-col">
+      <ScreenHeader
+        title="Resumos"
+        context={`Daily, weekly, 1:1, mensal e retro de sprint · ${saved.length} salvo${
+          saved.length === 1 ? '' : 's'
+        }`}
+      />
 
-      <Card>
-        <div className="flex flex-wrap items-end gap-3">
-          {isSprintRetro ? (
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-zinc-400">Sprint</span>
-              <select
-                className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
-                value={effectiveSprintId ?? ''}
-                onChange={(e) => setSprintJiraId(Number(e.target.value))}
-              >
-                {sprints.length === 0 && <option value="">Nenhuma sprint encontrada</option>}
-                {sprints.map((s) => (
-                  <option key={s.jiraId} value={s.jiraId}>
-                    {(s.name ?? `Sprint ${s.jiraId}`) + (s.state === 'active' ? ' (ativa)' : '')}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : (
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-zinc-400">Período</span>
-              <select
-                className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
-                value={periodKey}
-                onChange={(e) => setPeriodKey(e.target.value)}
-              >
-                {periodOptions.map((p) => (
-                  <option key={p.key} value={p.key}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-zinc-400">Formato</span>
-            <select
-              className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
-              value={template}
-              onChange={(e) => setTemplate(e.target.value as SummaryKind)}
-            >
-              {summaryKindOptions.map((o) => (
-                <option key={o.key} value={o.key}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label
-            className={`flex items-center gap-2 pb-1.5 text-sm ${
-              aiStatus?.active ? 'cursor-pointer text-zinc-300' : 'text-zinc-600'
-            }`}
-            title={
-              aiStatus?.active
-                ? `Reescreve o resumo com ${aiStatus.active.label}`
-                : 'Nenhum provider de IA disponível — configure em Ajustes'
-            }
-          >
-            <input
-              type="checkbox"
-              className="accent-indigo-600"
-              disabled={!aiStatus?.active}
-              checked={useAi && Boolean(aiStatus?.active)}
-              onChange={(e) => setUseAi(e.target.checked)}
-            />
-            <Sparkles size={14} className="text-indigo-400 light:text-indigo-600" />
-            Aprimorar com {aiStatus?.active?.label ?? 'IA'}
-          </label>
-          <Button
-            className="ml-auto"
-            disabled={busy || (isSprintRetro && effectiveSprintId == null)}
-            onClick={() => void generate()}
-          >
-            {busy && <Spinner />}
-            {busy ? 'Gerando…' : 'Gerar resumo'}
-          </Button>
-        </div>
-      </Card>
+      <div className="flex-1 overflow-y-auto px-6 py-[18px]">
+        <div className="flex items-start gap-3.5">
+          <div className="flex min-w-0 flex-1 flex-col gap-3.5">
+            <Card bodyClassName="flex flex-wrap items-center gap-2.5 p-3">
+              <SegmentedControl
+                aria-label="Formato do resumo"
+                options={summaryKindOptions.map((o) => ({ value: o.key, label: o.label }))}
+                value={template}
+                onChange={(next) => setTemplate(next)}
+              />
 
-      {content && (
-        <Card
-          title={
-            <span className="flex items-center gap-2">
-              Prévia (editável)
-              {generatedBy && generatedBy !== 'template' && (
-                <span className="flex items-center gap-1 text-xs font-normal text-indigo-400 light:text-indigo-600">
-                  <Sparkles size={12} /> gerado com {generatedByLabel(generatedBy, aiStatus)}
-                </span>
+              {isSprintRetro ? (
+                <select
+                  aria-label="Sprint"
+                  className={selectClass}
+                  value={effectiveSprintId ?? ''}
+                  onChange={(e) => setSprintJiraId(Number(e.target.value))}
+                >
+                  {sprints.length === 0 && <option value="">Nenhuma sprint encontrada</option>}
+                  {sprints.map((s) => (
+                    <option key={s.jiraId} value={s.jiraId}>
+                      {(s.name ?? `Sprint ${s.jiraId}`) + (s.state === 'active' ? ' (ativa)' : '')}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <select
+                  aria-label="Período"
+                  className={selectClass}
+                  value={periodKey}
+                  onChange={(e) => setPeriodKey(e.target.value)}
+                >
+                  {periodOptions.map((p) => (
+                    <option key={p.key} value={p.key}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
               )}
-              {aiFellBack && (
-                <span className="text-xs font-normal text-amber-400 light:text-amber-600">
-                  Gerado por template — {aiStatus?.active?.label ?? 'IA'} indisponível
-                </span>
-              )}
-            </span>
-          }
-        >
-          <textarea
-            className="h-72 w-full resize-y rounded-md border border-zinc-800 bg-zinc-950 p-3 font-mono text-sm text-zinc-200 outline-none focus:border-indigo-600"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-          />
-          <CitedIssueChips content={content} />
-          <div className="mt-3 flex gap-2">
-            <Button variant="secondary" onClick={() => void copy()}>
-              {copied ? <Check size={14} /> : <Copy size={14} />}
-              {copied ? t.common.copied : t.common.copy}
-            </Button>
-            <Button variant="secondary" onClick={() => void exportFile()}>
-              <Download size={14} />
-              {t.common.export}
-            </Button>
-            {!isSprintRetro && (
-              <Button variant="secondary" onClick={() => void save()}>
-                <Save size={14} />
-                Salvar no histórico
+
+              <span
+                className="ml-auto flex items-center gap-2 text-[12.5px] text-zinc-400"
+                title={
+                  aiStatus?.active
+                    ? `Reescreve o resumo com ${aiStatus.active.label}`
+                    : 'Nenhum provider de IA disponível — configure em Ajustes'
+                }
+              >
+                <span id="summaries-use-ai">usar IA</span>
+                <Toggle
+                  aria-labelledby="summaries-use-ai"
+                  disabled={!aiStatus?.active}
+                  checked={useAi && Boolean(aiStatus?.active)}
+                  onChange={setUseAi}
+                />
+              </span>
+
+              <Button
+                disabled={busy || (isSprintRetro && effectiveSprintId == null)}
+                onClick={() => void generate()}
+              >
+                {busy ? <Spinner /> : <Sparkles size={13} />}
+                {busy ? 'Gerando…' : 'Gerar'}
               </Button>
+            </Card>
+
+            {content && (
+              <Card
+                title={
+                  <span className="flex items-center gap-2.5">
+                    {resultTitle}
+                    {generatedBy && generatedBy !== 'template' && (
+                      <span className="flex items-center gap-1.5 rounded-full bg-indigo-600/16 px-2 py-0.5 text-[10.5px] font-bold text-indigo-400">
+                        <Sparkles size={10} />
+                        {generatedByLabel(generatedBy, aiStatus)}
+                      </span>
+                    )}
+                    {aiFellBack && (
+                      <span className="text-[11.5px] font-normal text-amber-400 light:text-amber-600">
+                        Gerado por template — {aiStatus?.active?.label ?? 'IA'} indisponível
+                      </span>
+                    )}
+                  </span>
+                }
+                actions={
+                  <>
+                    <Button variant="ghost" onClick={() => setEditing((v) => !v)}>
+                      <Pencil size={12} />
+                      {editing ? 'Pronto' : 'Editar'}
+                    </Button>
+                    <Button variant="secondary" onClick={() => void copy()}>
+                      {copied ? <Check size={12} /> : <Copy size={12} />}
+                      {copied ? t.common.copied : t.common.copy}
+                    </Button>
+                    {!isSprintRetro && (
+                      <Button variant="secondary" onClick={() => void save()}>
+                        <Save size={12} />
+                        Salvar
+                      </Button>
+                    )}
+                    <Button variant="secondary" onClick={() => void exportFile()}>
+                      <Download size={12} />
+                      .md
+                    </Button>
+                  </>
+                }
+                bodyClassName="px-[18px] py-4"
+              >
+                {editing ? (
+                  <textarea
+                    aria-label="Conteúdo do resumo"
+                    className="h-72 w-full resize-y rounded-md border border-zinc-800 bg-zinc-950/60 p-3 font-mono text-[12.5px] text-zinc-200 outline-none focus:border-indigo-600"
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                  />
+                ) : (
+                  <SummaryBody text={content} onOpenIssue={openIssue} />
+                )}
+              </Card>
+            )}
+
+            <Card title="Worklogs do período">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <select
+                  aria-label="Período dos worklogs"
+                  className={selectClass}
+                  value={worklogPeriodKey}
+                  onChange={(e) => setWorklogPeriodKey(e.target.value as WorklogPeriodKey)}
+                >
+                  {worklogPeriodOptions.map((o) => (
+                    <option key={o.key} value={o.key}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  className="ml-auto"
+                  disabled={worklogBusy}
+                  onClick={() => void generateWorklog()}
+                >
+                  {worklogBusy && <Spinner />}
+                  {worklogBusy ? 'Gerando…' : 'Gerar tabela'}
+                </Button>
+              </div>
+
+              {worklogResult &&
+                (worklogResult.rows.length === 0 ? (
+                  <div className="mt-4">
+                    <EmptyState message="Nenhum worklog seu no período." />
+                  </div>
+                ) : (
+                  <>
+                    <div className="mt-4 overflow-x-auto">
+                      <table className="w-full text-[13px]">
+                        <thead>
+                          <tr className="border-b border-zinc-800 text-left text-[11px] font-bold tracking-[.04em] text-zinc-600 uppercase">
+                            <th className="py-1.5 pr-3 font-bold">Data</th>
+                            <th className="py-1.5 pr-3 font-bold">Card</th>
+                            <th className="py-1.5 pr-3 font-bold">Tempo</th>
+                            <th className="py-1.5 font-bold">Comentário</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-800/60">
+                          {worklogResult.rows.map((r, i) => (
+                            <tr key={i}>
+                              <td className="py-1.5 pr-3 whitespace-nowrap text-zinc-400">
+                                {format(new Date(r.date), 'dd/MM')}
+                              </td>
+                              <td className="py-1.5 pr-3">
+                                <button
+                                  className="font-mono text-[11.5px] text-indigo-400 hover:underline"
+                                  onClick={() => openIssue(r.key)}
+                                >
+                                  {r.key}
+                                </button>
+                              </td>
+                              <td className="py-1.5 pr-3 whitespace-nowrap text-zinc-300">
+                                {r.timeSpent}
+                              </td>
+                              <td className="py-1.5 text-zinc-400">
+                                {truncate(r.comment ?? '', 80)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="border-t border-zinc-800 font-bold text-zinc-50">
+                            <td className="py-1.5 pr-3" colSpan={2}>
+                              Total
+                            </td>
+                            <td className="py-1.5 pr-3 whitespace-nowrap">
+                              {formatSecondsHm(worklogResult.totalSeconds)}
+                            </td>
+                            <td className="py-1.5"></td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                    <div className="mt-3 flex gap-2">
+                      <Button variant="secondary" onClick={() => void copyWorklogMarkdown()}>
+                        {worklogCopied ? <Check size={14} /> : <Copy size={14} />}
+                        {worklogCopied ? t.common.copied : 'Copiar (markdown)'}
+                      </Button>
+                      <Button variant="secondary" onClick={() => void exportWorklogCsv()}>
+                        <Download size={14} />
+                        Exportar CSV
+                      </Button>
+                    </div>
+                  </>
+                ))}
+            </Card>
+          </div>
+
+          <div className="w-[300px] shrink-0">
+            {/* histórico vazio é linha de ~26px, não cartão com empty state (regra 3) */}
+            {saved.length === 0 ? (
+              <div className="rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-[12.5px] text-zinc-400">
+                <span className="font-semibold text-zinc-200">Salvos 0</span> — resumos que você
+                salvar aparecem aqui
+              </div>
+            ) : (
+              <Card
+                title="Salvos"
+                actions={<Badge color="zinc">{saved.length}</Badge>}
+                bodyClassName="px-4 pt-0.5 pb-2.5"
+              >
+                <div className="flex flex-col">
+                  {saved.map((s) => (
+                    <div
+                      key={s.id}
+                      className="flex items-center gap-2.5 border-b border-zinc-800/60 py-2.5 last:border-0"
+                    >
+                      <span
+                        className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10.5px] font-bold ${templatePillClass[s.template]}`}
+                      >
+                        {templateLabel(s.template)}
+                      </span>
+                      <button
+                        className="min-w-0 flex-1 text-left"
+                        onClick={() => {
+                          setContent(s.contentMd)
+                          setGeneratedBy(s.generatedBy)
+                          setResultKind(s.template)
+                          setResultAt(s.createdAt)
+                          setAiFellBack(false)
+                          setEditing(false)
+                        }}
+                        title="Carregar no editor"
+                      >
+                        <span className="block truncate text-[12.5px] text-zinc-200">
+                          {format(new Date(s.createdAt), "d 'de' MMMM", { locale: ptBRLocale })}
+                        </span>
+                        <span className="mt-px block truncate text-[11px] text-zinc-500">
+                          {s.generatedBy === 'template'
+                            ? 'sem IA'
+                            : generatedByLabel(s.generatedBy, aiStatus)}
+                        </span>
+                      </button>
+                      <button
+                        className="shrink-0 rounded p-1 text-zinc-600 hover:text-zinc-300"
+                        onClick={() => void invoke('export:clipboard', { text: s.contentMd })}
+                        title="Copiar resumo salvo"
+                      >
+                        <Copy size={13} />
+                      </button>
+                      <button
+                        className="shrink-0 rounded p-1 text-zinc-600 hover:text-red-400 light:hover:text-red-600"
+                        onClick={() => void remove(s.id)}
+                        title={t.common.delete}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </Card>
             )}
           </div>
-        </Card>
-      )}
-
-      <Card title="Histórico">
-        {!history || history.summaries.length === 0 ? (
-          <EmptyState message="Nenhum resumo salvo ainda." />
-        ) : (
-          <div className="divide-y divide-zinc-800">
-            {history.summaries.map((s) => (
-              <div key={s.id} className="flex items-center gap-3 py-2">
-                <button
-                  className="min-w-0 flex-1 rounded-md -mx-1.5 px-1.5 py-0.5 text-left hover:bg-zinc-800/60"
-                  onClick={() => {
-                    setContent(s.contentMd)
-                    setGeneratedBy(s.generatedBy)
-                  }}
-                  title="Carregar no editor"
-                >
-                  <div className="text-sm text-zinc-200">
-                    {templateOptions.find((o) => o.key === s.template)?.label ?? s.template}
-                    <span className="ml-2 text-xs text-zinc-500">
-                      {format(new Date(s.createdAt), 'dd/MM/yyyy HH:mm')}
-                    </span>
-                  </div>
-                  <div className="truncate text-xs text-zinc-500">
-                    {s.contentMd.replace(/[#*_\n]/g, ' ').slice(0, 120)}
-                  </div>
-                </button>
-                <button
-                  className="shrink-0 rounded p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-red-400 light:hover:text-red-600"
-                  onClick={() => void remove(s.id)}
-                  title={t.common.delete}
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
-
-      <Card title="Worklogs do período">
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-zinc-400">Período</span>
-            <select
-              className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
-              value={worklogPeriodKey}
-              onChange={(e) => setWorklogPeriodKey(e.target.value as WorklogPeriodKey)}
-            >
-              {worklogPeriodOptions.map((o) => (
-                <option key={o.key} value={o.key}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <Button className="ml-auto" disabled={worklogBusy} onClick={() => void generateWorklog()}>
-            {worklogBusy && <Spinner />}
-            {worklogBusy ? 'Gerando…' : 'Gerar'}
-          </Button>
         </div>
-
-        {worklogResult &&
-          (worklogResult.rows.length === 0 ? (
-            <div className="mt-4">
-              <EmptyState message="Nenhum worklog seu no período." />
-            </div>
-          ) : (
-            <>
-              <div className="mt-4 overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-zinc-800 text-left text-xs text-zinc-500">
-                      <th className="py-1.5 pr-3 font-medium">Data</th>
-                      <th className="py-1.5 pr-3 font-medium">Card</th>
-                      <th className="py-1.5 pr-3 font-medium">Tempo</th>
-                      <th className="py-1.5 font-medium">Comentário</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-800">
-                    {worklogResult.rows.map((r, i) => (
-                      <tr key={i}>
-                        <td className="py-1.5 pr-3 whitespace-nowrap text-zinc-400">
-                          {format(new Date(r.date), 'dd/MM')}
-                        </td>
-                        <td className="py-1.5 pr-3">
-                          <button
-                            className="font-mono text-xs text-indigo-400 hover:underline light:text-indigo-600"
-                            onClick={() => openIssue(r.key)}
-                          >
-                            {r.key}
-                          </button>
-                        </td>
-                        <td className="py-1.5 pr-3 whitespace-nowrap text-zinc-300">
-                          {r.timeSpent}
-                        </td>
-                        <td className="py-1.5 text-zinc-400">{truncate(r.comment ?? '', 80)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t border-zinc-800 font-semibold text-zinc-200">
-                      <td className="py-1.5 pr-3" colSpan={2}>
-                        Total
-                      </td>
-                      <td className="py-1.5 pr-3 whitespace-nowrap">
-                        {formatSecondsHm(worklogResult.totalSeconds)}
-                      </td>
-                      <td className="py-1.5"></td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-              <div className="mt-3 flex gap-2">
-                <Button variant="secondary" onClick={() => void copyWorklogMarkdown()}>
-                  {worklogCopied ? <Check size={14} /> : <Copy size={14} />}
-                  {worklogCopied ? t.common.copied : 'Copiar (markdown)'}
-                </Button>
-                <Button variant="secondary" onClick={() => void exportWorklogCsv()}>
-                  <Download size={14} />
-                  Exportar CSV
-                </Button>
-              </div>
-            </>
-          ))}
-      </Card>
+      </div>
     </div>
   )
 }
 
-/** Keys de cards citadas no resumo, como chips que abrem a gaveta (o texto acima é um textarea — não dá para linkificar dentro dele). */
-function CitedIssueChips({ content }: { content: string }): React.JSX.Element | null {
-  const { openIssue } = useIssueDetail()
-  const keys = useMemo(() => {
-    const found = content.match(/\b[A-Z][A-Z0-9]{1,9}-\d+\b/g) ?? []
-    return [...new Set(found)]
-  }, [content])
-  if (keys.length === 0) return null
+const ISSUE_KEY_RE = /\b[A-Z][A-Z0-9]{1,9}-\d+\b/g
+const BOLD_RE = /\*\*(.+?)\*\*/g
+
+type SummaryBlock =
+  | { type: 'heading'; text: string }
+  | { type: 'list'; items: string[] }
+  | { type: 'paragraph'; lines: string[] }
+
+/** Markdown do resumo em blocos — só o que os templates da app emitem (título, lista, parágrafo). */
+function parseSummary(text: string): SummaryBlock[] {
+  const blocks: SummaryBlock[] = []
+  let paragraph: string[] = []
+
+  const flush = (): void => {
+    if (paragraph.length > 0) {
+      blocks.push({ type: 'paragraph', lines: paragraph })
+      paragraph = []
+    }
+  }
+
+  for (const rawLine of text.split('\n')) {
+    const line = rawLine.trim()
+    if (line === '') {
+      flush()
+      continue
+    }
+    if (/^#{1,4}\s+/.test(line)) {
+      flush()
+      blocks.push({ type: 'heading', text: line.replace(/^#{1,4}\s+/, '') })
+      continue
+    }
+    if (line.startsWith('- ') || line.startsWith('* ')) {
+      flush()
+      const item = line.slice(2)
+      const last = blocks[blocks.length - 1]
+      if (last && last.type === 'list') last.items.push(item)
+      else blocks.push({ type: 'list', items: [item] })
+      continue
+    }
+    paragraph.push(line)
+  }
+  flush()
+  return blocks
+}
+
+/** Keys de card viram botões mono de marca que abrem a gaveta. */
+function linkifyKeys(
+  text: string,
+  prefix: string,
+  onOpenIssue: (key: string) => void
+): React.ReactNode[] {
+  const nodes: React.ReactNode[] = []
+  let last = 0
+  let i = 0
+  ISSUE_KEY_RE.lastIndex = 0
+  let match: RegExpExecArray | null
+  while ((match = ISSUE_KEY_RE.exec(text))) {
+    if (match.index > last) nodes.push(text.slice(last, match.index))
+    const key = match[0]
+    nodes.push(
+      <button
+        key={`${prefix}-k${i}`}
+        type="button"
+        className="font-mono text-[11.5px] text-indigo-400 hover:underline"
+        onClick={() => onOpenIssue(key)}
+      >
+        {key}
+      </button>
+    )
+    i += 1
+    last = match.index + key.length
+  }
+  if (last < text.length) nodes.push(text.slice(last))
+  return nodes
+}
+
+function renderInline(
+  text: string,
+  prefix: string,
+  onOpenIssue: (key: string) => void
+): React.ReactNode[] {
+  const nodes: React.ReactNode[] = []
+  let last = 0
+  let i = 0
+  BOLD_RE.lastIndex = 0
+  let match: RegExpExecArray | null
+  while ((match = BOLD_RE.exec(text))) {
+    if (match.index > last) {
+      nodes.push(...linkifyKeys(text.slice(last, match.index), `${prefix}-t${i}`, onOpenIssue))
+    }
+    nodes.push(
+      <strong key={`${prefix}-b${i}`} className="font-semibold text-zinc-50">
+        {linkifyKeys(match[1], `${prefix}-b${i}-in`, onOpenIssue)}
+      </strong>
+    )
+    i += 1
+    last = match.index + match[0].length
+  }
+  if (last < text.length) {
+    nodes.push(...linkifyKeys(text.slice(last), `${prefix}-t${i}`, onOpenIssue))
+  }
+  return nodes
+}
+
+/** Corpo do resumo na tipografia do DS: coluna de 70ch, seção em negrito, keys em mono de marca. */
+function SummaryBody({
+  text,
+  onOpenIssue
+}: {
+  text: string
+  onOpenIssue: (key: string) => void
+}): React.JSX.Element {
+  const blocks = parseSummary(text)
+
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-1.5">
-      <span className="text-xs text-zinc-500">Cards citados:</span>
-      {keys.map((key) => (
-        <button
-          key={key}
-          className="rounded bg-zinc-800 px-1.5 py-0.5 text-xs font-medium text-indigo-400 hover:bg-zinc-700 hover:text-indigo-300 light:text-indigo-600 light:hover:text-indigo-700"
-          onClick={() => openIssue(key)}
-        >
-          {key}
-        </button>
-      ))}
+    <div className="flex max-w-[70ch] flex-col gap-3 text-[13px] leading-[1.65] text-zinc-300">
+      {blocks.map((block, i) => {
+        if (block.type === 'heading') {
+          return (
+            <h4 key={i} className="-mb-2 text-[13.5px] font-bold text-zinc-50">
+              {renderInline(block.text, `h${i}`, onOpenIssue)}
+            </h4>
+          )
+        }
+        if (block.type === 'list') {
+          return (
+            <ul key={i} className="list-disc space-y-1 pl-5">
+              {block.items.map((item, j) => (
+                <li key={j}>{renderInline(item, `l${i}-${j}`, onOpenIssue)}</li>
+              ))}
+            </ul>
+          )
+        }
+        return (
+          <p key={i}>
+            {block.lines.map((line, j) => (
+              <span key={j}>
+                {j > 0 && <br />}
+                {renderInline(line, `p${i}-${j}`, onOpenIssue)}
+              </span>
+            ))}
+          </p>
+        )
+      })}
     </div>
   )
 }

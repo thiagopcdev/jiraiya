@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
-import { Send, Sparkles, Trash2 } from 'lucide-react'
+import { CheckCircle2, Send, Sparkles, Trash2 } from 'lucide-react'
 import { invoke, IpcError } from '../../api/client'
 import { useAiStatus, unavailableAiProviderLabel } from '../../api/hooks'
-import { Button, EmptyState, Spinner } from '../../components/ui'
+import { Button, EmptyState, ScreenHeader, Spinner } from '../../components/ui'
 import { MarkdownLite } from '../../components/MarkdownLite'
 import { t } from '../../strings/ptBR'
 import { useIssueDetail } from '../../components/issueDetail'
@@ -47,6 +47,15 @@ function actionDescription(action: AskAction): string {
   }
 }
 
+/** Quadrado de 26px com o Sparkles — marca visual de toda resposta do assistente. */
+function AssistantAvatar(): React.JSX.Element {
+  return (
+    <span className="flex size-[26px] shrink-0 items-center justify-center rounded-md bg-indigo-600/14 text-indigo-400">
+      <Sparkles size={14} />
+    </span>
+  )
+}
+
 function AskActionCard({
   item,
   onExecute,
@@ -60,8 +69,9 @@ function AskActionCard({
 }): React.JSX.Element {
   if (item.status === 'done') {
     return (
-      <div className="rounded-md border border-green-900 bg-green-950/30 px-3 py-2 text-sm text-green-300 light:border-green-300 light:bg-green-50 light:text-green-700">
-        ✓ {item.message}
+      <div className="flex max-w-[520px] items-center gap-2 rounded-[9px] border border-green-600/35 bg-green-600/10 px-3 py-2.5 text-[13px] text-green-400 light:text-green-600">
+        <CheckCircle2 size={14} className="shrink-0" />
+        {item.message}
       </div>
     )
   }
@@ -71,15 +81,13 @@ function AskActionCard({
 
   return (
     <div
-      className={`rounded-md border px-3 py-2 ${
-        isError
-          ? 'border-amber-900 bg-amber-950/30 light:border-amber-300 light:bg-amber-50'
-          : 'border-zinc-800 bg-zinc-900'
+      className={`max-w-[520px] rounded-[9px] border px-3 py-2.5 ${
+        isError ? 'border-amber-600/35 bg-amber-600/10' : 'border-zinc-800 bg-zinc-900'
       }`}
     >
-      <p className="text-sm text-zinc-200">
+      <p className="text-[13px] text-zinc-200">
         <button
-          className="font-mono text-xs text-indigo-400 hover:underline light:text-indigo-600"
+          className="font-mono text-[11.5px] text-indigo-400 hover:underline"
           onClick={() => onOpenIssue(item.action.key)}
         >
           {item.action.key}
@@ -88,7 +96,7 @@ function AskActionCard({
         {actionDescription(item.action)}
       </p>
       {isError && item.message && (
-        <p className="mt-1 text-xs text-amber-400 light:text-amber-700">{item.message}</p>
+        <p className="mt-1 text-[11.5px] text-amber-400 light:text-amber-600">{item.message}</p>
       )}
       <div className="mt-2 flex gap-2">
         <Button variant="secondary" disabled={isBusy} onClick={onExecute}>
@@ -99,6 +107,18 @@ function AskActionCard({
           Descartar
         </Button>
       </div>
+    </div>
+  )
+}
+
+/** Três pontinhos de 6px no lugar de spinner + texto — o rótulo fica só para leitor de tela. */
+function WaitingDots(): React.JSX.Element {
+  return (
+    <div className="flex items-center gap-2" role="status">
+      <span className="size-1.5 animate-pulse rounded-full bg-indigo-400" />
+      <span className="size-1.5 animate-pulse rounded-full bg-zinc-700 [animation-delay:200ms]" />
+      <span className="size-1.5 animate-pulse rounded-full bg-zinc-700 [animation-delay:400ms]" />
+      <span className="sr-only">{t.ask.thinking}</span>
     </div>
   )
 }
@@ -194,116 +214,128 @@ export default function Ask(): React.JSX.Element {
     }
   }
 
+  // Contexto do cabeçalho: quem responde + de onde vem a resposta.
+  const headerContext = [aiStatus?.active?.label, t.ask.hint].filter(Boolean).join(' · ')
+
   if (aiStatus && !aiStatus.active) {
     return (
-      <div className="mx-auto flex h-full w-full max-w-3xl flex-col p-6">
-        <h2 className="text-xl font-semibold text-zinc-100">{t.ask.title}</h2>
-        <p className="mt-1 text-sm text-zinc-500">{t.ask.hint}</p>
+      <div className="flex h-full flex-col">
+        <ScreenHeader title={t.ask.title} context={t.ask.hint} />
         <EmptyState message={t.ask.aiUnavailableHint(unavailableAiProviderLabel(aiStatus))} />
       </div>
     )
   }
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-3xl flex-col p-6">
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold text-zinc-100">{t.ask.title}</h2>
-          <p className="mt-1 text-sm text-zinc-500">{t.ask.hint}</p>
-        </div>
-        {messages.length > 0 && (
-          <Button variant="ghost" onClick={clearConversation}>
-            <Trash2 size={14} />
-            {t.ask.clearConversation}
-          </Button>
+    <div className="flex h-full flex-col">
+      <ScreenHeader
+        title={t.ask.title}
+        context={headerContext}
+        actions={
+          messages.length > 0 && (
+            <Button variant="secondary" onClick={clearConversation}>
+              <Trash2 size={12} />
+              {t.ask.clearConversation}
+            </Button>
+          )
+        }
+      />
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+        {messages.length === 0 && !busy ? (
+          <div className="flex h-full flex-col items-center justify-center gap-3.5">
+            <div className="flex size-12 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900">
+              <Sparkles size={20} className="text-indigo-400" />
+            </div>
+            <p className="max-w-[46ch] text-center text-[13px] text-zinc-500">{t.ask.emptyTitle}</p>
+          </div>
+        ) : (
+          <div className="flex max-w-[780px] flex-col gap-4">
+            {messages.map((message, i) =>
+              message.role === 'user' ? (
+                <div key={i} className="flex justify-end">
+                  <div className="max-w-[70%] rounded-[10px_10px_2px_10px] bg-indigo-600/14 px-3 py-2.5 text-[13.5px] leading-[1.55] text-zinc-200">
+                    {message.content}
+                  </div>
+                </div>
+              ) : (
+                <div key={i} className="flex gap-2.5">
+                  <AssistantAvatar />
+                  <div className="flex min-w-0 flex-col gap-2.5">
+                    {message.error ? (
+                      <div className="max-w-[520px] rounded-[9px] border border-amber-600/35 bg-amber-600/10 px-3 py-2.5 text-[13px] text-amber-400 light:text-amber-600">
+                        {message.content}
+                      </div>
+                    ) : (
+                      <div className="max-w-[70ch]">
+                        <MarkdownLite text={message.content} variant="chat" />
+                      </div>
+                    )}
+                    {!message.error && message.actionItems && message.actionItems.length > 0 && (
+                      <div className="flex flex-col gap-2">
+                        <p className="text-[11.5px] text-zinc-500">
+                          Ações só executam com a sua confirmação.
+                        </p>
+                        {message.actionItems.map((item, j) => (
+                          <AskActionCard
+                            key={j}
+                            item={item}
+                            onExecute={() => void executeAction(i, j, item.action)}
+                            onDiscard={() => updateActionItem(i, j, null)}
+                            onOpenIssue={openIssue}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            )}
+            {busy && (
+              <div className="flex gap-2.5">
+                <AssistantAvatar />
+                <div className="flex h-[26px] items-center">
+                  <WaitingDots />
+                </div>
+              </div>
+            )}
+            <div ref={bottomRef} />
+          </div>
         )}
       </div>
 
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
-        {messages.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-4">
-            <div className="flex size-12 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900">
-              <Sparkles size={20} className="text-indigo-400 light:text-indigo-600" />
-            </div>
-            <p className="text-sm text-zinc-500">{t.ask.emptyTitle}</p>
-            <div className="flex max-w-lg flex-col items-center gap-2">
+      <div className="shrink-0 border-t border-zinc-800 bg-zinc-950/60 px-6 py-3">
+        <div className="flex max-w-[780px] flex-col gap-2">
+          {/* Atalho de partida: some depois da primeira pergunta, quando a conversa
+              já dá o contexto e os chips só ocupariam espaço. */}
+          {messages.length === 0 && (
+            <div className="flex flex-wrap gap-1.5">
               {t.ask.suggestions.map((suggestion) => (
                 <button
                   key={suggestion}
-                  className="rounded-full border border-zinc-800 bg-zinc-900 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-indigo-700 hover:text-indigo-300 light:hover:text-indigo-600"
+                  disabled={busy}
+                  className="rounded-full border border-zinc-800 px-3 py-0.5 text-[11.5px] text-zinc-400 transition-colors hover:border-indigo-600/60 hover:text-indigo-400 disabled:cursor-not-allowed"
                   onClick={() => void send(suggestion)}
                 >
                   {suggestion}
                 </button>
               ))}
             </div>
+          )}
+          <div className="flex items-end gap-2.5">
+            <textarea
+              className="h-[38px] max-h-40 flex-1 resize-none rounded-md border border-zinc-700 bg-zinc-950/60 px-2.5 py-[7px] text-[13px] leading-[1.6] text-zinc-200 placeholder-zinc-600 outline-none focus:border-indigo-500"
+              placeholder={t.ask.placeholder}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={onKeyDown}
+            />
+            <Button disabled={busy || !input.trim()} onClick={() => void send(input)}>
+              {busy ? <Spinner /> : <Send size={13} />}
+              {t.ask.send}
+            </Button>
           </div>
-        ) : (
-          messages.map((message, i) =>
-            message.role === 'user' ? (
-              <div key={i} className="flex justify-end">
-                <div className="max-w-[85%] rounded-lg bg-indigo-950/60 px-3 py-2 text-sm text-zinc-100">
-                  {message.content}
-                </div>
-              </div>
-            ) : (
-              <div key={i} className="flex flex-col items-start gap-2">
-                <div
-                  className={`max-w-[85%] rounded-lg border px-3 py-2 ${
-                    message.error
-                      ? 'border-amber-900 bg-amber-950/30 text-amber-300 light:border-amber-300 light:bg-amber-50 light:text-amber-700'
-                      : 'border-zinc-800 bg-zinc-900'
-                  }`}
-                >
-                  {message.error ? (
-                    <p className="text-sm">{message.content}</p>
-                  ) : (
-                    <MarkdownLite text={message.content} />
-                  )}
-                </div>
-                {!message.error && message.actionItems && message.actionItems.length > 0 && (
-                  <div className="flex w-full max-w-[85%] flex-col gap-2">
-                    <p className="text-xs text-zinc-500">
-                      Ações só executam com a sua confirmação.
-                    </p>
-                    {message.actionItems.map((item, j) => (
-                      <AskActionCard
-                        key={j}
-                        item={item}
-                        onExecute={() => void executeAction(i, j, item.action)}
-                        onDiscard={() => updateActionItem(i, j, null)}
-                        onOpenIssue={openIssue}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            )
-          )
-        )}
-        {busy && (
-          <div className="flex justify-start">
-            <div className="flex max-w-[85%] items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-400">
-              <Spinner />
-              {t.ask.thinking}
-            </div>
-          </div>
-        )}
-        <div ref={bottomRef} />
-      </div>
-
-      <div className="mt-3 flex items-end gap-2">
-        <textarea
-          className="h-16 flex-1 resize-none rounded-md border border-zinc-800 bg-zinc-950 p-3 text-sm text-zinc-200 outline-none focus:border-indigo-600"
-          placeholder={t.ask.placeholder}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={onKeyDown}
-        />
-        <Button disabled={busy || !input.trim()} onClick={() => void send(input)}>
-          {busy ? <Spinner /> : <Send size={14} />}
-          {t.ask.send}
-        </Button>
+        </div>
       </div>
     </div>
   )

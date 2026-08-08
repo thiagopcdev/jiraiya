@@ -77,13 +77,35 @@ describe('Dashboard (tela "Hoje")', () => {
   afterEach(() => cleanup())
   beforeEach(() => localStorage.clear())
 
-  it('cabeçalho: título "Hoje" e segmented de período', async () => {
+  it('cabeçalho: título "Hoje" e faixa de abas de período', async () => {
     installBaseMocks()
     renderWithProviders(<Dashboard />, { withIssueDetail: false })
     expect(screen.getByRole('heading', { name: 'Hoje' })).toBeInTheDocument()
     expect(screen.getByText('Hoje', { selector: 'button' })).toBeInTheDocument()
     expect(screen.getByText('7 dias')).toBeInTheDocument()
     expect(screen.getByText('Sprint')).toBeInTheDocument()
+    // aba sublinhada: a ativa se anuncia com aria-current, não com aria-pressed
+    expect(screen.getByText('Hoje', { selector: 'button' })).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('trocar de aba de período move o aria-current e reconsulta os buckets do período', async () => {
+    const api = installBaseMocks()
+    const user = userEvent.setup()
+    renderWithProviders(<Dashboard />, { withIssueDetail: false })
+    await waitFor(() => expect(api.count('issues:query')).toBeGreaterThan(0))
+
+    await user.click(screen.getByText('7 dias'))
+    expect(screen.getByText('7 dias')).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByText('Hoje', { selector: 'button' })).not.toHaveAttribute('aria-current')
+    await waitFor(() =>
+      expect(
+        api.calls.some((call) => {
+          if (call.channel !== 'issues:query') return false
+          const payload = call.payload as { bucket?: string; period: { type: string } }
+          return payload.bucket === 'inProgress' && payload.period.type === '7d'
+        })
+      ).toBe(true)
+    )
   })
 
   it('SprintStrip aparece mesmo na aba "Hoje" (não só na aba Sprint) e mostra "Sem sprint ativa"', async () => {

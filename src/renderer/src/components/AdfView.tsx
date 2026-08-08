@@ -84,7 +84,7 @@ function AdfBlock({
       )
     case 'codeBlock':
       return (
-        <pre className="overflow-x-auto rounded-md border border-zinc-800 bg-zinc-900 p-2.5 font-mono text-xs text-zinc-300">
+        <pre className="overflow-x-auto rounded-md border border-zinc-800 bg-zinc-950/60 p-2.5 font-mono text-xs text-zinc-300">
           {(node.content ?? []).map((c) => c.text ?? '').join('')}
         </pre>
       )
@@ -108,7 +108,7 @@ function AdfBlock({
       return <tr className="border-b border-zinc-800">{renderChildren(node, mediaResolver)}</tr>
     case 'tableHeader':
       return (
-        <th className="border border-zinc-800 bg-zinc-900 px-2 py-1 text-left font-semibold">
+        <th className="border border-zinc-800 bg-zinc-950/60 px-2 py-1 text-left font-semibold">
           {renderChildren(node, mediaResolver)}
         </th>
       )
@@ -120,7 +120,7 @@ function AdfBlock({
       )
     case 'panel':
       return (
-        <div className="rounded-md border border-zinc-700 bg-zinc-900/70 p-2.5">
+        <div className="rounded-md border border-zinc-700 bg-zinc-950/60 p-2.5">
           {renderChildren(node, mediaResolver)}
         </div>
       )
@@ -142,8 +142,10 @@ function AdfInline({ node }: { node: AdfNode }): React.JSX.Element | null {
     case 'hardBreak':
       return <br />
     case 'mention':
+      // indigo-400 pinta texto de marca nos dois temas (a escala aponta para
+      // --brand-N) — daí não haver mais variante light: aqui
       return (
-        <span className="rounded bg-indigo-950/70 px-1 py-0.5 text-indigo-300 light:bg-indigo-100 light:text-indigo-700">
+        <span className="rounded-sm bg-indigo-950/70 px-1 py-0.5 font-medium text-indigo-400">
           {String(node.attrs?.text ?? '@?')}
         </span>
       )
@@ -152,7 +154,7 @@ function AdfInline({ node }: { node: AdfNode }): React.JSX.Element | null {
     case 'inlineCard':
       return (
         <a
-          className="text-indigo-400 hover:underline light:text-indigo-700"
+          className="text-indigo-400 hover:underline"
           href={String(node.attrs?.url ?? '#')}
           target="_blank"
           rel="noreferrer"
@@ -195,7 +197,7 @@ function applyMarks(text: string, marks?: AdfNode['marks']): ReactNode {
         break
       case 'code':
         out = (
-          <code className="rounded bg-zinc-900 px-1 py-0.5 font-mono text-xs text-amber-200 light:text-amber-700">
+          <code className="rounded-sm bg-zinc-950/70 px-1 py-0.5 font-mono text-xs text-amber-200 light:text-amber-700">
             {out}
           </code>
         )
@@ -203,7 +205,7 @@ function applyMarks(text: string, marks?: AdfNode['marks']): ReactNode {
       case 'link':
         out = (
           <a
-            className="text-indigo-400 hover:underline light:text-indigo-700"
+            className="text-indigo-400 hover:underline"
             href={String(mark.attrs?.href ?? '#')}
             target="_blank"
             rel="noreferrer"

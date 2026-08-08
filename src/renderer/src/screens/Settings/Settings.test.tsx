@@ -12,13 +12,14 @@ import {
 } from '../../testing/mockApi'
 import { renderWithProviders } from '../../testing/render'
 import Settings from './Settings'
+import { SEARCH_INDEX } from './searchIndex'
 
 /**
- * Settings agrega ~12 Cards independentes, todos renderizados juntos — por isso cada teste
- * precisa de um conjunto completo de handlers (senão os Cards que não são o alvo do teste
- * caem no estado de erro NO_MOCK e podem interferir na busca por texto/role). `baseHandlers`
- * cobre o cenário "tudo conectado, tudo disponível"; testes de estado alternativo (desconectado,
- * IA indisponível, gh ausente) sobrescrevem só o necessário via `api.set`.
+ * Configurações agora é índice (9 grupos) + painel: só os cartões do grupo ATIVO
+ * são renderizados. Por isso quase todo teste começa navegando com `goTo` — sem
+ * isso o cartão alvo simplesmente não está no DOM. `baseHandlers` cobre o cenário
+ * "tudo conectado, tudo disponível"; testes de estado alternativo (desconectado,
+ * IA indisponível, gh ausente, fila com item) sobrescrevem via `api.set`.
  */
 
 function baseHandlers(prefsState: Prefs): MockHandlers {
@@ -54,6 +55,7 @@ function baseHandlers(prefsState: Prefs): MockHandlers {
       progress: null
     }),
     'sync:run': () => ({ started: true as const }),
+    'queue:list': () => ({ actions: [] }),
     'prs:status': () => ({ ghAvailable: true, enabled: true }),
     'ai:status': () => ({
       providers: [
@@ -132,17 +134,20 @@ function setup(overrides?: (api: MockApiControl, prefsState: Prefs) => void): Mo
   return api
 }
 
+/** O rodapé do índice só aparece com o app:info resolvido — bom sinal de "tela pronta". */
 async function waitReady(): Promise<void> {
-  await waitFor(() => expect(screen.getByText('Thiago Prado')).toBeInTheDocument())
   await waitFor(() => expect(screen.getByText('Jiraiya v1.2.3')).toBeInTheDocument())
 }
 
-/** Cada Card renderiza `<h3>{title}</h3>` seguido do conteúdo, no mesmo container — usado
- * para escopar queries quando o mesmo texto/role aparece em mais de um Card ao mesmo tempo
- * (ex.: botão "Salvar" existe em Ajustes de IA, Templates e Atualizações simultaneamente). */
+/** Clica num grupo do índice à esquerda. */
+async function goTo(user: ReturnType<typeof userEvent.setup>, group: string): Promise<void> {
+  await user.click(screen.getByRole('button', { name: group }))
+}
+
+/** Card = faixa de título (onde mora o <h3>) + corpo; por isso dois níveis acima. */
 function getCard(title: string): HTMLElement {
   const heading = screen.getByRole('heading', { name: title })
-  return heading.parentElement as HTMLElement
+  return heading.parentElement?.parentElement as HTMLElement
 }
 
 describe('Settings', () => {
@@ -152,15 +157,184 @@ describe('Settings', () => {
 
   afterEach(() => cleanup())
 
+  describe('Índice de grupos', () => {
+    /**
+     * O índice da busca casa com o cartão por igualdade de título. Renomear um
+     * dos dois lados tira o cartão da busca sem erro de tipo e sem quebrar
+     * nenhum outro teste — este aqui é o que transforma a divergência em falha.
+     */
+    it('todo cartão declarado no índice da busca existe de fato na tela', async () => {
+      const user = userEvent.setup()
+      setup()
+      await waitReady()
+
+      const rotuloDoGrupo: Record<string, string> = {
+        account: 'Conta',
+        sync: 'Sincronização',
+        notifications: 'Notificações',
+        appearance: 'Aparência',
+        ai: 'Inteligência artificial',
+        prs: 'Pull requests',
+        templates: 'Templates',
+        data: 'Dados e backup',
+        updates: 'Atualizações'
+      }
+
+      for (const grupo of [...new Set(SEARCH_INDEX.map((e) => e.group))]) {
+        await goTo(user, rotuloDoGrupo[grupo])
+        for (const entrada of SEARCH_INDEX.filter((e) => e.group === grupo)) {
+          await waitFor(() =>
+            expect(screen.getByRole('heading', { name: entrada.card })).toBeInTheDocument()
+          )
+        }
+      }
+    })
+
+    it('abre em Conta e não renderiza os cartões dos outros grupos', async () => {
+      setup()
+      await waitReady()
+
+      expect(screen.getByRole('heading', { name: 'Conta' })).toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: 'Aparência' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: 'Backup' })).not.toBeInTheDocument()
+    })
+
+    it('cada grupo do índice mostra os cartões que lhe pertencem', async () => {
+      const user = userEvent.setup()
+      setup()
+      await waitReady()
+
+      const casos: Array<[string, string[]]> = [
+        [
+          'Sincronização',
+          ['Ritmo de sincronização', 'Projetos acompanhados', 'Estado da sincronização']
+        ],
+        ['Notificações', ['Notificações', 'Lembrete de tempo']],
+        ['Aparência', ['Aparência']],
+        ['Inteligência artificial', ['Inteligência artificial']],
+        ['Pull requests', ['Pull requests (GitHub)']],
+        ['Templates', ['Templates de comentário']],
+        ['Dados e backup', ['Backup', 'Armazenamento']],
+        ['Atualizações', ['Atualizações']]
+      ]
+
+      for (const [grupo, cartoes] of casos) {
+        await goTo(user, grupo)
+        for (const cartao of cartoes) {
+          await waitFor(() =>
+            expect(screen.getByRole('heading', { name: cartao })).toBeInTheDocument()
+          )
+        }
+      }
+    })
+
+    it('marca o grupo ativo com aria-current', async () => {
+      const user = userEvent.setup()
+      setup()
+      await waitReady()
+
+      expect(screen.getByRole('button', { name: 'Conta' })).toHaveAttribute('aria-current', 'page')
+      await goTo(user, 'Aparência')
+      expect(screen.getByRole('button', { name: 'Aparência' })).toHaveAttribute(
+        'aria-current',
+        'page'
+      )
+      expect(screen.getByRole('button', { name: 'Conta' })).not.toHaveAttribute('aria-current')
+    })
+
+    it('mostra versão e crédito no rodapé do índice (o antigo cartão "Sobre")', async () => {
+      setup()
+      await waitReady()
+
+      expect(screen.getByText('Jiraiya v1.2.3')).toBeInTheDocument()
+      expect(screen.getByText('feito por @thiagopcdev')).toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: 'Sobre' })).not.toBeInTheDocument()
+    })
+
+    it('cabeçalho resume conta, site e versão', async () => {
+      setup()
+      await waitReady()
+
+      await waitFor(() =>
+        expect(
+          screen.getByText('thiago@biud.com.br · https://biud.atlassian.net · Jiraiya v1.2.3')
+        ).toBeInTheDocument()
+      )
+    })
+  })
+
+  describe('Busca', () => {
+    it('salta para o grupo do primeiro resultado e deixa só a linha que casa', async () => {
+      const user = userEvent.setup()
+      setup()
+      await waitReady()
+
+      await user.type(screen.getByLabelText('Buscar configuração'), 'densidade')
+
+      await waitFor(() =>
+        expect(screen.getByRole('heading', { name: 'Aparência' })).toBeInTheDocument()
+      )
+      expect(screen.getByLabelText('Densidade')).toBeInTheDocument()
+      expect(screen.queryByLabelText('Tema')).not.toBeInTheDocument()
+    })
+
+    it('sem acento também acha, e casar pelo título mostra o cartão inteiro', async () => {
+      const user = userEvent.setup()
+      setup()
+      await waitReady()
+
+      await user.type(screen.getByLabelText('Buscar configuração'), 'aparencia')
+
+      await waitFor(() => expect(screen.getByLabelText('Tema')).toBeInTheDocument())
+      expect(screen.getByLabelText('Densidade')).toBeInTheDocument()
+    })
+
+    it('esconde os cartões do grupo que não casam com a busca', async () => {
+      const user = userEvent.setup()
+      setup()
+      await waitReady()
+
+      await user.type(screen.getByLabelText('Buscar configuração'), 'fila offline')
+
+      await waitFor(() =>
+        expect(screen.getByRole('heading', { name: 'Estado da sincronização' })).toBeInTheDocument()
+      )
+      expect(
+        screen.queryByRole('heading', { name: 'Ritmo de sincronização' })
+      ).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('heading', { name: 'Projetos acompanhados' })
+      ).not.toBeInTheDocument()
+    })
+
+    it('busca sem resultado avisa e limpar volta o grupo inteiro', async () => {
+      const user = userEvent.setup()
+      setup()
+      await waitReady()
+
+      // change de uma vez só: digitando tecla a tecla, o 'z' isolado casaria com
+      // "Armazenamento" e o salto levaria para outro grupo antes do termo completo
+      fireEvent.change(screen.getByLabelText('Buscar configuração'), { target: { value: 'zzzz' } })
+      await waitFor(() => expect(screen.getByText(/Nada em Conta para/)).toBeInTheDocument())
+
+      await user.click(screen.getByRole('button', { name: 'Limpar busca' }))
+      await waitFor(() =>
+        expect(screen.getByRole('heading', { name: 'Conta' })).toBeInTheDocument()
+      )
+    })
+  })
+
   describe('Conta', () => {
     it('mostra workspace conectado e desconecta', async () => {
       const user = userEvent.setup()
       const api = setup()
       await waitReady()
 
-      expect(
-        screen.getByText('thiago@biud.com.br · https://biud.atlassian.net')
-      ).toBeInTheDocument()
+      await waitFor(() =>
+        expect(
+          screen.getByText('Thiago Prado · thiago@biud.com.br · https://biud.atlassian.net')
+        ).toBeInTheDocument()
+      )
 
       await user.click(screen.getByRole('button', { name: 'Desconectar' }))
       await waitFor(() => expect(api.count('auth:disconnect')).toBe(1))
@@ -179,26 +353,54 @@ describe('Settings', () => {
       const user = userEvent.setup()
       const api = setup()
       await waitReady()
+      await goTo(user, 'Aparência')
 
-      const select = screen.getByLabelText('Tema') as HTMLSelectElement
-      await user.selectOptions(select, 'light')
-
+      await user.selectOptions(await screen.findByLabelText('Tema'), 'light')
       await waitFor(() => expect(api.lastPayload('prefs:set')).toEqual({ theme: 'light' }))
     })
-  })
 
-  describe('Lembrete de tempo', () => {
-    it('alterna o checkbox e edita o horário', async () => {
+    it('troca a densidade e aplica no <html> antes do round-trip', async () => {
       const user = userEvent.setup()
       const api = setup()
       await waitReady()
+      await goTo(user, 'Aparência')
 
-      const checkbox = screen.getByRole('checkbox', { name: /Lembrar de registrar tempo/ })
-      expect(checkbox).toBeChecked()
-      await user.click(checkbox)
+      await user.selectOptions(await screen.findByLabelText('Densidade'), 'compact')
+      await waitFor(() => expect(api.lastPayload('prefs:set')).toEqual({ density: 'compact' }))
+      expect(document.documentElement.dataset.density).toBe('compact')
+    })
+  })
+
+  describe('Notificações', () => {
+    it('alterna os quatro interruptores', async () => {
+      const user = userEvent.setup()
+      const api = setup()
+      await waitReady()
+      await goTo(user, 'Notificações')
+
+      const toggle = async (name: RegExp, patch: Partial<Prefs>): Promise<void> => {
+        await user.click(await screen.findByRole('switch', { name }))
+        await waitFor(() => expect(api.lastPayload('prefs:set')).toEqual(patch))
+      }
+
+      await toggle(/card for atribuído a mim/, { notifyAssignedToMe: false })
+      await toggle(/eu for mencionado/, { notifyMentions: false })
+      await toggle(/alertas críticos/, { notifyCriticalAlerts: true })
+      await toggle(/daily no primeiro uso/, { morningBriefing: false })
+    })
+
+    it('lembrete de tempo: interruptor e horário', async () => {
+      const user = userEvent.setup()
+      const api = setup()
+      await waitReady()
+      await goTo(user, 'Notificações')
+
+      const reminder = await screen.findByRole('switch', { name: 'Lembrar de registrar tempo' })
+      expect(reminder).toHaveAttribute('aria-checked', 'true')
+      await user.click(reminder)
       await waitFor(() => expect(api.lastPayload('prefs:set')).toEqual({ worklogReminder: false }))
 
-      const timeInput = screen.getByLabelText(/Horário do lembrete/) as HTMLInputElement
+      const timeInput = screen.getByLabelText('Horário do lembrete')
       fireEvent.change(timeInput, { target: { value: '08:00' } })
       await waitFor(() =>
         expect(api.lastPayload('prefs:set')).toEqual({ worklogReminderTime: '08:00' })
@@ -206,29 +408,17 @@ describe('Settings', () => {
     })
   })
 
-  describe('Projetos acompanhados', () => {
-    it('alterna seleção de projeto', async () => {
+  describe('Sincronização', () => {
+    it('grava os quatro selects de ritmo', async () => {
       const user = userEvent.setup()
       const api = setup()
       await waitReady()
+      await goTo(user, 'Sincronização')
 
-      await user.click(screen.getByRole('button', { name: 'ESG' }))
-      await waitFor(() =>
-        expect(api.lastPayload('projects:setSelected')).toEqual({ keys: ['BT', 'ESG'] })
-      )
-    })
-  })
-
-  describe('Sincronização e alertas', () => {
-    it('grava mudanças de selects e checkboxes', async () => {
-      const user = userEvent.setup()
-      const api = setup()
-      await waitReady()
-
-      await user.selectOptions(screen.getByLabelText('Intervalo de sincronização'), '60')
+      await user.selectOptions(await screen.findByLabelText('Intervalo de sincronização'), '60')
       await waitFor(() => expect(api.lastPayload('prefs:set')).toEqual({ syncIntervalMinutes: 60 }))
 
-      await user.selectOptions(screen.getByLabelText('Janela de histórico (backfill)'), '90')
+      await user.selectOptions(screen.getByLabelText('Janela de histórico'), '90')
       await waitFor(() => expect(api.lastPayload('prefs:set')).toEqual({ backfillDays: 90 }))
 
       await user.selectOptions(screen.getByLabelText('Considerar ticket parado após'), '7')
@@ -236,22 +426,37 @@ describe('Settings', () => {
 
       await user.selectOptions(screen.getByLabelText('Modo de sincronização'), 'personal')
       await waitFor(() => expect(api.lastPayload('prefs:set')).toEqual({ syncMode: 'personal' }))
+    })
 
-      await user.click(screen.getByRole('checkbox', { name: /card for atribuído a mim/ }))
+    it('projetos: contador bate com os chips e o clique alterna a seleção', async () => {
+      const user = userEvent.setup()
+      const api = setup()
+      await waitReady()
+      await goTo(user, 'Sincronização')
+
+      const card = getCard('Projetos acompanhados')
+      expect(within(card).getByText('1 de 2')).toBeInTheDocument()
+      expect(within(card).getAllByRole('button')).toHaveLength(2)
+
+      await user.click(within(card).getByRole('button', { name: 'ESG' }))
       await waitFor(() =>
-        expect(api.lastPayload('prefs:set')).toEqual({ notifyAssignedToMe: false })
+        expect(api.lastPayload('projects:setSelected')).toEqual({ keys: ['BT', 'ESG'] })
       )
+    })
 
-      await user.click(screen.getByRole('checkbox', { name: /eu for mencionado/ }))
-      await waitFor(() => expect(api.lastPayload('prefs:set')).toEqual({ notifyMentions: false }))
+    it('estado da sincronização: nunca sincronizado, fila vazia e sync incremental', async () => {
+      const user = userEvent.setup()
+      const api = setup()
+      await waitReady()
+      await goTo(user, 'Sincronização')
 
-      await user.click(screen.getByRole('checkbox', { name: /alertas críticos/ }))
-      await waitFor(() =>
-        expect(api.lastPayload('prefs:set')).toEqual({ notifyCriticalAlerts: true })
-      )
+      expect(await screen.findByText('nunca sincronizado')).toBeInTheDocument()
+      const card = getCard('Estado da sincronização')
+      expect(within(card).getByText('Ainda não sincronizado nesta máquina.')).toBeInTheDocument()
+      expect(within(card).getByText('vazia')).toBeInTheDocument()
 
-      await user.click(screen.getByRole('checkbox', { name: /daily no primeiro uso/ }))
-      await waitFor(() => expect(api.lastPayload('prefs:set')).toEqual({ morningBriefing: false }))
+      await user.click(within(card).getByRole('button', { name: 'Sincronizar agora' }))
+      await waitFor(() => expect(api.lastPayload('sync:run')).toEqual({}))
     })
 
     // é a sincronização completa que reconcilia o cache e remove cards excluídos
@@ -259,12 +464,14 @@ describe('Settings', () => {
       const user = userEvent.setup()
       const api = setup()
       await waitReady()
+      await goTo(user, 'Sincronização')
 
-      await user.click(screen.getByRole('button', { name: 'Sincronizar tudo' }))
+      await user.click(await screen.findByRole('button', { name: 'Sincronizar tudo' }))
       await waitFor(() => expect(api.lastPayload('sync:run')).toEqual({ full: true }))
     })
 
-    it('sync em andamento desabilita o botão', async () => {
+    it('sync em andamento desabilita os botões e mostra o estado na faixa', async () => {
+      const user = userEvent.setup()
       setup((api) => {
         api.set('sync:status', () => ({
           running: true,
@@ -274,8 +481,74 @@ describe('Settings', () => {
         }))
       })
       await waitReady()
+      await goTo(user, 'Sincronização')
 
-      expect(screen.getByRole('button', { name: 'Sincronizando…' })).toBeDisabled()
+      expect(await screen.findByText('sincronizando…')).toBeInTheDocument()
+      const card = getCard('Estado da sincronização')
+      // incremental e completa ficam ambas travadas enquanto um ciclo roda
+      const travados = within(card).getAllByRole('button', { name: /Sincronizando…/ })
+      expect(travados).toHaveLength(2)
+      travados.forEach((botao) => expect(botao).toBeDisabled())
+    })
+
+    it('com última sincronização mostra a data e o erro do último ciclo', async () => {
+      const user = userEvent.setup()
+      setup((api) => {
+        api.set('sync:status', () => ({
+          running: false,
+          lastSuccessAt: new Date().toISOString(),
+          lastError: 'timeout no Jira',
+          progress: null
+        }))
+      })
+      await waitReady()
+      await goTo(user, 'Sincronização')
+
+      expect(await screen.findByText(/última agora/)).toBeInTheDocument()
+      expect(screen.getByText('timeout no Jira')).toBeInTheDocument()
+    })
+
+    it('fila offline com ação pendente mostra o badge no lugar de "vazia"', async () => {
+      const user = userEvent.setup()
+      setup((api) => {
+        api.set('queue:list', () => ({
+          actions: [
+            {
+              id: 1,
+              issueKey: 'BT-1',
+              type: 'transition' as const,
+              summary: 'Mover para Em andamento',
+              status: 'pending' as const,
+              attempts: 1,
+              lastError: null,
+              createdAt: new Date().toISOString()
+            }
+          ]
+        }))
+      })
+      await waitReady()
+      await goTo(user, 'Sincronização')
+
+      const card = getCard('Estado da sincronização')
+      await waitFor(() => expect(within(card).getByText('1')).toBeInTheDocument())
+      expect(within(card).queryByText('vazia')).not.toBeInTheDocument()
+    })
+
+    it('registro de requisições abre o CommandLogModal (saiu do cartão de IA)', async () => {
+      const user = userEvent.setup()
+      setup()
+      await waitReady()
+      await goTo(user, 'Sincronização')
+
+      await user.click(await screen.findByRole('button', { name: 'Abrir' }))
+      await waitFor(() =>
+        expect(screen.getByText('Nenhum comando registrado.')).toBeInTheDocument()
+      )
+
+      await user.click(screen.getByRole('button', { name: 'Fechar' }))
+      await waitFor(() =>
+        expect(screen.queryByText('Nenhum comando registrado.')).not.toBeInTheDocument()
+      )
     })
   })
 
@@ -284,26 +557,30 @@ describe('Settings', () => {
       const user = userEvent.setup()
       const api = setup()
       await waitReady()
+      await goTo(user, 'Pull requests')
 
-      const prCard = getCard('Pull requests (GitHub)')
-      await user.click(within(prCard).getByRole('checkbox', { name: /Mostrar PRs relacionados/ }))
+      await user.click(await screen.findByRole('switch', { name: /Mostrar PRs relacionados/ }))
       await waitFor(() => expect(api.lastPayload('prefs:set')).toEqual({ prIntegration: true }))
 
-      // o hint do Input entra no textContent do <label>, então o match precisa ser parcial
-      const scope = within(prCard).getByLabelText(/Escopo da busca/)
       // input controlado direto pelo valor de prefs (round-trip via invalidateQueries) —
       // digitar tecla a tecla causaria corrida com o refetch; um único change reflete
       // o mesmo onChange do componente.
-      fireEvent.change(scope, { target: { value: 'org:biudtech' } })
+      fireEvent.change(screen.getByLabelText('Escopo da busca'), {
+        target: { value: 'org:biudtech' }
+      })
       await waitFor(() =>
         expect(api.lastPayload('prefs:set')).toEqual({ prSearchScope: 'org:biudtech' })
       )
     })
 
     it('mostra aviso quando gh não está disponível', async () => {
+      const user = userEvent.setup()
       setup((api) => {
         api.set('prs:status', () => ({ ghAvailable: false, enabled: false }))
       })
+      await waitReady()
+      await goTo(user, 'Pull requests')
+
       await waitFor(() => expect(screen.getByText(/CLI gh não encontrado/)).toBeInTheDocument())
     })
   })
@@ -313,16 +590,15 @@ describe('Settings', () => {
       const user = userEvent.setup()
       const api = setup()
       await waitReady()
+      await goTo(user, 'Inteligência artificial')
 
       const aiCard = getCard('Inteligência artificial')
       expect(within(aiCard).getByText('/usr/local/bin/claude')).toBeInTheDocument()
 
-      const providerSelect = within(aiCard).getByLabelText('Provider ativo')
-      await user.selectOptions(providerSelect, 'gemini')
+      await user.selectOptions(within(aiCard).getByLabelText('Provider ativo'), 'gemini')
       await waitFor(() => expect(api.lastPayload('prefs:set')).toEqual({ aiProvider: 'gemini' }))
 
-      const modelSelect = within(aiCard).getByLabelText('Resumos (daily/weekly/1:1)')
-      await user.selectOptions(modelSelect, 'opus')
+      await user.selectOptions(within(aiCard).getByLabelText('Resumos (daily/weekly/1:1)'), 'opus')
       await waitFor(() =>
         expect(api.lastPayload('prefs:set')).toEqual({
           aiModels: { claude: { summaries: 'opus' } }
@@ -331,6 +607,7 @@ describe('Settings', () => {
     })
 
     it('mostra aviso quando nenhum provider está disponível', async () => {
+      const user = userEvent.setup()
       setup((api) => {
         api.set('ai:status', () => ({
           providers: [
@@ -347,6 +624,9 @@ describe('Settings', () => {
           activePref: 'auto' as const
         }))
       })
+      await waitReady()
+      await goTo(user, 'Inteligência artificial')
+
       await waitFor(() =>
         expect(screen.getByText(/Nenhum provider de IA disponível/)).toBeInTheDocument()
       )
@@ -362,10 +642,10 @@ describe('Settings', () => {
         })
       })
       await waitReady()
+      await goTo(user, 'Inteligência artificial')
 
       const aiCard = getCard('Inteligência artificial')
-      const keyInput = within(aiCard).getByPlaceholderText('sk-or-…')
-      await user.type(keyInput, 'sk-or-teste')
+      await user.type(within(aiCard).getByLabelText('Chave da OpenRouter'), 'sk-or-teste')
       await user.click(within(aiCard).getByRole('button', { name: 'Salvar' }))
 
       await waitFor(() => expect(within(aiCard).getByText('Chave inválida.')).toBeInTheDocument())
@@ -397,7 +677,7 @@ describe('Settings', () => {
       await waitFor(() => expect(api.count('ai:clearOpenRouterKey')).toBe(1))
     })
 
-    it('exibe ModelCombobox quando o provider ativo é openrouter', async () => {
+    it('usa o ModelCombobox quando o provider ativo é openrouter', async () => {
       const user = userEvent.setup()
       setup((api) => {
         api.set('ai:status', () => ({
@@ -416,33 +696,15 @@ describe('Settings', () => {
         }))
       })
       await waitReady()
+      await goTo(user, 'Inteligência artificial')
 
-      // AI_FEATURES renderiza um ModelCombobox por funcionalidade — escopa ao label
-      // "Resumos (daily/weekly/1:1)" para pegar só o combobox daquela linha.
-      const summariesLabel = screen.getByText('Resumos (daily/weekly/1:1)')
-      const row = within(summariesLabel.parentElement as HTMLElement)
-      const combo = row.getByPlaceholderText('id do modelo (ex.: anthropic/claude-3.5-sonnet)')
+      // o combobox agora é o controle da linha, então o <label> da linha o nomeia
+      const combo = (await screen.findByLabelText('Resumos (daily/weekly/1:1)')) as HTMLInputElement
       await user.click(combo)
-      await waitFor(() => expect(row.getByText('GPT-4o')).toBeInTheDocument())
-      await user.click(row.getByText('GPT-4o'))
+      await waitFor(() => expect(screen.getByText('GPT-4o')).toBeInTheDocument())
+      await user.click(screen.getByText('GPT-4o'))
 
-      await waitFor(() => expect((combo as HTMLInputElement).value).toBe('openai/gpt-4o'))
-    })
-
-    it('abre a modal de comandos executados', async () => {
-      const user = userEvent.setup()
-      setup()
-      await waitReady()
-
-      await user.click(screen.getByRole('button', { name: /Ver comandos executados/ }))
-      await waitFor(() =>
-        expect(screen.getByText('Nenhum comando registrado.')).toBeInTheDocument()
-      )
-
-      await user.click(screen.getByRole('button', { name: 'Fechar' }))
-      await waitFor(() =>
-        expect(screen.queryByText('Nenhum comando registrado.')).not.toBeInTheDocument()
-      )
+      await waitFor(() => expect(combo.value).toBe('openai/gpt-4o'))
     })
   })
 
@@ -451,6 +713,7 @@ describe('Settings', () => {
       const user = userEvent.setup()
       const api = setup()
       await waitReady()
+      await goTo(user, 'Templates')
 
       const tplCard = getCard('Templates de comentário')
       await user.click(within(tplCard).getByRole('button', { name: '+ Novo template' }))
@@ -477,6 +740,8 @@ describe('Settings', () => {
       await waitFor(() =>
         expect(within(tplCard).getByText('Aviso de bloqueio')).toBeInTheDocument()
       )
+      // contador da faixa bate com as linhas renderizadas
+      expect(within(tplCard).getByText('1')).toBeInTheDocument()
 
       await user.click(within(tplCard).getByRole('button', { name: 'Editar' }))
       const nameInput = within(tplCard).getByLabelText('Nome') as HTMLInputElement
@@ -506,6 +771,7 @@ describe('Settings', () => {
       const user = userEvent.setup()
       const api = setup()
       await waitReady()
+      await goTo(user, 'Templates')
 
       const tplCard = getCard('Templates de comentário')
       await user.click(within(tplCard).getByRole('button', { name: '+ Novo template' }))
@@ -515,13 +781,14 @@ describe('Settings', () => {
     })
   })
 
-  describe('Backup', () => {
+  describe('Dados e backup', () => {
     it('exporta backup e mostra o caminho', async () => {
       const user = userEvent.setup()
       setup()
       await waitReady()
+      await goTo(user, 'Dados e backup')
 
-      await user.click(screen.getByRole('button', { name: 'Exportar backup…' }))
+      await user.click(await screen.findByRole('button', { name: 'Exportar backup…' }))
       await waitFor(() =>
         expect(screen.getByText('Backup salvo em /Users/thiago/backup.json')).toBeInTheDocument()
       )
@@ -535,8 +802,9 @@ describe('Settings', () => {
         })
       })
       await waitReady()
+      await goTo(user, 'Dados e backup')
 
-      await user.click(screen.getByRole('button', { name: 'Exportar backup…' }))
+      await user.click(await screen.findByRole('button', { name: 'Exportar backup…' }))
       await waitFor(() => expect(screen.getByText('Falha ao exportar backup.')).toBeInTheDocument())
     })
 
@@ -545,8 +813,9 @@ describe('Settings', () => {
       const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
       const api = setup()
       await waitReady()
+      await goTo(user, 'Dados e backup')
 
-      await user.click(screen.getByRole('button', { name: 'Importar backup…' }))
+      await user.click(await screen.findByRole('button', { name: 'Importar backup…' }))
       await waitFor(() => expect(api.count('backup:import')).toBe(1))
       await waitFor(() =>
         expect(
@@ -563,15 +832,27 @@ describe('Settings', () => {
       const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
       const api = setup()
       await waitReady()
+      await goTo(user, 'Dados e backup')
 
-      await user.click(screen.getByRole('button', { name: 'Importar backup…' }))
+      await user.click(await screen.findByRole('button', { name: 'Importar backup…' }))
       expect(api.count('backup:import')).toBe(0)
       confirmSpy.mockRestore()
+    })
+
+    it('armazenamento mostra o tamanho e limpa os temporários', async () => {
+      const user = userEvent.setup()
+      setup()
+      await waitReady()
+      await goTo(user, 'Dados e backup')
+
+      await waitFor(() => expect(screen.getByText(/2 KB em cache/)).toBeInTheDocument())
+      await user.click(screen.getByRole('button', { name: 'Limpar' }))
+      await waitFor(() => expect(screen.getByText('Liberado 2 KB')).toBeInTheDocument())
     })
   })
 
   describe('Atualizações', () => {
-    it('verifica, mostra versão disponível e grava/remove token', async () => {
+    it('verifica, mostra versão disponível e grava token', async () => {
       const user = userEvent.setup()
       const api = setup((mock) => {
         mock.set('update:check', () => ({
@@ -584,6 +865,7 @@ describe('Settings', () => {
         }))
       })
       await waitReady()
+      await goTo(user, 'Atualizações')
 
       const updateCard = getCard('Atualizações')
       expect(within(updateCard).getByText('Ainda não verificado nesta sessão.')).toBeInTheDocument()
@@ -592,18 +874,17 @@ describe('Settings', () => {
         expect(within(updateCard).getByText(/v1.3.0 disponível/)).toBeInTheDocument()
       )
 
-      const tokenInput = within(updateCard).getByLabelText(/Token do GitHub/)
-      await user.type(tokenInput, 'ghp_abc123')
+      await user.type(within(updateCard).getByLabelText('Token do GitHub'), 'ghp_abc123')
       await user.click(within(updateCard).getByRole('button', { name: 'Salvar' }))
       await waitFor(() =>
         expect(api.lastPayload('update:setToken')).toEqual({ token: 'ghp_abc123' })
       )
     })
 
-    it('mostra mensagem de já atualizado e erro de verificação', async () => {
+    it('mostra mensagem de já atualizado e alterna o check automático', async () => {
       const user = userEvent.setup()
-      setup((api) => {
-        api.set('update:check', () => ({
+      const api = setup((mock) => {
+        mock.set('update:check', () => ({
           current: '1.2.3',
           latest: null,
           url: null,
@@ -613,32 +894,37 @@ describe('Settings', () => {
         }))
       })
       await waitReady()
-      await user.click(screen.getByRole('button', { name: 'Verificar agora' }))
+      await goTo(user, 'Atualizações')
+
+      await user.click(await screen.findByRole('button', { name: 'Verificar agora' }))
       await waitFor(() =>
         expect(screen.getByText('Você está na versão mais recente.')).toBeInTheDocument()
       )
-    })
-  })
 
-  describe('Armazenamento', () => {
-    it('mostra bytes e limpa arquivos temporários', async () => {
-      const user = userEvent.setup()
-      setup()
-      await waitReady()
-
-      await waitFor(() =>
-        expect(screen.getByText(/Arquivos temporários de anexos: 2 KB/)).toBeInTheDocument()
+      await user.click(
+        screen.getByRole('switch', { name: 'Verificar novas versões automaticamente' })
       )
-      await user.click(screen.getByRole('button', { name: 'Limpar' }))
-      await waitFor(() => expect(screen.getByText('Liberado 2 KB')).toBeInTheDocument())
+      await waitFor(() => expect(api.lastPayload('prefs:set')).toEqual({ updateCheck: false }))
     })
-  })
 
-  describe('Sobre', () => {
-    it('mostra a versão do app', async () => {
-      setup()
-      await waitFor(() => expect(screen.getByText('Jiraiya v1.2.3')).toBeInTheDocument())
-      expect(screen.getByText('feito por @thiagopcdev')).toBeInTheDocument()
+    it('erro de verificação aparece na linha', async () => {
+      const user = userEvent.setup()
+      setup((mock) => {
+        mock.set('update:check', () => ({
+          current: '1.2.3',
+          latest: null,
+          url: null,
+          available: false,
+          tokenConfigured: true,
+          error: 'GitHub indisponível'
+        }))
+      })
+      await waitReady()
+      await goTo(user, 'Atualizações')
+
+      await user.click(await screen.findByRole('button', { name: 'Verificar agora' }))
+      await waitFor(() => expect(screen.getByText('GitHub indisponível')).toBeInTheDocument())
+      expect(screen.getByRole('button', { name: 'Remover' })).toBeInTheDocument()
     })
   })
 })

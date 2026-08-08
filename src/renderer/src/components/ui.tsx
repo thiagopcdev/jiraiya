@@ -163,7 +163,9 @@ export function SegmentedControl<T extends string>({
             aria-pressed={active}
             onClick={() => onChange(option.value)}
             className={`rounded-md px-3 py-1 text-[12.5px] transition-colors ${
-              active ? 'bg-indigo-600 font-semibold text-white' : 'text-zinc-400 hover:text-zinc-200'
+              active
+                ? 'bg-indigo-600 font-semibold text-white'
+                : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
             {option.label}

@@ -89,7 +89,7 @@ function setup(overrides?: (api: MockApiControl) => void, route?: string): MockA
 }
 
 async function waitReady(): Promise<void> {
-  await waitFor(() => expect(screen.getByText('Qual card dividir?')).toBeInTheDocument())
+  await waitFor(() => expect(screen.getByText('Card a dividir')).toBeInTheDocument())
 }
 
 describe('Split', () => {
@@ -111,8 +111,8 @@ describe('Split', () => {
     await waitFor(() =>
       expect(screen.getByText('Migrar autenticação para OAuth')).toBeInTheDocument()
     )
-    expect(screen.getByText('Descrição original do card.')).toBeInTheDocument()
-    expect(screen.getByText('Story')).toBeInTheDocument()
+    expect(screen.getByText('BT-100')).toBeInTheDocument()
+    expect(screen.getByText('Em progresso')).toBeInTheDocument()
   })
 
   it('busca por key manual, trata não encontrado e erro', async () => {
@@ -210,7 +210,7 @@ describe('Split', () => {
     }))
     const feedback = screen.getByLabelText('Feedback para a IA')
     await user.type(feedback, 'junte tudo em um item só')
-    await user.click(screen.getByRole('button', { name: /Refinar com Claude Code/ }))
+    await user.click(screen.getByRole('button', { name: /Analisar de novo/ }))
 
     await waitFor(() => expect(api.count('issues:splitDraft')).toBe(2))
     expect(api.lastPayload('issues:splitDraft')).toMatchObject({
@@ -254,20 +254,24 @@ describe('Split', () => {
     )
 
     // subtarefa é o padrão (há tipo de subtarefa disponível)
-    expect(screen.getByRole('radio', { name: 'Subtarefas do card original' })).toBeChecked()
+    expect(screen.getByRole('button', { name: 'Subtarefas' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    )
+    expect(screen.getByRole('button', { name: 'Criar 2 subtarefas' })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('radio', { name: 'Cards irmãos (mesmo projeto)' }))
+    await user.click(screen.getByRole('button', { name: 'Cards irmãos' }))
     const typeSelect = screen.getByLabelText('Tipo') as HTMLSelectElement
     await waitFor(() => expect(typeSelect).toBeInTheDocument())
     // projectKey do parent é 'BT' e issueType 'Story' -> default deve ser Story
     expect(typeSelect.value).toBe('story-1')
     await user.selectOptions(typeSelect, 'bug-1')
 
-    const assignCheckbox = screen.getByRole('checkbox', { name: 'Atribuir a mim' })
-    expect(assignCheckbox).toBeChecked()
-    await user.click(assignCheckbox)
+    const assignToggle = screen.getByRole('switch', { name: 'Atribuir a mim' })
+    expect(assignToggle).toHaveAttribute('aria-checked', 'true')
+    await user.click(assignToggle)
 
-    await user.click(screen.getByRole('button', { name: 'Criar 2 cards no Jira' }))
+    await user.click(screen.getByRole('button', { name: 'Criar 2 cards irmãos' }))
 
     await waitFor(() => expect(api.count('issues:split')).toBe(1))
     expect(api.lastPayload('issues:split')).toMatchObject({
@@ -286,7 +290,7 @@ describe('Split', () => {
 
     // "Dividir outro" reseta tudo, de volta pro passo inicial
     await user.click(screen.getByRole('button', { name: 'Dividir outro' }))
-    await waitFor(() => expect(screen.getByText('Qual card dividir?')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Card a dividir')).toBeInTheDocument())
     expect(screen.queryByText('2 cards criados a partir de BT-100')).not.toBeInTheDocument()
   })
 
@@ -309,12 +313,12 @@ describe('Split', () => {
       expect(screen.getByText('Dividido por camada técnica.')).toBeInTheDocument()
     )
 
-    await user.click(screen.getByRole('button', { name: 'Criar 2 cards no Jira' }))
+    await user.click(screen.getByRole('button', { name: 'Criar 2 subtarefas' }))
     await waitFor(() => expect(screen.getByText('Falha ao criar os cards.')).toBeInTheDocument())
     expect(api.count('issues:split')).toBe(1)
 
     shouldFail = false
-    await user.click(screen.getByRole('button', { name: 'Criar 2 cards no Jira' }))
+    await user.click(screen.getByRole('button', { name: 'Criar 2 subtarefas' }))
     await waitFor(() =>
       expect(screen.getByText('1 card criado a partir de BT-100')).toBeInTheDocument()
     )
@@ -335,13 +339,54 @@ describe('Split', () => {
     await waitFor(() =>
       expect(screen.getByText('Dividido por camada técnica.')).toBeInTheDocument()
     )
-    await user.click(screen.getByRole('button', { name: 'Criar 2 cards no Jira' }))
+    await user.click(screen.getByRole('button', { name: 'Criar 2 subtarefas' }))
     await waitFor(() =>
       expect(screen.getByText('2 cards criados a partir de BT-100')).toBeInTheDocument()
     )
 
     await user.click(screen.getByTitle('Abrir BT-100 no Jira'))
     await waitFor(() => expect(api.lastPayload('shell:openIssue')).toEqual({ issueKey: 'BT-100' }))
+  })
+
+  it('a coluna da direita orienta antes da análise e "trocar card" volta para a escolha', async () => {
+    const user = userEvent.setup()
+    setup()
+    await waitReady()
+
+    expect(screen.getByText('Escolha um card à esquerda para começar.')).toBeInTheDocument()
+
+    const select = screen.getByLabelText('Meus cards abertos') as HTMLSelectElement
+    await waitFor(() => expect(select).not.toBeDisabled())
+    await user.selectOptions(select, 'BT-100')
+
+    await waitFor(() =>
+      expect(screen.getByText('Analise o card para ver a divisão proposta.')).toBeInTheDocument()
+    )
+    // com card escolhido o seletor sai da tela — quem volta atrás é o "trocar card"
+    expect(screen.queryByLabelText('Meus cards abertos')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'trocar card' }))
+    await waitFor(() => expect(screen.getByLabelText('Meus cards abertos')).toBeInTheDocument())
+    expect(screen.getByText('Escolha um card à esquerda para começar.')).toBeInTheDocument()
+  })
+
+  it('conta as subtarefas propostas na pílula da seção', async () => {
+    const user = userEvent.setup()
+    setup()
+    await waitReady()
+
+    const select = screen.getByLabelText('Meus cards abertos') as HTMLSelectElement
+    await waitFor(() => expect(select).not.toBeDisabled())
+    await user.selectOptions(select, 'BT-100')
+    await user.click(screen.getByRole('button', { name: /Analisar com Claude Code/ }))
+
+    await waitFor(() => expect(screen.getByText('2 subtarefas')).toBeInTheDocument())
+    // o contador tem que bater com o número de cartões renderizados
+    expect(screen.getAllByLabelText(/^Título \d/)).toHaveLength(2)
+
+    await user.click(screen.getAllByRole('button', { name: 'Remover item' })[0])
+    await waitFor(() => expect(screen.getByText('1 subtarefa')).toBeInTheDocument())
+    expect(screen.getAllByLabelText(/^Título \d/)).toHaveLength(1)
   })
 
   it('a faixa de abas Criar/Dividir marca a aba ativa pela rota e navega ao clicar', async () => {

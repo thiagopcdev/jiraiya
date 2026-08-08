@@ -249,6 +249,19 @@ const IssueDetailDockContext = createContext<IssueDetailDock>({
   dockAllowed: false
 })
 
+/**
+ * Chave do card aberto agora (topo da pilha), para a tela de fundo marcar a
+ * linha/cartão correspondente como selecionado. Só leitura: não entra no
+ * `IssueDetailApi` porque não é ação, e fora do provider devolve null (o
+ * contexto tem default próprio).
+ */
+// hook exportado ao lado de componentes — Fast Refresh reclama, mas o estado
+// mora no contexto interno deste arquivo.
+// eslint-disable-next-line react-refresh/only-export-components
+export function useOpenIssueKey(): string | null {
+  return useContext(IssueDetailDockContext).topKey
+}
+
 function matchesDockWidth(): boolean {
   return window.matchMedia(DETAIL_DOCK_MIN_WINDOW_QUERY).matches
 }
@@ -381,7 +394,7 @@ function IssueDetailDrawer({
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div
-        className={`absolute inset-y-0 right-0 flex h-full w-[560px] max-w-[90vw] flex-col border-l border-zinc-800 bg-zinc-950 shadow-2xl transition-transform duration-200 ease-out ${
+        className={`absolute inset-y-0 right-0 flex h-full w-[560px] max-w-[90vw] flex-col border-l border-zinc-800 bg-zinc-900 shadow-2xl transition-transform duration-200 ease-out ${
           visible ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
@@ -436,7 +449,7 @@ function IssueDetailPanel({
 
   return (
     <div
-      className="relative flex h-full min-h-0 flex-shrink-0 flex-col border-l border-zinc-800 bg-zinc-900/35"
+      className="relative flex h-full min-h-0 flex-shrink-0 flex-col border-l border-zinc-800 bg-zinc-900"
       style={{ width }}
     >
       <div
@@ -793,8 +806,12 @@ function IssueDetailBody({
             setSelectedTransitionId(e.target.value)
             void handleTransitionChange(e.target.value)
           }}
-          className={`rounded-md border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-xs text-zinc-300 outline-none focus:border-indigo-500 disabled:opacity-50 ${
-            docked ? 'min-w-0 flex-1' : 'max-w-72'
+          className={`rounded-md border border-zinc-700 bg-zinc-950/60 outline-none focus:border-indigo-500 disabled:opacity-50 ${
+            // 380px não comportam o select em tamanho cheio ao lado do timer e
+            // dos ícones — no docado ele encolhe de propósito
+            docked
+              ? 'min-w-0 flex-1 px-[7px] py-1 text-[11px] text-zinc-200'
+              : 'max-w-72 px-1.5 py-1 text-xs text-zinc-300'
           }`}
         >
           <option value="" disabled>
@@ -815,19 +832,27 @@ function IssueDetailBody({
       </>
     ) : null
 
+  // contagem ao lado do rótulo da aba (só quando há o que contar) — sem
+  // parênteses, como no protótipo: "Comentários 4"
+  const tabCount = (n: number): React.JSX.Element => (
+    <span className="text-[12px] font-semibold text-zinc-500">{n}</span>
+  )
+
   // rótulos das abas; a de PRs só entra na lista quando há PR para mostrar
   const tabs: Array<{ id: DetailTab; label: string; badge?: React.JSX.Element }> = [
     {
       id: 'comments',
       label: t.detail.tabComments,
       badge:
-        liveComments && liveComments.comments.length > 0 ? (
-          <span className="text-zinc-600">({liveComments.comments.length})</span>
-        ) : undefined
+        liveComments && liveComments.comments.length > 0
+          ? tabCount(liveComments.comments.length)
+          : undefined
     },
     { id: 'history', label: t.detail.tabHistory },
     { id: 'worklogs', label: t.detail.tabWorklogs },
-    ...(showPrsTab ? [{ id: 'prs' as const, label: t.detail.tabPrs }] : [])
+    ...(showPrsTab
+      ? [{ id: 'prs' as const, label: t.detail.tabPrs, badge: tabCount(prs.length) }]
+      : [])
   ]
 
   /**
@@ -842,7 +867,7 @@ function IssueDetailBody({
         {t.detail.commentTitle}
       </h3>
       {draftRestored && (
-        <div className="flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-1 text-xs text-zinc-400">
+        <div className="flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-950/60 px-2 py-1 text-xs text-zinc-400">
           <span>{t.drafts.restored}</span>
           <button
             className="text-indigo-400 hover:underline light:text-indigo-600"
@@ -853,7 +878,7 @@ function IssueDetailBody({
         </div>
       )}
       {aiOpen && (
-        <div className="space-y-2 rounded-md border border-zinc-800 bg-zinc-900/60 p-2.5">
+        <div className="space-y-2 rounded-md border border-zinc-800 bg-zinc-950/60 p-2.5">
           <textarea
             className="h-16 w-full resize-y rounded-md border border-zinc-800 bg-zinc-950 p-2 text-sm text-zinc-200 outline-none focus:border-indigo-600"
             placeholder={t.detail.aiNotesPlaceholder}
@@ -893,7 +918,7 @@ function IssueDetailBody({
       {commentViewMode === 'edit' ? (
         <textarea
           ref={commentRef}
-          className="h-24 w-full resize-y rounded-md border border-zinc-700 bg-zinc-900 p-2.5 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+          className="h-24 w-full resize-y rounded-md border border-zinc-700 bg-zinc-950/60 p-2.5 text-sm text-zinc-100 outline-none focus:border-indigo-500"
           placeholder={t.detail.commentPlaceholder}
           value={comment}
           onChange={(e) => setComment(e.target.value)}
@@ -939,10 +964,16 @@ function IssueDetailBody({
     </section>
   )
 
+  // botões de ícone do cabeçalho: no docado o alvo encolhe um degrau para os
+  // cinco caberem ao lado do select e do timer em 380px
+  const headerIconButton = `shrink-0 rounded-md text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200 ${
+    docked ? 'p-1' : 'p-1.5'
+  }`
+
   return (
     <>
-      <div className={`border-b border-zinc-800 ${docked ? 'px-3 py-2' : 'px-4 py-3'}`}>
-        <div className="flex items-center gap-2">
+      <div className={`border-b border-zinc-800 ${docked ? 'px-3 py-2.5' : 'px-4 py-3'}`}>
+        <div className={`flex items-center ${docked ? 'gap-[7px]' : 'gap-2'}`}>
           {onBack && (
             <button
               className="shrink-0 rounded-md p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
@@ -952,7 +983,11 @@ function IssueDetailBody({
               <ChevronLeft size={16} />
             </button>
           )}
-          <span className="shrink-0 font-mono text-sm whitespace-nowrap text-zinc-400 select-text">
+          <span
+            className={`shrink-0 font-mono whitespace-nowrap select-text ${
+              docked ? 'text-xs font-bold text-indigo-400' : 'text-sm text-zinc-400'
+            }`}
+          >
             {issueKey}
           </span>
           {docked ? (
@@ -967,7 +1002,7 @@ function IssueDetailBody({
           )}
           <TimerControl issueKey={issueKey} onError={setTimerError} />
           <button
-            className="shrink-0 rounded-md p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+            className={headerIconButton}
             onClick={() => void shareIssue()}
             title={shareCopied ? t.detail.shareCopied : t.detail.share}
             aria-label={t.detail.share}
@@ -978,9 +1013,13 @@ function IssueDetailBody({
               <Link2 size={15} />
             )}
           </button>
+          {/* O handoff pedia tirar este ícone no docado de 380px por achar que
+              era o atalho de PR — não é: é o "copiar nome do branch", e não há
+              outro caminho para ele. Fica nos dois modos; quem cede largura é o
+              <select> de status, reduzido logo abaixo. */}
           {issue && (
             <button
-              className="shrink-0 rounded-md p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+              className={headerIconButton}
               onClick={() => void copyBranch()}
               title={branchCopied ? 'Nome do branch copiado!' : 'Copiar nome do branch'}
               aria-label="Copiar nome do branch"
@@ -993,7 +1032,7 @@ function IssueDetailBody({
             </button>
           )}
           <button
-            className="shrink-0 rounded-md p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-50"
+            className={`${headerIconButton} disabled:opacity-50`}
             onClick={() => void toggleWatch()}
             disabled={watchBusy}
             title={watching ? 'Deixar de seguir (notifica mudanças)' : 'Seguir (notifica mudanças)'}
@@ -1006,18 +1045,14 @@ function IssueDetailBody({
             )}
           </button>
           <button
-            className="shrink-0 rounded-md p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+            className={headerIconButton}
             onClick={openInJira}
             title={t.detail.openInJira}
             aria-label={t.detail.openInJira}
           >
             <ExternalLink size={15} />
           </button>
-          <button
-            className="shrink-0 rounded-md p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
-            onClick={onClose}
-            aria-label={t.detail.close}
-          >
+          <button className={headerIconButton} onClick={onClose} aria-label={t.detail.close}>
             <X size={16} />
           </button>
         </div>
@@ -1090,7 +1125,7 @@ function IssueDetailBody({
             </div>
           </div>
         ) : (
-          <div className={`space-y-5 ${docked ? 'p-3' : 'p-4'}`}>
+          <div className={docked ? 'space-y-4 p-3.5' : 'space-y-5 p-4'}>
             <div>
               <EditableTitle issue={issue} issueKey={issueKey} />
               <IssueMetaFields
@@ -1180,7 +1215,7 @@ function IssueDetailBody({
                           {children.map((child) => (
                             <button
                               key={child.key}
-                              className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left text-sm text-zinc-300 hover:bg-zinc-900"
+                              className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left text-sm text-zinc-300 hover:bg-zinc-950/60"
                               onClick={() => openIssue(child.key)}
                             >
                               <span className="min-w-0 flex-1 truncate">
@@ -1228,7 +1263,7 @@ function IssueDetailBody({
                         {links.map((link) => (
                           <button
                             key={`${link.label}-${link.key}`}
-                            className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left text-sm text-zinc-300 hover:bg-zinc-900"
+                            className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left text-sm text-zinc-300 hover:bg-zinc-950/60"
                             onClick={() => openIssue(link.key)}
                           >
                             <span className="min-w-0 flex-1 truncate">
@@ -1287,7 +1322,9 @@ function IssueDetailBody({
             </section>
 
             <section>
-              <div className="flex items-center gap-4 border-b border-zinc-800">
+              {/* mesma aba sublinhada do PairTabs; overflow-x só entra em ação
+                  se o painel for encolhido até o mínimo */}
+              <div className="flex overflow-x-auto border-b border-zinc-800">
                 {tabs.map((item) => {
                   const active = item.id === activeTab
                   return (
@@ -1295,9 +1332,9 @@ function IssueDetailBody({
                       key={item.id}
                       type="button"
                       aria-current={active ? 'true' : undefined}
-                      className={`-mb-px flex cursor-pointer items-center gap-1 border-b-2 pb-2 text-xs font-semibold tracking-wide uppercase transition-colors ${
+                      className={`-mb-px flex shrink-0 cursor-pointer items-center gap-1 border-b-2 px-3.5 pt-2 pb-2.5 text-[13px] whitespace-nowrap transition-colors first:pl-0 ${
                         active
-                          ? 'border-indigo-500 text-zinc-100'
+                          ? 'border-indigo-500 font-semibold text-indigo-400'
                           : 'border-transparent text-zinc-400 hover:text-zinc-200'
                       }`}
                       onClick={() => setTab(item.id)}
@@ -1335,7 +1372,7 @@ function IssueDetailBody({
                       {localComments.map((c) => (
                         <div
                           key={c.id}
-                          className="rounded-md border border-zinc-800 bg-zinc-900/60 p-2.5"
+                          className="rounded-md border border-zinc-800 bg-zinc-950/60 p-2.5"
                         >
                           <div className="mb-1 flex items-baseline justify-between gap-2">
                             <span className="text-sm font-medium text-zinc-300">
@@ -1390,7 +1427,7 @@ function IssueDetailBody({
       </div>
       {/* docado: composer ancorado no rodapé, fora da área rolável (handoff B3) */}
       {docked && issue && (
-        <div className="border-t border-zinc-800 bg-zinc-950/60 px-3 py-2.5">{composer}</div>
+        <div className="border-t border-zinc-800 bg-zinc-950/60 px-4 pt-2.5 pb-3">{composer}</div>
       )}
     </>
   )
@@ -1457,11 +1494,16 @@ function IssueMetaFields({
 
   if (variant === 'docked') {
     return (
-      <dl className="mt-2 grid grid-cols-2 gap-x-3.5 gap-y-2.5">
+      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2.5">
         {fields.map((f) => (
           <div key={f.label} className="min-w-0">
-            <dt className="text-[10px] tracking-wide text-zinc-600 uppercase">{f.label}</dt>
-            <dd className="truncate text-xs text-zinc-300" title={f.dockedValue ?? f.value}>
+            <dt className="text-[10px] font-bold tracking-[.06em] text-zinc-500 uppercase">
+              {f.label}
+            </dt>
+            <dd
+              className="mt-0.5 truncate text-[12.5px] text-zinc-200"
+              title={f.dockedValue ?? f.value}
+            >
               {f.dockedValue ?? f.value}
             </dd>
           </div>
@@ -1612,14 +1654,14 @@ function EditPanel({
   }
 
   return (
-    <div className="space-y-3 rounded-md border border-zinc-800 bg-zinc-900/40 p-3">
+    <div className="space-y-3 rounded-md border border-zinc-800 bg-zinc-950/40 p-3">
       <div className="space-y-2">
         <div className="grid grid-cols-[130px_1fr] items-center gap-2">
           <span className="text-xs text-zinc-500">{t.detail.assigneeLabel}</span>
           <select
             value={assigneeId}
             onChange={(e) => setAssigneeId(e.target.value)}
-            className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+            className="w-full rounded-md border border-zinc-700 bg-zinc-950/60 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
           >
             {assigneeOptions.map((o) => (
               <option key={o.id} value={o.id}>
@@ -1633,7 +1675,7 @@ function EditPanel({
           <select
             value={sprintTarget}
             onChange={(e) => setSprintTarget(e.target.value)}
-            className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+            className="w-full rounded-md border border-zinc-700 bg-zinc-950/60 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
           >
             {sprintTarget === '' && (
               <option value="" disabled>
@@ -1657,7 +1699,7 @@ function EditPanel({
               step={0.5}
               value={storyPoints}
               onChange={(e) => setStoryPoints(e.target.value)}
-              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+              className="w-full rounded-md border border-zinc-700 bg-zinc-950/60 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
             />
           </div>
         )}
@@ -1667,7 +1709,7 @@ function EditPanel({
             <select
               value={priorityId}
               onChange={(e) => setPriorityId(e.target.value)}
-              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+              className="w-full rounded-md border border-zinc-700 bg-zinc-950/60 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
             >
               {meta.priority.options.map((o) => (
                 <option key={o.id} value={o.id}>
@@ -1683,7 +1725,7 @@ function EditPanel({
             <select
               value={severityId}
               onChange={(e) => setSeverityId(e.target.value)}
-              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+              className="w-full rounded-md border border-zinc-700 bg-zinc-950/60 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
             >
               {severityId === '' && (
                 <option value="" disabled>
@@ -1706,7 +1748,7 @@ function EditPanel({
               placeholder={t.detail.originalEstimatePlaceholder}
               value={originalEstimate}
               onChange={(e) => setOriginalEstimate(e.target.value)}
-              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+              className="w-full rounded-md border border-zinc-700 bg-zinc-950/60 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
             />
           </div>
         )}
@@ -1776,7 +1818,7 @@ function SubtaskCreateForm({
   }
 
   return (
-    <div className="space-y-2 rounded-md border border-zinc-800 bg-zinc-900/60 p-2.5">
+    <div className="space-y-2 rounded-md border border-zinc-800 bg-zinc-950/60 p-2.5">
       <Input
         placeholder={t.detail.subtaskTitlePlaceholder}
         value={title}
@@ -1916,8 +1958,9 @@ function TemplatesMenu({
       >
         <LibraryBig size={14} />
       </button>
+      {/* popover flutuante: superfície opaca e um degrau acima do painel */}
       {open && (
-        <div className="absolute top-full right-0 z-20 mt-1 max-h-64 min-w-56 overflow-y-auto rounded-md border border-zinc-700 bg-zinc-900 shadow-lg">
+        <div className="absolute top-full right-0 z-20 mt-1 max-h-64 min-w-56 overflow-y-auto rounded-md border border-zinc-700 bg-zinc-800 shadow-lg">
           {templates.length === 0 ? (
             <p className="px-3 py-2 text-xs text-zinc-500">
               Nenhum template — salve um comentário como template.
@@ -2064,7 +2107,7 @@ function CommentItem({
   }
 
   return (
-    <div className="rounded-md border border-zinc-800 bg-zinc-900/60 p-2.5">
+    <div className="rounded-md border border-zinc-800 bg-zinc-950/60 p-2.5">
       <div className="mb-1.5 flex items-baseline justify-between gap-2">
         <span className="text-sm font-medium text-zinc-300">{comment.authorName ?? 'Alguém'}</span>
         <div className="flex shrink-0 items-center gap-2">
@@ -2242,7 +2285,7 @@ function DescriptionSection({
         {viewMode === 'edit' ? (
           <textarea
             ref={descriptionRef}
-            className="min-h-40 w-full resize-y rounded-md border border-zinc-700 bg-zinc-900 p-2.5 font-mono text-xs text-zinc-100 outline-none focus:border-indigo-500"
+            className="min-h-40 w-full resize-y rounded-md border border-zinc-700 bg-zinc-950/60 p-2.5 font-mono text-xs text-zinc-100 outline-none focus:border-indigo-500"
             value={value}
             onChange={(e) => setValue(e.target.value)}
             disabled={busy}
@@ -2352,7 +2395,7 @@ function DescriptionBody({
   const shown = truncated ? lines.slice(0, DESCRIPTION_LINE_LIMIT).join('\n') : text
   return (
     <div>
-      <p className="rounded-md bg-zinc-900/60 p-3 text-sm whitespace-pre-wrap text-zinc-300">
+      <p className="rounded-md bg-zinc-950/60 p-3 text-sm whitespace-pre-wrap text-zinc-300">
         {shown}
         {truncated && '…'}
       </p>
@@ -2393,7 +2436,7 @@ function ActivityLine({ activity }: { activity: IssueActivity }): React.JSX.Elem
           )}
         </div>
         {activity.kind === 'comment' && activity.bodyText && (
-          <div className="mt-1 line-clamp-2 rounded bg-zinc-900 px-2 py-1 text-xs text-zinc-400">
+          <div className="mt-1 line-clamp-2 rounded-sm bg-zinc-950/60 px-2 py-1 text-xs text-zinc-400">
             {activity.bodyText}
           </div>
         )}
@@ -2408,7 +2451,7 @@ function ActivityLine({ activity }: { activity: IssueActivity }): React.JSX.Elem
 /** Uma entrada do histórico (changelog) do Jira: autor + data relativa, uma linha por campo alterado. */
 function ChangelogEntryRow({ entry }: { entry: ChangelogEntry }): React.JSX.Element {
   return (
-    <div className="rounded-md border border-zinc-800 bg-zinc-900/60 p-2.5">
+    <div className="rounded-md border border-zinc-800 bg-zinc-950/60 p-2.5">
       <div className="mb-1 flex items-baseline justify-between gap-2">
         <span className="text-sm font-medium text-zinc-300">{entry.authorName ?? '—'}</span>
         <span className="shrink-0 text-xs text-zinc-600">{compactAgo(entry.createdAt)}</span>
@@ -2521,18 +2564,20 @@ function TimerControl({
   }
 
   if (timer.running) {
+    // rodando é o único estado que vira pílula preenchida: é o sinal mais forte
+    // do cabeçalho (indigo-600 preenche, texto branco — regra de cor do DS)
     return (
-      <div className="flex shrink-0 items-center gap-1">
-        <span className="font-mono text-xs tabular-nums text-zinc-300">
+      <div className="flex shrink-0 items-center gap-1 rounded-md bg-indigo-600 py-0.5 pr-0.5 pl-2 text-white">
+        <span className="font-mono text-[11.5px] font-semibold tabular-nums">
           {formatTimer(timer.seconds)}
         </span>
         <button
-          className="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+          className="rounded p-1 hover:bg-white/15"
           onClick={timer.pause}
           title="Pausar timer"
           aria-label="Pausar timer"
         >
-          <Pause size={15} />
+          <Pause size={13} />
         </button>
       </div>
     )
@@ -2621,7 +2666,7 @@ function EditableTitle({ issue, issueKey }: { issue: Issue; issueKey: string }):
         <div className="flex items-center gap-1.5">
           <input
             autoFocus
-            className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-lg font-semibold text-zinc-100 outline-none focus:border-indigo-500"
+            className="w-full rounded-md border border-zinc-700 bg-zinc-950/60 px-2 py-1 text-lg font-semibold text-zinc-100 outline-none focus:border-indigo-500"
             value={value}
             disabled={busy}
             onChange={(e) => setValue(e.target.value)}
@@ -2654,7 +2699,9 @@ function EditableTitle({ issue, issueKey }: { issue: Issue; issueKey: string }):
 
   return (
     <div className="group flex items-start gap-1.5">
-      <h2 className="text-lg font-semibold text-zinc-100">{issue.summary}</h2>
+      <h2 className="max-w-[70ch] text-base leading-[1.35] font-bold text-pretty text-zinc-50">
+        {issue.summary}
+      </h2>
       <button
         className="mt-1 shrink-0 rounded p-0.5 text-zinc-600 opacity-0 hover:bg-zinc-800 hover:text-zinc-300 group-hover:opacity-100"
         onClick={startEdit}
@@ -2727,7 +2774,7 @@ function WorklogsTab({ issueKey }: { issueKey: string }): React.JSX.Element {
             placeholder={t.detail.timeSpentPlaceholder}
             value={timeSpentInput}
             onChange={(e) => setTimeSpentInput(e.target.value)}
-            className="flex-1 rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+            className="flex-1 rounded-md border border-zinc-700 bg-zinc-950/60 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
           />
           <Button
             variant="secondary"
@@ -2830,7 +2877,7 @@ function WorklogItem({
   }
 
   return (
-    <div className="rounded-md border border-zinc-800 bg-zinc-900/60 p-2.5 text-sm">
+    <div className="rounded-md border border-zinc-800 bg-zinc-950/60 p-2.5 text-sm">
       <div className="flex items-baseline justify-between gap-2">
         <span className="font-medium text-zinc-300">{worklog.authorName ?? 'Alguém'}</span>
         <div className="flex shrink-0 items-center gap-2">
@@ -2968,11 +3015,11 @@ function LinkCreateForm({
   }
 
   return (
-    <div className="space-y-2 rounded-md border border-zinc-800 bg-zinc-900/60 p-2.5">
+    <div className="space-y-2 rounded-md border border-zinc-800 bg-zinc-950/60 p-2.5">
       <select
         value={typeValue}
         onChange={(e) => setTypeValue(e.target.value)}
-        className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+        className="w-full rounded-md border border-zinc-700 bg-zinc-950/60 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
       >
         <option value="" disabled>
           Tipo de vínculo
@@ -3091,7 +3138,7 @@ function PullRequestRow({
 
   return (
     <button
-      className="flex w-full items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900/40 px-2.5 py-1.5 text-left text-sm hover:bg-zinc-900"
+      className="flex w-full items-center gap-2 rounded-md border border-zinc-800 bg-zinc-950/40 px-2.5 py-1.5 text-left text-sm hover:bg-zinc-950/60"
       onClick={() => window.open(pr.url, '_blank')}
     >
       <span className="min-w-0 flex-1 truncate text-zinc-300">
@@ -3255,7 +3302,7 @@ function NoteEditor({
   return (
     <>
       <textarea
-        className="h-20 w-full resize-y rounded-md border border-zinc-700 bg-zinc-900 p-2.5 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+        className="h-20 w-full resize-y rounded-md border border-zinc-700 bg-zinc-950/60 p-2.5 text-sm text-zinc-100 outline-none focus:border-indigo-500"
         placeholder="Notas privadas — ficam só neste app, nunca vão para o Jira."
         value={value}
         onChange={handleChange}

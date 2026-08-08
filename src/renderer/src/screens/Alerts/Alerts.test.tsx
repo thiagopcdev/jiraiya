@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClientProvider } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
 import type { Alert, Issue } from '@shared/domain'
@@ -84,8 +84,10 @@ describe('Alerts', () => {
     )
     // resumo dos 3 contadores zerados (CollapsedStats), não um empty state por severidade
     expect(screen.getByText('Críticos 0 · Atenção 0 · Informativos 0')).toBeInTheDocument()
+    // "Seguindo" sem item também é linha, não cartão com empty state
+    expect(screen.getByText('Seguindo 0')).toBeInTheDocument()
     expect(
-      screen.getByText('Você não segue nenhum card — use o olho na gaveta do card.')
+      screen.getByText('marque um card com o olho na gaveta para acompanhá-lo aqui')
     ).toBeInTheDocument()
   })
 
@@ -102,11 +104,61 @@ describe('Alerts', () => {
     })
     renderWithProviders(<Alerts />, { withIssueDetail: false })
     await waitFor(() => expect(screen.getByText('crítico 1')).toBeInTheDocument())
-    expect(screen.getByText('(1)', { exact: false })).toBeInTheDocument()
-    expect(screen.getByText('Críticos')).toBeInTheDocument()
-    expect(screen.getByText('Atenção')).toBeInTheDocument()
+    // contador agora é pílula na faixa de título, uma por severidade
+    expect(
+      within(screen.getByRole('heading', { name: /Críticos/ })).getByText('1')
+    ).toBeInTheDocument()
+    expect(
+      within(screen.getByRole('heading', { name: /Atenção/ })).getByText('2')
+    ).toBeInTheDocument()
     expect(screen.getByText('atenção 1')).toBeInTheDocument()
     expect(screen.getByText('atenção 2')).toBeInTheDocument()
+    // o contexto do cabeçalho soma exatamente o que a tela mostra
+    expect(screen.getByText('1 críticos · 2 de atenção · 0 informativos')).toBeInTheDocument()
+  })
+
+  it('severidade sem item vira linha de ~26px, não cartão', async () => {
+    installMockApi({
+      'alerts:list': () => ({ alerts: [makeAlert({ severity: 'critical', message: 'só esse' })] }),
+      'watch:list': () => ({ issues: [] })
+    })
+    renderWithProviders(<Alerts />, { withIssueDetail: false })
+    await waitFor(() => expect(screen.getByText('só esse')).toBeInTheDocument())
+    expect(screen.getByText('0 de atenção')).toBeInTheDocument()
+    expect(screen.getByText('0 informativos')).toBeInTheDocument()
+    expect(screen.getAllByText('nada por aqui')).toHaveLength(2)
+    // sem item não há o que abrir: o "mostrar" não aparece
+    expect(screen.queryByRole('button', { name: 'mostrar' })).not.toBeInTheDocument()
+  })
+
+  it('informativo com item é cartão como as outras severidades', async () => {
+    installMockApi({
+      'alerts:list': () => ({
+        alerts: [
+          makeAlert({ id: 1, severity: 'critical', message: 'crítico 1' }),
+          makeAlert({ id: 2, severity: 'info', message: 'saiu do seu radar' })
+        ]
+      }),
+      'watch:list': () => ({ issues: [] })
+    })
+    renderWithProviders(<Alerts />, { withIssueDetail: false })
+    // severidade com item nunca entra colapsada — só a zerada vira linha
+    await waitFor(() => expect(screen.getByText('saiu do seu radar')).toBeInTheDocument())
+    expect(screen.getByRole('heading', { name: /Informativos/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'mostrar' })).not.toBeInTheDocument()
+    // a severidade sem item nenhum, essa sim, é a linha de ~26px
+    expect(screen.getByText('0 de atenção')).toBeInTheDocument()
+  })
+
+  it('não oferece dispensa em massa — só a dispensa por alerta', async () => {
+    installMockApi({
+      'alerts:list': () => ({ alerts: [makeAlert({ id: 3 }), makeAlert({ id: 4 })] }),
+      'watch:list': () => ({ issues: [] }),
+      'alerts:dismiss': () => ({ ok: true })
+    })
+    renderWithProviders(<Alerts />, { withIssueDetail: false })
+    await waitFor(() => expect(screen.getAllByTitle('Dispensar')).toHaveLength(2))
+    expect(screen.queryByText('Dispensar todos')).not.toBeInTheDocument()
   })
 
   it('dispensa um alerta e reconsulta a lista', async () => {
