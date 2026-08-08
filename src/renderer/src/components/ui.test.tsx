@@ -2,7 +2,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { Badge, Button, Card, CollapsedStats, EmptyState, Input, ScreenHeader, Spinner } from './ui'
+import {
+  Badge,
+  Button,
+  Card,
+  CollapsedStats,
+  EmptyState,
+  Input,
+  ScreenHeader,
+  SegmentedControl,
+  Spinner,
+  Toggle
+} from './ui'
 
 afterEach(cleanup)
 
@@ -73,6 +84,79 @@ describe('ui — componentes de apoio', () => {
       )
       expect(screen.getByText('Título rico')).toBeInTheDocument()
     })
+
+    it('renderiza a faixa de título com actions à direita', () => {
+      render(
+        <Card title="Em andamento" actions={<button>ordenar</button>}>
+          conteúdo
+        </Card>
+      )
+      expect(screen.getByRole('heading', { name: 'Em andamento' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'ordenar' })).toBeInTheDocument()
+    })
+
+    it('só com actions (sem title), ainda renderiza a faixa', () => {
+      render(<Card actions={<button>ação</button>}>conteúdo</Card>)
+      expect(screen.getByRole('button', { name: 'ação' })).toBeInTheDocument()
+      expect(screen.queryByRole('heading')).not.toBeInTheDocument()
+    })
+
+    it('bodyClassName troca o padding do corpo', () => {
+      render(<Card bodyClassName="">sangrado</Card>)
+      expect(screen.getByText('sangrado').className).not.toContain('p-4')
+    })
+  })
+
+  describe('Toggle', () => {
+    it('expõe role switch com aria-checked e alterna ao clicar', async () => {
+      const onChange = vi.fn()
+      render(<Toggle checked={false} onChange={onChange} aria-label="Atribuir a mim" />)
+      const sw = screen.getByRole('switch', { name: 'Atribuir a mim' })
+      expect(sw).toHaveAttribute('aria-checked', 'false')
+      await userEvent.click(sw)
+      expect(onChange).toHaveBeenCalledWith(true)
+    })
+
+    it('ligado, devolve false no próximo clique e pinta o trilho de marca', async () => {
+      const onChange = vi.fn()
+      render(<Toggle checked onChange={onChange} aria-label="Usar IA" />)
+      const sw = screen.getByRole('switch', { name: 'Usar IA' })
+      expect(sw.className).toContain('bg-indigo-600')
+      await userEvent.click(sw)
+      expect(onChange).toHaveBeenCalledWith(false)
+    })
+
+    it('desabilitado não dispara onChange', async () => {
+      const onChange = vi.fn()
+      render(<Toggle checked={false} onChange={onChange} disabled aria-label="Bloqueado" />)
+      await userEvent.click(screen.getByRole('switch', { name: 'Bloqueado' }))
+      expect(onChange).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('SegmentedControl', () => {
+    const options = [
+      { value: 'hoje' as const, label: 'Hoje' },
+      { value: '7d' as const, label: '7 dias' },
+      { value: 'sprint' as const, label: 'Sprint' }
+    ]
+
+    it('marca o item ativo com aria-pressed e o estilo de marca', () => {
+      render(
+        <SegmentedControl options={options} value="7d" onChange={vi.fn()} aria-label="Período" />
+      )
+      const ativo = screen.getByRole('button', { name: '7 dias' })
+      expect(ativo).toHaveAttribute('aria-pressed', 'true')
+      expect(ativo.className).toContain('bg-indigo-600')
+      expect(screen.getByRole('button', { name: 'Hoje' })).toHaveAttribute('aria-pressed', 'false')
+    })
+
+    it('devolve o valor da opção clicada', async () => {
+      const onChange = vi.fn()
+      render(<SegmentedControl options={options} value="hoje" onChange={onChange} />)
+      await userEvent.click(screen.getByRole('button', { name: 'Sprint' }))
+      expect(onChange).toHaveBeenCalledWith('sprint')
+    })
   })
 
   describe('Spinner', () => {
@@ -93,6 +177,13 @@ describe('ui — componentes de apoio', () => {
     it.each(['green', 'blue', 'amber', 'red', 'indigo'] as const)('aplica a cor "%s"', (color) => {
       render(<Badge color={color}>x-{color}</Badge>)
       expect(screen.getByText(`x-${color}`)).toBeInTheDocument()
+    })
+
+    it('a variante brand é pastilha de marca, não retângulo cinza', () => {
+      render(<Badge color="brand">4</Badge>)
+      const pill = screen.getByText('4')
+      expect(pill.className).toContain('rounded-full')
+      expect(pill.className).toContain('text-indigo-400')
     })
   })
 
@@ -121,6 +212,11 @@ describe('ui — componentes de apoio', () => {
       render(<ScreenHeader title="Quadro" />)
       expect(screen.getByRole('heading', { name: 'Quadro' })).toBeInTheDocument()
       expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    })
+
+    it('flush tira a borda inferior (quem fecha é a faixa de abas)', () => {
+      const { container } = render(<ScreenHeader title="Criar" flush />)
+      expect(container.querySelector('header')?.className).not.toContain('border-b')
     })
   })
 

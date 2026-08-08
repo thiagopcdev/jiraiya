@@ -14,7 +14,7 @@ export function PairTabs({
 }): React.JSX.Element {
   const { pathname } = useLocation()
   return (
-    <nav className="flex gap-1 border-b border-zinc-800 px-6">
+    <nav className="flex border-b border-zinc-800 bg-zinc-900 px-5">
       {tabs.map((tab) => {
         const active = pathname === tab.to
         return (
@@ -22,9 +22,9 @@ export function PairTabs({
             key={tab.to}
             to={tab.to}
             aria-current={active ? 'page' : undefined}
-            className={`border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+            className={`-mb-px border-b-2 px-3.5 pt-2 pb-2.5 text-[13px] transition-colors ${
               active
-                ? 'border-indigo-500 text-zinc-100'
+                ? 'border-indigo-500 font-semibold text-indigo-400'
                 : 'border-transparent text-zinc-400 hover:text-zinc-200'
             }`}
           >
