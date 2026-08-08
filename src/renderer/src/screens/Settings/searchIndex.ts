@@ -54,6 +54,11 @@ export const SEARCH_INDEX: Array<{ group: GroupId; card: string; labels: string[
       'Modo de sincronização'
     ]
   },
+  {
+    group: 'sync',
+    card: 'O que é trabalho em andamento',
+    labels: ['Em andamento', 'Status em progresso']
+  },
   { group: 'sync', card: 'Projetos acompanhados', labels: [] },
   {
     group: 'sync',

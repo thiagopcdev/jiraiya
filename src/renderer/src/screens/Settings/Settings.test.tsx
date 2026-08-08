@@ -41,6 +41,13 @@ function baseHandlers(prefsState: Prefs): MockHandlers {
       Object.assign(prefsState, patch)
       return { ...prefsState }
     },
+    'issues:inProgressStatuses': () => ({
+      statuses: [
+        { status: 'Em andamento', total: 15, mine: 4 },
+        { status: 'Pronto para Teste', total: 12, mine: 11 },
+        { status: 'Code Review', total: 6, mine: 0 }
+      ]
+    }),
     'projects:list': () => ({
       projects: [
         { jiraId: '1', key: 'BT', name: 'Biud Tech', avatarUrl: null, selected: true },
@@ -321,6 +328,90 @@ describe('Settings', () => {
       await waitFor(() =>
         expect(screen.getByRole('heading', { name: 'Conta' })).toBeInTheDocument()
       )
+    })
+  })
+
+  describe('O que é trabalho em andamento', () => {
+    it('no padrão, só "Em andamento" aparece marcado', async () => {
+      const user = userEvent.setup()
+      setup()
+      await waitReady()
+      await goTo(user, 'Sincronização')
+
+      const card = getCard('O que é trabalho em andamento')
+      await waitFor(() =>
+        expect(within(card).getByRole('button', { name: /Em andamento/ })).toBeInTheDocument()
+      )
+      expect(within(card).getByRole('button', { name: /Em andamento/ })).toHaveAttribute(
+        'aria-pressed',
+        'true'
+      )
+      for (const nome of ['Pronto para Teste', 'Code Review']) {
+        expect(within(card).getByRole('button', { name: new RegExp(nome) })).toHaveAttribute(
+          'aria-pressed',
+          'false'
+        )
+      }
+      expect(within(card).getByText('1 de 3')).toBeInTheDocument()
+    })
+
+    it('marcar um status a mais grava a lista completa', async () => {
+      const user = userEvent.setup()
+      const api = setup()
+      await waitReady()
+      await goTo(user, 'Sincronização')
+
+      const card = getCard('O que é trabalho em andamento')
+      await waitFor(() =>
+        expect(within(card).getByRole('button', { name: /Code Review/ })).toBeInTheDocument()
+      )
+      await user.click(within(card).getByRole('button', { name: /Code Review/ }))
+
+      await waitFor(() =>
+        expect(api.lastPayload('prefs:set')).toEqual({
+          inProgressStatuses: ['Em andamento', 'Code Review']
+        })
+      )
+    })
+
+    it('marcar todos de volta grava lista vazia — é o mesmo que "sem filtro"', async () => {
+      const user = userEvent.setup()
+      const api = setup((_api, prefsState) => {
+        prefsState.inProgressStatuses = ['Em andamento', 'Pronto para Teste']
+      })
+      await waitReady()
+      await goTo(user, 'Sincronização')
+
+      const card = getCard('O que é trabalho em andamento')
+      await waitFor(() =>
+        expect(within(card).getByRole('button', { name: /Code Review/ })).toHaveAttribute(
+          'aria-pressed',
+          'false'
+        )
+      )
+      await user.click(within(card).getByRole('button', { name: /Code Review/ }))
+
+      await waitFor(() => expect(api.lastPayload('prefs:set')).toEqual({ inProgressStatuses: [] }))
+    })
+
+    it('desmarcar o último é ignorado — deixaria a tela Hoje sem definição', async () => {
+      const user = userEvent.setup()
+      const api = setup((_api, prefsState) => {
+        prefsState.inProgressStatuses = ['Em andamento']
+      })
+      await waitReady()
+      await goTo(user, 'Sincronização')
+
+      const card = getCard('O que é trabalho em andamento')
+      await waitFor(() =>
+        expect(within(card).getByRole('button', { name: /Em andamento/ })).toHaveAttribute(
+          'aria-pressed',
+          'true'
+        )
+      )
+      await user.click(within(card).getByRole('button', { name: /Em andamento/ }))
+
+      expect(api.count('prefs:set')).toBe(0)
     })
   })
 

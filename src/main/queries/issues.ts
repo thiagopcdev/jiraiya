@@ -13,6 +13,30 @@ export type IssueBucket =
   | 'mine'
   | 'all'
 
+/**
+ * Normaliza nome de status para comparação: sem acento e sem caixa. O mesmo
+ * status aparece como "Aguardando Deploy HMG" num projeto e "AGUARDANDO DEPLOY
+ * HMG" em outro.
+ */
+export function normalizeStatus(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+}
+
+/**
+ * Filtra "trabalho em curso" pelos status escolhidos pelo usuário. Lista vazia
+ * mantém o comportamento histórico: toda a categoria 'indeterminate' do Jira —
+ * que inclui Code Review, Pronto para Teste e Aguardando Deploy.
+ */
+function keepInProgress(rows: IssueRow[], statuses: string[] | undefined): IssueRow[] {
+  if (!statuses || statuses.length === 0) return rows
+  const permitidos = new Set(statuses.map(normalizeStatus))
+  return rows.filter((row) => row.status !== null && permitidos.has(normalizeStatus(row.status)))
+}
+
 export interface IssueQueryCtx {
   db: Database.Database
   workspaceId: number
@@ -26,7 +50,14 @@ export interface IssueQueryCtx {
  */
 export function queryIssues(
   ctx: IssueQueryCtx,
-  opts: { start: string; end: string; bucket: IssueBucket; stalledDays: number }
+  opts: {
+    start: string
+    end: string
+    bucket: IssueBucket
+    stalledDays: number
+    /** vazio/ausente = toda a categoria 'indeterminate' (comportamento histórico) */
+    inProgressStatuses?: string[]
+  }
 ): Issue[] {
   const { db, workspaceId, accountId, siteUrl } = ctx
   const { start, end, bucket } = opts
@@ -77,6 +108,7 @@ export function queryIssues(
            ORDER BY updated_at DESC`
         )
         .all({ workspaceId, accountId }) as IssueRow[]
+      rows = keepInProgress(rows, opts.inProgressStatuses)
       break
     case 'stalled': {
       const cutoff = new Date(Date.now() - opts.stalledDays * 24 * 3600 * 1000).toISOString()
@@ -93,6 +125,10 @@ export function queryIssues(
            ORDER BY i.updated_at ASC`
         )
         .all({ workspaceId, accountId, cutoff }) as IssueRow[]
+      // "parado" é card EM CURSO sem toque há N dias: segue a mesma definição
+      // de em curso, senão a mesma tela contaria como parado um card que ela
+      // não considera em andamento.
+      rows = keepInProgress(rows, opts.inProgressStatuses)
       break
     }
     case 'rejected':
@@ -175,4 +211,29 @@ export function searchIssues(ctx: IssueQueryCtx, query: string, limit: number): 
     )
     .all({ workspaceId, q: '%' + query + '%', limit }) as IssueRow[]
   return rows.map((r) => rowToIssue(r, siteUrl))
+}
+
+/**
+ * Status da categoria "em progresso" que realmente existem no workspace, com
+ * quantos cards do usuário estão em cada um. Alimenta a escolha em
+ * Configurações — a lista sai dos dados, não de um enum fixo, porque cada
+ * projeto do Jira nomeia o fluxo do seu jeito.
+ */
+export function listInProgressStatuses(
+  ctx: IssueQueryCtx
+): Array<{ status: string; total: number; mine: number }> {
+  const { db, workspaceId, accountId } = ctx
+  return db
+    .prepare(
+      `SELECT status,
+              COUNT(*) AS total,
+              SUM(CASE WHEN assignee_account_id = @accountId THEN 1 ELSE 0 END) AS mine
+         FROM issue
+        WHERE workspace_id = @workspaceId
+          AND status_category = 'indeterminate'
+          AND status IS NOT NULL
+        GROUP BY status
+        ORDER BY total DESC, status ASC`
+    )
+    .all({ workspaceId, accountId }) as Array<{ status: string; total: number; mine: number }>
 }

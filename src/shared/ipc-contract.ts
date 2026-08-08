@@ -153,6 +153,12 @@ export const ipcContract = {
     req: z.object({ id: z.number() }),
     res: undefined as unknown as { ok: true }
   },
+  'issues:inProgressStatuses': {
+    req: z.object({}),
+    res: undefined as unknown as {
+      statuses: Array<{ status: string; total: number; mine: number }>
+    }
+  },
   'prefs:get': {
     req: z.object({}),
     res: undefined as unknown as Prefs
@@ -162,6 +168,7 @@ export const ipcContract = {
       syncIntervalMinutes: z.number().int().min(5).max(120).optional(),
       backfillDays: z.number().int().min(7).max(180).optional(),
       stalledDays: z.number().int().min(1).max(30).optional(),
+      inProgressStatuses: z.array(z.string().trim().min(1)).max(60).optional(),
       syncMode: z.enum(['project', 'personal']).optional(),
       notifyCriticalAlerts: z.boolean().optional(),
       notifyAssignedToMe: z.boolean().optional(),

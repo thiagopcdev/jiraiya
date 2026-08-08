@@ -24,6 +24,7 @@ import { invoke, IpcError } from '../../api/client'
 import {
   useAiStatus,
   useAuthStatus,
+  useInProgressStatuses,
   useOpenRouterModels,
   usePrefs,
   usePrStatus,
@@ -183,6 +184,7 @@ function GroupPanel({ group }: { group: GroupId }): React.JSX.Element {
       return (
         <>
           <SyncSection />
+          <InProgressStatusSection />
           <ProjectsSection />
           <SyncStateSection />
         </>
@@ -532,6 +534,92 @@ function WorklogReminderSection(): React.JSX.Element | null {
           />
         }
       />
+    </SettingsCard>
+  )
+}
+
+/**
+ * O que conta como trabalho EM CURSO. O Jira só tem três categorias, e a do
+ * meio ("em progresso") junta "Em andamento" com "Code Review", "Pronto para
+ * Teste" e "Aguardando Deploy" — por isso a tela Hoje mostrava como em
+ * andamento card que já saiu da sua mão. A lista de status vem dos dados do
+ * workspace, não de um enum: cada projeto nomeia o fluxo do seu jeito.
+ *
+ * Vazio = todos (comportamento histórico), e é assim que os chips aparecem
+ * quando o usuário nunca escolheu: todos marcados.
+ */
+function InProgressStatusSection(): React.JSX.Element | null {
+  const { data: prefs } = usePrefs()
+  const { data, isLoading } = useInProgressStatuses()
+  const savePrefs = usePrefsUpdater()
+  const [busy, setBusy] = useState(false)
+
+  const statuses = data?.statuses ?? []
+  const escolhidos = prefs?.inProgressStatuses ?? []
+  const todos = escolhidos.length === 0
+  const marcado = (status: string): boolean =>
+    todos || escolhidos.some((s) => norm(s) === norm(status))
+
+  const toggle = async (status: string): Promise<void> => {
+    // primeiro clique parte de "todos marcados", que é o que a tela mostra
+    const base = todos ? statuses.map((s) => s.status) : escolhidos
+    const proximos = marcado(status)
+      ? base.filter((s) => norm(s) !== norm(status))
+      : [...base, status]
+    // desmarcar tudo voltaria ao comportamento "todos" sem o usuário pedir
+    if (proximos.length === 0) return
+    setBusy(true)
+    try {
+      // marcar todos de volta é o mesmo que "sem filtro"
+      const patch = proximos.length === statuses.length ? [] : proximos
+      await savePrefs({ inProgressStatuses: patch })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const marcados = statuses.filter((s) => marcado(s.status)).length
+
+  return (
+    <SettingsCard
+      title="O que é trabalho em andamento"
+      actions={
+        statuses.length > 0 && (
+          <Badge color="brand">
+            {marcados} de {statuses.length}
+          </Badge>
+        )
+      }
+    >
+      <p className="mb-2.5 text-[11.5px] leading-snug text-zinc-500">
+        Vale para o bloco “Em andamento” e para a contagem de parados na tela Hoje, e para os
+        números por pessoa na tela Time. Sem nenhuma escolha, conta a categoria inteira do Jira.
+      </p>
+      {isLoading && <Spinner className="text-zinc-500" />}
+      {!isLoading && statuses.length === 0 && (
+        <p className="text-[12.5px] text-zinc-500">
+          Nenhum card em progresso sincronizado ainda — rode uma sincronização.
+        </p>
+      )}
+      <div className="flex flex-wrap gap-[7px]">
+        {statuses.map((s) => (
+          <button
+            key={s.status}
+            disabled={busy}
+            aria-pressed={marcado(s.status)}
+            className={`rounded-full border px-3 py-1 text-[12.5px] transition-colors disabled:opacity-50 ${
+              marcado(s.status)
+                ? 'border-indigo-600 bg-indigo-600/12 font-semibold text-indigo-400'
+                : 'border-zinc-700 text-zinc-400 hover:border-zinc-500'
+            }`}
+            onClick={() => void toggle(s.status)}
+            title={`${s.mine} ${s.mine === 1 ? 'card seu' : 'cards seus'} · ${s.total} no total`}
+          >
+            {s.status}
+            <span className="ml-1.5 text-[10.5px] font-normal opacity-70">{s.mine}</span>
+          </button>
+        ))}
+      </div>
     </SettingsCard>
   )
 }

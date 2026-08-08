@@ -53,6 +53,13 @@ export function useSyncStatus(): UseQueryResult<IpcResponse<'sync:status'>> {
   })
 }
 
+export function useInProgressStatuses(): UseQueryResult<IpcResponse<'issues:inProgressStatuses'>> {
+  return useQuery({
+    queryKey: ['in-progress-statuses'],
+    queryFn: () => invoke('issues:inProgressStatuses', {})
+  })
+}
+
 export function useProjects(refresh = false): UseQueryResult<IpcResponse<'projects:list'>> {
   return useQuery({
     queryKey: ['projects', refresh],

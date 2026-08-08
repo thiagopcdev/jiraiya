@@ -231,6 +231,14 @@ export interface Prefs {
   syncIntervalMinutes: number
   backfillDays: number
   stalledDays: number
+  /**
+   * Nomes de status que contam como trabalho EM CURSO. Vazio = toda a categoria
+   * "em progresso" do Jira, que é o comportamento histórico — e que mistura
+   * "Em andamento" com "Code Review", "Pronto para Teste" e "Aguardando Deploy".
+   * Comparação normalizada (sem acento, sem caixa): o mesmo status aparece com
+   * grafias diferentes entre projetos.
+   */
+  inProgressStatuses: string[]
   syncMode: 'project' | 'personal'
   notifyCriticalAlerts: boolean
   notifyAssignedToMe: boolean
@@ -332,6 +340,10 @@ export const DEFAULT_PREFS: Prefs = {
   syncIntervalMinutes: 15,
   backfillDays: 30,
   stalledDays: 3,
+  // "Em andamento" e não a categoria inteira: o padrão do Jira misturava code
+  // review, teste e deploy com trabalho realmente em curso. Quem usa outro nome
+  // de coluna reescolhe em Configurações → Sincronização.
+  inProgressStatuses: ['Em andamento'],
   syncMode: 'project',
   notifyCriticalAlerts: false,
   notifyAssignedToMe: true,

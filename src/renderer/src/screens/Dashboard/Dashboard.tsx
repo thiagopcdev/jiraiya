@@ -538,7 +538,10 @@ function ActivityCard({ period }: { period: Period }): React.JSX.Element {
           onClick={() => setFilter('commented')}
         />
       </div>
-      <div className="flex flex-col p-1.5">
+      {/* Teto de altura com rolagem própria: num dia cheio esta lista passava de
+          uma tela inteira e empurrava "Onde seu tempo passa" para fora da
+          dobra. O cartão continua com a altura do conteúdo enquanto couber. */}
+      <div className="flex max-h-[420px] flex-col overflow-y-auto p-1.5">
         {visible.length === 0 && (
           <p className="px-2 py-3 text-[13px] text-zinc-500">{t.today.activityEmpty}</p>
         )}

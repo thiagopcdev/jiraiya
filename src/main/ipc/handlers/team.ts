@@ -14,7 +14,13 @@ export function registerTeamHandlers(ctx: AppContext): void {
     if (!workspace) throw new AppError('NOT_CONNECTED', 'Nenhuma conta Jira conectada')
     const range = resolveWithSprint(ctx, workspace.id, period)
     const prefs = getPrefs(ctx.db)
-    const members = buildTeamSummary(ctx.db, workspace, range, prefs.stalledDays)
+    const members = buildTeamSummary(
+      ctx.db,
+      workspace,
+      range,
+      prefs.stalledDays,
+      prefs.inProgressStatuses
+    )
     return { members, periodLabel: range.label, syncMode: prefs.syncMode }
   })
 
@@ -23,7 +29,13 @@ export function registerTeamHandlers(ctx: AppContext): void {
     if (!workspace) throw new AppError('NOT_CONNECTED', 'Nenhuma conta Jira conectada')
     const range = resolveWithSprint(ctx, workspace.id, period)
     const prefs = getPrefs(ctx.db)
-    const members = buildTeamSummary(ctx.db, workspace, range, prefs.stalledDays)
+    const members = buildTeamSummary(
+      ctx.db,
+      workspace,
+      range,
+      prefs.stalledDays,
+      prefs.inProgressStatuses
+    )
 
     // envia só o essencial pra IA (nomes, chaves, contagens) — uma única chamada
     const compact = members.map((m) => ({
