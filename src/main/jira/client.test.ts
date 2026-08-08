@@ -220,37 +220,46 @@ describe('JiraClient.issueExists', () => {
   })
 })
 
-describe('JiraClient.missingIssueKeys', () => {
-  it('devolve as keys que o bulkfetch não trouxe', async () => {
+describe('JiraClient.unreachableIssueKeys', () => {
+  it('devolve as keys que a BUSCA não alcança', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonRes({ issues: [{ key: 'BT-1' }] }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(makeClient().missingIssueKeys(['BT-1', 'BT-907'])).resolves.toEqual(['BT-907'])
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string)
-    expect(body.issueIdsOrKeys).toEqual(['BT-1', 'BT-907'])
+    await expect(makeClient().unreachableIssueKeys(['BT-1', 'BT-907'])).resolves.toEqual(['BT-907'])
+    const [url, init] = fetchMock.mock.calls[0]
+    // a pergunta é de ALCANCE (busca), não de existência (bulkfetch): card
+    // arquivado responde 200 no bulkfetch e por isso nunca era purgado
+    expect(String(url)).toContain('/rest/api/3/search/jql')
+    expect(JSON.parse(init.body as string).jql).toBe('key in (BT-1,BT-907)')
   })
 
-  it('lote de 100 em 100', async () => {
-    const keys = Array.from({ length: 150 }, (_, i) => `BT-${i + 1}`)
+  it('compara sem diferenciar caixa', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonRes({ issues: [{ key: 'bt-1' }] })))
+    await expect(makeClient().unreachableIssueKeys(['BT-1'])).resolves.toEqual([])
+  })
+
+  it('lote de 80 em 80', async () => {
+    const keys = Array.from({ length: 170 }, (_, i) => `BT-${i + 1}`)
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(jsonRes({ issues: keys.slice(0, 100).map((key) => ({ key })) }))
-      .mockResolvedValueOnce(jsonRes({ issues: keys.slice(100).map((key) => ({ key })) }))
+      .mockResolvedValueOnce(jsonRes({ issues: keys.slice(0, 80).map((key) => ({ key })) }))
+      .mockResolvedValueOnce(jsonRes({ issues: keys.slice(80, 160).map((key) => ({ key })) }))
+      .mockResolvedValueOnce(jsonRes({ issues: keys.slice(160).map((key) => ({ key })) }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(makeClient().missingIssueKeys(keys)).resolves.toEqual([])
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+    await expect(makeClient().unreachableIssueKeys(keys)).resolves.toEqual([])
+    expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 
-  it('lote inteiro vazio é ignorado (mais provável falha sistêmica que 100 exclusões)', async () => {
+  it('lote inteiro vazio é ignorado (mais provável falha sistêmica que 80 exclusões)', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonRes({ issues: [] })))
-    await expect(makeClient().missingIssueKeys(['BT-1', 'BT-2'])).resolves.toEqual([])
+    await expect(makeClient().unreachableIssueKeys(['BT-1', 'BT-2'])).resolves.toEqual([])
   })
 
   it('sem keys não chama o Jira', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
-    await expect(makeClient().missingIssueKeys([])).resolves.toEqual([])
+    await expect(makeClient().unreachableIssueKeys([])).resolves.toEqual([])
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })

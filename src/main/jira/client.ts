@@ -115,28 +115,37 @@ export class JiraClient {
   }
 
   /**
-   * Das keys informadas, quais o Jira não devolve (excluídas ou sem acesso).
-   * Usa o bulkfetch (teto de 100 por request) em vez de um GET por card.
+   * Das keys informadas, quais a BUSCA do Jira não alcança mais.
    *
-   * Guarda contra falso positivo: se um lote inteiro voltar vazio, o mais
-   * provável é problema sistêmico (permissão do endpoint, lote inválido) e não
-   * 100 cards apagados de uma vez — nesse caso o lote é ignorado.
+   * A pergunta certa é essa, e não "a issue existe?". O cache é populado pela
+   * busca JQL, então ele só deveria conter o que a busca devolve. Card que
+   * sumiu da busca — excluído, arquivado, movido para fora do escopo ou sem
+   * permissão — não tem como voltar a ser atualizado e vira fantasma.
+   *
+   * Perguntar por existência (bulkfetch/GET por key) não serve: card arquivado
+   * some da busca mas continua respondendo 200 quando buscado pela key, e por
+   * isso ficava no app para sempre.
+   *
+   * `key in (...)` não tem filtro de período: é pura pergunta de alcance.
+   * Lote de 80 para o JQL não estourar limite de tamanho.
    */
-  async missingIssueKeys(issueKeys: string[]): Promise<string[]> {
-    const missing: string[] = []
-    for (let i = 0; i < issueKeys.length; i += 100) {
-      const batch = issueKeys.slice(i, i + 100)
+  async unreachableIssueKeys(issueKeys: string[]): Promise<string[]> {
+    const unreachable: string[] = []
+    for (let i = 0; i < issueKeys.length; i += 80) {
+      const batch = issueKeys.slice(i, i + 80)
       const res = await this.http.post<{ issues?: Array<{ key?: string }> }>(
-        '/rest/api/3/issue/bulkfetch',
-        { issueIdsOrKeys: batch, fields: ['summary'] }
+        '/rest/api/3/search/jql',
+        { jql: `key in (${batch.join(',')})`, fields: ['summary'], maxResults: batch.length }
       )
       const found = new Set((res.issues ?? []).map((issue) => issue.key?.toUpperCase()))
+      // lote inteiro vazio é sintoma sistêmico (JQL recusada, permissão), não
+      // 80 cards sumidos de uma vez — ignora o lote em vez de apagar tudo
       if (found.size === 0) continue
       for (const key of batch) {
-        if (!found.has(key.toUpperCase())) missing.push(key)
+        if (!found.has(key.toUpperCase())) unreachable.push(key)
       }
     }
-    return missing
+    return unreachable
   }
 
   /** Changelogs em lote (até 1000 issues por request, paginado por token). */

@@ -66,6 +66,20 @@ export interface SyncResult {
 
 const RESOURCE = 'issues'
 
+/**
+ * Teto da reconciliação: acima disso ela não apaga nada. Sumiço em massa é
+ * quase sempre acesso quebrado, não exclusão real — e cache esvaziado por
+ * engano custa um sync completo inteiro para voltar.
+ */
+const RECONCILE_MAX_RATIO = 0.2
+
+/**
+ * Piso absoluto do teto acima. Sem ele, cache pequeno nunca se limpa: com 20
+ * cards em cache, 5 exclusões legítimas já dariam 25% e ficariam presas para
+ * sempre. Uma dúzia de cards não é o desastre contra o qual o teto protege.
+ */
+const RECONCILE_MIN_ABSOLUTE = 12
+
 export async function runSync(deps: SyncDeps, opts: { full?: boolean } = {}): Promise<SyncResult> {
   const { db, client, workspace, onProgress } = deps
   const prefs = getPrefs(db)
@@ -140,18 +154,32 @@ export async function runSync(deps: SyncDeps, opts: { full?: boolean } = {}): Pr
       }
     })
 
-    // fase 1.5 (só no sync completo): cards excluídos no Jira. A busca
-    // incremental nunca devolve quem foi apagado, então sem essa reconciliação o
-    // card fantasma fica no cache para sempre. É bulkfetch em lotes de 100, por
-    // isso roda apenas no sync completo (o incremental segue barato).
+    // fase 1.5: cards que a busca não alcança mais. A busca incremental nunca
+    // devolve quem sumiu — excluído, arquivado, movido para fora do escopo ou
+    // sem permissão — então sem essa reconciliação o card fantasma fica no cache
+    // para sempre, visível no quadro. Roda em TODO sync (~1 request por 80
+    // cards) porque só no completo ela quase nunca acontecia na prática.
     const purged: string[] = []
-    if (opts.full) {
+    {
       const localKeys = allIssueKeys(db, workspace.id)
       if (localKeys.length > 0) {
         onProgress?.({ phase: 'reconcile', done: 0, total: localKeys.length })
         try {
-          for (const key of await client.missingIssueKeys(localKeys)) {
-            if (purgeIssue(db, workspace.id, key)) purged.push(key)
+          const unreachable = await client.unreachableIssueKeys(localKeys)
+          const teto = Math.max(localKeys.length * RECONCILE_MAX_RATIO, RECONCILE_MIN_ABSOLUTE)
+          if (unreachable.length > teto) {
+            // Sumiço em massa é quase sempre problema de acesso (token trocado,
+            // permissão revogada, busca degradada) e não exclusão real. Na
+            // dúvida não apaga: o card fantasma incomoda menos que o cache
+            // esvaziado.
+            console.warn(
+              `[sync] reconciliação abortada: ${unreachable.length} de ${localKeys.length} ` +
+                `cards fora do alcance da busca (teto de ${RECONCILE_MAX_RATIO * 100}%)`
+            )
+          } else {
+            for (const key of unreachable) {
+              if (purgeIssue(db, workspace.id, key)) purged.push(key)
+            }
           }
         } catch {
           // reconciliação é oportunista: falha aqui não derruba o sync

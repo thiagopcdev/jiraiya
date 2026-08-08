@@ -74,7 +74,7 @@ interface FakeSyncClient {
   issueComments: ReturnType<typeof vi.fn>
   listSprints: ReturnType<typeof vi.fn>
   listBoards: ReturnType<typeof vi.fn>
-  missingIssueKeys: ReturnType<typeof vi.fn>
+  unreachableIssueKeys: ReturnType<typeof vi.fn>
 }
 
 function makeClient(opts: ClientOpts = {}): {
@@ -98,7 +98,7 @@ function makeClient(opts: ClientOpts = {}): {
     ),
     listSprints: vi.fn(async () => opts.sprints ?? []),
     listBoards: vi.fn(async () => opts.boards ?? []),
-    missingIssueKeys: vi.fn(async () => opts.missingKeys ?? [])
+    unreachableIssueKeys: vi.fn(async () => opts.missingKeys ?? [])
   }
   return { client, calls }
 }
@@ -621,34 +621,75 @@ describe('runSync — cards excluídos no Jira', () => {
       (r) => r.key
     )
 
-  it('sync completo remove do cache os cards que o Jira não devolve mais', async () => {
-    seedSynced('BT-907')
-    seedSynced('BT-908')
+  it('remove do cache os cards que a busca não alcança mais', async () => {
+    // massa de 10 porque a purga tem teto proporcional (ver o teste do teto)
+    for (let i = 1; i <= 10; i++) seedSynced(`BT-${900 + i}`)
     const { client } = makeClient({ missingKeys: ['BT-907'] })
 
     const res = await runSync(deps(client), { full: true })
 
-    expect(client.missingIssueKeys).toHaveBeenCalledWith(['BT-907', 'BT-908'])
-    expect(keysInCache()).toEqual(['BT-908'])
+    expect(client.unreachableIssueKeys).toHaveBeenCalledWith(
+      Array.from({ length: 10 }, (_, i) => `BT-${901 + i}`)
+    )
+    expect(keysInCache()).not.toContain('BT-907')
     expect(res.purgedIssues).toEqual(['BT-907'])
   })
 
-  it('sync incremental não paga o custo da reconciliação', async () => {
-    seedSynced('BT-907')
-    const { client } = makeClient({ missingKeys: ['BT-907'] })
+  it('roda também no sync incremental — só no completo ela quase nunca acontecia', async () => {
+    for (let i = 1; i <= 10; i++) seedSynced(`BT-${900 + i}`)
+    const { client } = makeClient({ missingKeys: ['BT-901'] })
 
     const res = await runSync(deps(client))
 
-    expect(client.missingIssueKeys).not.toHaveBeenCalled()
-    expect(keysInCache()).toEqual(['BT-907'])
+    expect(client.unreachableIssueKeys).toHaveBeenCalled()
+    expect(keysInCache()).not.toContain('BT-901')
+    expect(res.purgedIssues).toEqual(['BT-901'])
+  })
+
+  it('sumiço acima do teto não apaga nada — é acesso quebrado, não exclusão', async () => {
+    for (let i = 1; i <= 100; i++) seedSynced(`BT-${900 + i}`)
+    // 30 de 100 = 30%, acima do teto de 20% e também acima do piso absoluto
+    const { client } = makeClient({
+      missingKeys: Array.from({ length: 30 }, (_, i) => `BT-${901 + i}`)
+    })
+
+    const res = await runSync(deps(client))
+
     expect(res.purgedIssues).toEqual([])
+    expect(keysInCache()).toHaveLength(100)
+  })
+
+  it('cache pequeno se limpa pelo piso absoluto, mesmo estourando a proporção', async () => {
+    // 5 de 20 = 25%, acima dos 20% — mas 5 cards não é o desastre que o teto
+    // proporcional existe para evitar
+    for (let i = 1; i <= 20; i++) seedSynced(`BT-${900 + i}`)
+    const { client } = makeClient({
+      missingKeys: ['BT-901', 'BT-902', 'BT-903', 'BT-904', 'BT-905']
+    })
+
+    const res = await runSync(deps(client))
+
+    expect(res.purgedIssues).toHaveLength(5)
+    expect(keysInCache()).toHaveLength(15)
+  })
+
+  it('exatamente no teto ainda apaga', async () => {
+    for (let i = 1; i <= 100; i++) seedSynced(`BT-${900 + i}`)
+    // 20 de 100 = 20%: o teto é "acima de", então este passa
+    const missingKeys = Array.from({ length: 20 }, (_, i) => `BT-${901 + i}`)
+    const { client } = makeClient({ missingKeys })
+
+    const res = await runSync(deps(client))
+
+    expect(res.purgedIssues).toEqual(missingKeys)
+    expect(keysInCache()).toHaveLength(80)
   })
 
   it('falha na reconciliação não derruba o sync', async () => {
     seedSynced('BT-907')
     const { client } = makeClient()
-    client.missingIssueKeys.mockImplementation(async () => {
-      throw new Error('bulkfetch fora do ar')
+    client.unreachableIssueKeys.mockImplementation(async () => {
+      throw new Error('busca fora do ar')
     })
 
     const res = await runSync(deps(client), { full: true })
@@ -660,7 +701,7 @@ describe('runSync — cards excluídos no Jira', () => {
   it('cache vazio não chama o Jira', async () => {
     const { client } = makeClient()
     await runSync(deps(client), { full: true })
-    expect(client.missingIssueKeys).not.toHaveBeenCalled()
+    expect(client.unreachableIssueKeys).not.toHaveBeenCalled()
   })
 
   it('404 nos comentários (card apagado no meio do sync) purga e segue', async () => {
