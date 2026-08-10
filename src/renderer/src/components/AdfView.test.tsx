@@ -227,6 +227,36 @@ describe('AdfView', () => {
     expect(container.textContent).toContain('15/01/2026')
   })
 
+  it('link e menção usam a cor de marca sem variante light: (indigo-400 já é theme-aware)', () => {
+    render(
+      <AdfView
+        doc={{
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                { type: 'mention', attrs: { text: '@Thiago' } },
+                {
+                  type: 'text',
+                  text: 'um link',
+                  marks: [{ type: 'link', attrs: { href: 'https://ex.com' } }]
+                }
+              ]
+            }
+          ]
+        }}
+      />
+    )
+    const link = screen.getByText('um link')
+    expect(link.className).toContain('text-indigo-400')
+    expect(link.className).not.toContain('light:')
+
+    const mention = screen.getByText('@Thiago')
+    expect(mention.className).toContain('text-indigo-400')
+    expect(mention.className).not.toContain('light:')
+  })
+
   it('mediaSingle/mediaGroup sem resolver mostra o placeholder padrão', () => {
     render(
       <AdfView

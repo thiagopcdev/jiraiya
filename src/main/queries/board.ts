@@ -8,6 +8,8 @@ export interface ResolvedColumn {
   name: string
   statusIds: string[]
   statusNames: string[]
+  /** limite de WIP da coluna (`columnConfig.columns[].max` no Jira); null = sem constraint configurada (caso comum) */
+  wipMax: number | null
 }
 
 export interface BoardTransition {
@@ -24,7 +26,7 @@ export interface BoardTransition {
  * (mas permanece em `statusIds`, que alimenta o board:move).
  */
 export function resolveColumns(
-  config: { columns: Array<{ name: string; statusIds: string[] }> },
+  config: { columns: Array<{ name: string; statusIds: string[]; wipMax: number | null }> },
   statuses: Array<{ id: string; name: string; categoryKey: 'new' | 'indeterminate' | 'done' }>
 ): ResolvedColumn[] {
   const nameById = new Map(statuses.map((s) => [s.id, s.name]))
@@ -33,7 +35,8 @@ export function resolveColumns(
     statusIds: c.statusIds,
     statusNames: c.statusIds
       .map((id) => nameById.get(id))
-      .filter((n): n is string => n !== undefined)
+      .filter((n): n is string => n !== undefined),
+    wipMax: c.wipMax
   }))
 }
 
@@ -176,8 +179,8 @@ export function fallbackColumns(issues: Issue[]): ResolvedColumn[] {
     if (issue.status) buckets[cat].add(issue.status)
   }
   return [
-    { name: 'A fazer', statusIds: [], statusNames: [...buckets.new] },
-    { name: 'Em andamento', statusIds: [], statusNames: [...buckets.indeterminate] },
-    { name: 'Concluído', statusIds: [], statusNames: [...buckets.done] }
+    { name: 'A fazer', statusIds: [], statusNames: [...buckets.new], wipMax: null },
+    { name: 'Em andamento', statusIds: [], statusNames: [...buckets.indeterminate], wipMax: null },
+    { name: 'Concluído', statusIds: [], statusNames: [...buckets.done], wipMax: null }
   ]
 }

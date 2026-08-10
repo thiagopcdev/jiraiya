@@ -66,6 +66,7 @@ function insertIssue(key: string): void {
     assigneeAccountId: 'acc-1',
     assigneeName: 'Eu',
     reporterAccountId: 'acc-1',
+    reporterName: null,
     storyPoints: 5,
     sprintJiraId: null,
     labels: [],
@@ -266,6 +267,48 @@ describe('drainQueue — erro definitivo', () => {
       'BT-1: "Mover para Em andamento" não pôde ser enviada'
     )
     expect(pushed[0].payload).toEqual({ pending: 0, failed: 1 })
+  })
+
+  it('card excluído no Jira: falha explicando, purga o card e notifica', async () => {
+    insertIssue('BT-907')
+    const client = fakeClient({
+      addComment: vi.fn(async () => {
+        throw new JiraHttpError(404, 'Jira respondeu 404')
+      }),
+      issueExists: vi.fn(async () => false)
+    } as unknown as Partial<FakeClient>)
+    enqueueAction(db, 1, {
+      issueKey: 'BT-907',
+      type: 'comment',
+      payload: { summary: 'Comentar: "oi"', body: 'oi' }
+    })
+
+    await expect(drainQueue(ctxWith(client))).resolves.toEqual({ sent: 0, failed: 1 })
+
+    const [action] = listActions(db, 1)
+    expect(action.status).toBe('failed')
+    expect(action.last_error).toContain('BT-907 não existe mais no Jira')
+    expect(db.prepare(`SELECT key FROM issue WHERE key = 'BT-907'`).get()).toBeUndefined()
+    expect(shownNotifications[0].body).toContain('não existe mais no Jira')
+  })
+
+  it('404 com o card vivo mantém a mensagem crua do Jira e o cache', async () => {
+    insertIssue('BT-1')
+    const client = fakeClient({
+      addComment: vi.fn(async () => {
+        throw new JiraHttpError(404, 'Jira respondeu 404')
+      }),
+      issueExists: vi.fn(async () => true)
+    } as unknown as Partial<FakeClient>)
+    enqueueAction(db, 1, {
+      issueKey: 'BT-1',
+      type: 'comment',
+      payload: { summary: 'c', body: 'x' }
+    })
+
+    await expect(drainQueue(ctxWith(client))).resolves.toEqual({ sent: 0, failed: 1 })
+    expect(listActions(db, 1)[0].last_error).toBe('Jira respondeu 404')
+    expect(db.prepare(`SELECT key FROM issue WHERE key = 'BT-1'`).get()).toEqual({ key: 'BT-1' })
   })
 
   it('erro definitivo pula as demais ações do mesmo card, mas segue nos outros', async () => {

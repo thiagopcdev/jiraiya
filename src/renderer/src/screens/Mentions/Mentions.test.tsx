@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClientProvider } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
 import type { Mention } from '@shared/domain'
@@ -32,6 +32,14 @@ describe('Mentions', () => {
     expect(document.querySelector('.animate-spin')).toBeInTheDocument()
   })
 
+  it('renderiza o título via ScreenHeader', async () => {
+    installMockApi({ 'mentions:list': () => ({ mentions: [], unreadCount: 0 }) })
+    renderWithProviders(<Mentions />, { withIssueDetail: false })
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Menções' })).toBeInTheDocument()
+    )
+  })
+
   it('estado vazio quando não há menções', async () => {
     installMockApi({ 'mentions:list': () => ({ mentions: [], unreadCount: 0 }) })
     renderWithProviders(<Mentions />, { withIssueDetail: false })
@@ -54,6 +62,54 @@ describe('Mentions', () => {
     expect(screen.getByText('BT-1')).toBeInTheDocument()
     expect(screen.getByText('Ajustar layout')).toBeInTheDocument()
     expect(screen.getByText('você pode olhar isso?')).toBeInTheDocument()
+  })
+
+  it('o dia com não lidas ganha o contador em pílula e o ponto de marca na linha', async () => {
+    installMockApi({
+      'mentions:list': () => ({
+        mentions: [makeMention({ id: 1 }), makeMention({ id: 2, readAt: null })],
+        unreadCount: 2
+      }),
+      'mentions:markAllRead': () => ({ ok: true })
+    })
+    const { container } = renderWithProviders(<Mentions />, { withIssueDetail: false })
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole('heading', { name: /Hoje/ })).getByText('2 novas')
+      ).toBeInTheDocument()
+    )
+    expect(screen.getByText('2 novas nesta visita · 2 no total')).toBeInTheDocument()
+    // o ponto continua ocupando o lugar quando lida: 2 pontos, 2 pintados
+    expect(container.querySelectorAll('span.size-1\\.5')).toHaveLength(2)
+    expect(container.querySelectorAll('span.bg-indigo-400')).toHaveLength(2)
+  })
+
+  it('menção já lida não mostra contador no dia nem ponto pintado', async () => {
+    installMockApi({
+      'mentions:list': () => ({
+        mentions: [makeMention({ readAt: new Date().toISOString() })],
+        unreadCount: 0
+      })
+    })
+    const { container } = renderWithProviders(<Mentions />, { withIssueDetail: false })
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Hoje' })).toBeInTheDocument())
+    // a pílula do dia é exatamente "N nova(s)"; o contexto do cabeçalho tem
+    // outra redação e não deve ser confundido com ela
+    expect(screen.queryByText(/^\d+ novas?$/)).not.toBeInTheDocument()
+    expect(screen.getByText('0 novas nesta visita · 1 no total')).toBeInTheDocument()
+    expect(container.querySelectorAll('span.bg-indigo-400')).toHaveLength(0)
+  })
+
+  it('o trecho do comentário sai em bloco citado', async () => {
+    installMockApi({
+      'mentions:list': () => ({
+        mentions: [makeMention({ excerpt: 'dá uma olhada nisso' })],
+        unreadCount: 0
+      })
+    })
+    renderWithProviders(<Mentions />, { withIssueDetail: false })
+    await waitFor(() => expect(screen.getByText('dá uma olhada nisso')).toBeInTheDocument())
+    expect(screen.getByText('dá uma olhada nisso').className).toContain('border-l-2')
   })
 
   it('menção sem autor cai no rótulo "Alguém"', async () => {

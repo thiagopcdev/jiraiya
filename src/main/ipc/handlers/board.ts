@@ -155,7 +155,8 @@ export function registerBoardHandlers(ctx: AppContext): void {
       if (err instanceof JiraHttpError) {
         throw new AppError(
           'TRANSITION_FAILED',
-          'O Jira recusou a transição: ' + parseCreateError(err)
+          'O Jira recusou a transição: ' + parseCreateError(err),
+          err
         )
       }
       throw err

@@ -1,4 +1,14 @@
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject
+} from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import {
@@ -26,6 +36,7 @@ import {
   Sparkles,
   Trash2,
   UserRound,
+  UserRoundPen,
   X,
   Zap
 } from 'lucide-react'
@@ -58,7 +69,15 @@ import { MarkdownLite } from './MarkdownLite'
 import { MarkdownToolbar } from './MarkdownToolbar'
 import { AttachmentsSection, useMediaResolver } from './attachments'
 import { statusColor } from './statusColor'
-import { IssueDetailContext, useIssueDetail } from './issueDetail'
+import {
+  clampDetailPanelWidth,
+  DETAIL_DOCK_MIN_WINDOW_QUERY,
+  IssueDetailContext,
+  loadDetailPanelWidth,
+  saveDetailPanelWidth,
+  useIssueDetail,
+  type IssueDetailApi
+} from './issueDetail'
 import { t } from '../strings/ptBR'
 import { formatJiraDuration, formatTimer, useIssueTimer } from '../lib/timer'
 import { branchName } from '../lib/branchName'
@@ -207,20 +226,91 @@ function EditPreviewTabs({
   )
 }
 
+/**
+ * Fiação entre o provider e os hosts docados. Fica FORA do `IssueDetailApi`
+ * público: quem consome o contexto só precisa de `<DockedPanel />`; o resto
+ * (pilha, contador de hosts, faixa de largura) é detalhe interno.
+ */
+interface IssueDetailDock {
+  topKey: string | null
+  onBack: (() => void) | null
+  close: () => void
+  /** Registra um host docado; a função devolvida desregistra (use no cleanup). */
+  registerHost: () => () => void
+  /** false abaixo de 1100px de janela — o docado deixa de valer (handoff regra 2) */
+  dockAllowed: boolean
+}
+
+const IssueDetailDockContext = createContext<IssueDetailDock>({
+  topKey: null,
+  onBack: null,
+  close: () => {},
+  registerHost: () => () => {},
+  dockAllowed: false
+})
+
+/**
+ * Chave do card aberto agora (topo da pilha), para a tela de fundo marcar a
+ * linha/cartão correspondente como selecionado. Só leitura: não entra no
+ * `IssueDetailApi` porque não é ação, e fora do provider devolve null (o
+ * contexto tem default próprio).
+ */
+// hook exportado ao lado de componentes — Fast Refresh reclama, mas o estado
+// mora no contexto interno deste arquivo.
+// eslint-disable-next-line react-refresh/only-export-components
+export function useOpenIssueKey(): string | null {
+  return useContext(IssueDetailDockContext).topKey
+}
+
+function matchesDockWidth(): boolean {
+  return window.matchMedia(DETAIL_DOCK_MIN_WINDOW_QUERY).matches
+}
+
+/**
+ * Acompanha `(min-width: 1100px)`. Escutamos `resize` E o `change` do
+ * matchMedia: o segundo é o sinal certo, mas em janela redimensionada aos
+ * poucos o primeiro chega antes — e reavaliar a query é barato.
+ */
+function useDockAllowed(): boolean {
+  const [allowed, setAllowed] = useState(matchesDockWidth)
+  useEffect(() => {
+    const update = (): void => setAllowed(matchesDockWidth())
+    update()
+    const mql = window.matchMedia(DETAIL_DOCK_MIN_WINDOW_QUERY)
+    window.addEventListener('resize', update)
+    mql.addEventListener('change', update)
+    return () => {
+      window.removeEventListener('resize', update)
+      mql.removeEventListener('change', update)
+    }
+  }, [])
+  return allowed
+}
+
 export function IssueDetailProvider({ children }: { children: ReactNode }): React.JSX.Element {
   // pilha de navegação interna do drawer: abrir um pai/subtarefa/vínculo empilha por
   // cima do card atual; "voltar" desempilha; fechar limpa tudo de uma vez.
   const [stack, setStack] = useState<string[]>([])
 
-  const openIssue = (key: string): void => {
+  const openIssue = useCallback((key: string): void => {
     setStack((prev) => {
       if (prev.length === 0) return [key]
       if (prev[prev.length - 1] === key) return prev
       return [...prev, key]
     })
-  }
-  const close = (): void => setStack([])
-  const back = (): void => setStack((prev) => prev.slice(0, -1))
+  }, [])
+  const close = useCallback((): void => setStack([]), [])
+  const back = useCallback((): void => setStack((prev) => prev.slice(0, -1)), [])
+
+  // contador — e não booleano — de hosts docados montados: numa troca de rota o
+  // host novo pode montar antes de o antigo desmontar, e um booleano faria o
+  // overlay piscar no meio da transição.
+  const [dockedHosts, setDockedHosts] = useState(0)
+  const registerHost = useCallback((): (() => void) => {
+    setDockedHosts((n) => n + 1)
+    return () => setDockedHosts((n) => n - 1)
+  }, [])
+  const dockAllowed = useDockAllowed()
 
   useEffect(() => {
     if (stack.length === 0) return
@@ -236,25 +326,55 @@ export function IssueDetailProvider({ children }: { children: ReactNode }): Reac
   useEffect(() => {
     const off = window.api.on('push:open-issue', ({ key }) => openIssue(key))
     return () => off()
-  }, [])
+  }, [openIssue])
 
   const topKey = stack[stack.length - 1] ?? null
+  const onBack = stack.length > 1 ? back : null
+
+  const api = useMemo<IssueDetailApi>(
+    () => ({ openIssue, close, DockedPanel: IssueDetailDockedHost }),
+    [openIssue, close]
+  )
+  const dock = useMemo<IssueDetailDock>(
+    () => ({ topKey, onBack, close, registerHost, dockAllowed }),
+    [topKey, onBack, close, registerHost, dockAllowed]
+  )
 
   return (
-    <IssueDetailContext.Provider value={{ openIssue, close }}>
-      {children}
-      {topKey && (
-        <IssueDetailDrawer
-          key={topKey}
-          issueKey={topKey}
-          onClose={close}
-          onBack={stack.length > 1 ? back : null}
-        />
-      )}
+    <IssueDetailContext.Provider value={api}>
+      <IssueDetailDockContext.Provider value={dock}>
+        {children}
+        {topKey && dockedHosts === 0 && (
+          <IssueDetailDrawer key={topKey} issueKey={topKey} onClose={close} onBack={onBack} />
+        )}
+      </IssueDetailDockContext.Provider>
     </IssueDetailContext.Provider>
   )
 }
 
+/**
+ * O que o contexto expõe como `DockedPanel`. É uma referência de módulo (e não
+ * um componente criado dentro do provider) porque uma identidade nova a cada
+ * render remontaria o painel — e com ele todo o estado do card aberto.
+ */
+function IssueDetailDockedHost(): React.JSX.Element | null {
+  const { topKey, onBack, close, registerHost, dockAllowed } = useContext(IssueDetailDockContext)
+
+  // registra no efeito de montagem (não no render) para o provider poder
+  // contar hosts sem set-state durante o render de outro componente
+  useEffect(() => {
+    if (!dockAllowed) return
+    return registerHost()
+  }, [dockAllowed, registerHost])
+
+  if (!dockAllowed || !topKey) return null
+  return <IssueDetailPanel key={topKey} issueKey={topKey} onClose={close} onBack={onBack} />
+}
+
+/**
+ * Gaveta sobreposta — comportamento histórico: backdrop clicável, 560px
+ * encostados na direita e entrada animada com translate-x.
+ */
 function IssueDetailDrawer({
   issueKey,
   onClose,
@@ -264,14 +384,113 @@ function IssueDetailDrawer({
   onClose: () => void
   onBack: (() => void) | null
 }): React.JSX.Element {
-  const { openIssue } = useIssueDetail()
-  const queryClient = useQueryClient()
-
   const [visible, setVisible] = useState(false)
   useEffect(() => {
     const raf = requestAnimationFrame(() => setVisible(true))
     return () => cancelAnimationFrame(raf)
   }, [])
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div
+        className={`absolute inset-y-0 right-0 flex h-full w-[560px] max-w-[90vw] flex-col border-l border-zinc-800 bg-zinc-900 shadow-2xl transition-transform duration-200 ease-out ${
+          visible ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        <IssueDetailBody variant="overlay" issueKey={issueKey} onClose={onClose} onBack={onBack} />
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Painel docado: in-flow (ocupa espaço em vez de cobrir a tela), sem backdrop,
+ * sem sombra e sem animação de entrada. Divisor de 8px na borda esquerda —
+ * como o painel encosta na direita, arrastar para a esquerda alarga.
+ */
+function IssueDetailPanel({
+  issueKey,
+  onClose,
+  onBack
+}: {
+  issueKey: string
+  onClose: () => void
+  onBack: (() => void) | null
+}): React.JSX.Element {
+  const [width, setWidth] = useState(loadDetailPanelWidth)
+  const widthRef = useRef(width)
+  useEffect(() => {
+    widthRef.current = width
+  }, [width])
+
+  // teardown do arrasto em andamento: sem isso, desmontar no meio do drag
+  // (fechar o card, cair abaixo de 1100px) deixaria listeners no window
+  const stopDragRef = useRef<(() => void) | null>(null)
+  useEffect(() => () => stopDragRef.current?.(), [])
+
+  const startResize = (e: React.PointerEvent<HTMLDivElement>): void => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startWidth = widthRef.current
+    const onMove = (ev: PointerEvent): void => {
+      setWidth(clampDetailPanelWidth(startWidth + (startX - ev.clientX)))
+    }
+    const stop = (): void => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', stop)
+      stopDragRef.current = null
+      saveDetailPanelWidth(widthRef.current)
+    }
+    stopDragRef.current = stop
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', stop)
+  }
+
+  return (
+    <div
+      className="relative flex h-full min-h-0 flex-shrink-0 flex-col border-l border-zinc-800 bg-zinc-900"
+      style={{ width }}
+    >
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label={t.detail.resizeHandle}
+        title={t.detail.resizeHandle}
+        className="absolute inset-y-0 -left-1 z-10 flex w-2 cursor-col-resize items-center justify-center"
+        onPointerDown={startResize}
+      >
+        <span className="h-[26px] w-0.5 rounded-full bg-zinc-700" />
+      </div>
+      <IssueDetailBody variant="docked" issueKey={issueKey} onClose={onClose} onBack={onBack} />
+    </div>
+  )
+}
+
+type DetailVariant = 'overlay' | 'docked'
+
+/** Abas da área de atividade do card (handoff B3). */
+type DetailTab = 'comments' | 'history' | 'worklogs' | 'prs'
+
+/**
+ * Conteúdo do card — header de ações, corpo rolável e composer. Sem chrome:
+ * quem posiciona é o `IssueDetailDrawer` (sobreposto) ou o `IssueDetailPanel`
+ * (docado). `variant` muda só layout; o comportamento é idêntico nos dois.
+ */
+function IssueDetailBody({
+  variant,
+  issueKey,
+  onClose,
+  onBack
+}: {
+  variant: DetailVariant
+  issueKey: string
+  onClose: () => void
+  onBack: (() => void) | null
+}): React.JSX.Element {
+  const docked = variant === 'docked'
+  const { openIssue } = useIssueDetail()
+  const queryClient = useQueryClient()
 
   const { data: issueData, isLoading: issueLoading } = useQuery({
     queryKey: ['issue', issueKey],
@@ -302,6 +521,10 @@ function IssueDetailDrawer({
     staleTime: 30_000,
     retry: 0
   })
+
+  // cards sincronizados antes da coluna reporter_name só têm o relator no
+  // payload ao vivo; o valor local vem primeiro para não piscar offline
+  const reporterName = issue?.reporterName ?? liveDescription?.reporterName ?? null
 
   const { data: aiStatus } = useAiStatus()
   const { data: sprintsData } = useSprintList()
@@ -432,8 +655,24 @@ function IssueDetailDrawer({
   const [aiOpen, setAiOpen] = useState(false)
   // timeline em accordion, fechada por padrão
   const [timelineOpen, setTimelineOpen] = useState(false)
-  // histórico (changelog) em accordion, fechado por padrão — só busca ao expandir
-  const [changelogOpen, setChangelogOpen] = useState(false)
+
+  // PRs do card: a aba só existe quando a integração está ligada, o `gh`
+  // responde e há PR para o card — a mesma condição que antes fazia a seção
+  // inteira sumir (não é erro, é o estado normal da maioria dos cards)
+  const { data: prStatus } = usePrStatus()
+  const prEnabled = !!prStatus?.enabled && !!prStatus?.ghAvailable
+  const { data: prsData } = usePrsForIssue(issueKey, prEnabled)
+  const prs = prsData && prsData.available !== false ? prsData.prs : []
+  const showPrsTab = prEnabled && prs.length > 0
+
+  // abas da área de atividade. `activeTab` é derivado (e não um efeito de
+  // correção) porque a aba de PRs pode sumir depois de selecionada — se a
+  // integração cair ou o último PR for fechado, cair de volta em Comentários
+  // no mesmo render evita um quadro com aba nenhuma ativa.
+  const [tab, setTab] = useState<DetailTab>('comments')
+  const activeTab: DetailTab = tab === 'prs' && !showPrsTab ? 'comments' : tab
+
+  // histórico (changelog): continua lazy — só busca quando a aba fica ativa
   const {
     data: changelogData,
     isLoading: changelogLoading,
@@ -441,7 +680,7 @@ function IssueDetailDrawer({
   } = useQuery({
     queryKey: ['issue-changelog', issueKey],
     queryFn: () => invoke('issues:changelog', { key: issueKey }),
-    enabled: changelogOpen,
+    enabled: activeTab === 'history',
     retry: 0
   })
   const [aiNotes, setAiNotes] = useState('')
@@ -554,597 +793,732 @@ function IssueDetailDrawer({
 
   const statusSegments = issue ? buildStatusSegments(issue, activities) : []
 
-  return (
-    <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div
-        className={`absolute inset-y-0 right-0 flex h-full w-[560px] max-w-[90vw] flex-col border-l border-zinc-800 bg-zinc-950 shadow-2xl transition-transform duration-200 ease-out ${
-          visible ? 'translate-x-0' : 'translate-x-full'
-        }`}
-      >
-        <div className="border-b border-zinc-800 px-4 py-3">
+  // no docado o select entra na própria linha do header (380px não comportam
+  // uma segunda linha só para ele); na gaveta continua embaixo, como sempre
+  const transitionControl =
+    transitionsData && transitionsData.transitions.length > 0 ? (
+      <>
+        <select
+          value={selectedTransitionId}
+          disabled={moveBusy}
+          title={moveBusy ? t.detail.moving : t.detail.moveTo}
+          onChange={(e) => {
+            setSelectedTransitionId(e.target.value)
+            void handleTransitionChange(e.target.value)
+          }}
+          className={`rounded-md border border-zinc-700 bg-zinc-950/60 outline-none focus:border-indigo-500 disabled:opacity-50 ${
+            // 380px não comportam o select em tamanho cheio ao lado do timer e
+            // dos ícones — no docado ele encolhe de propósito
+            docked
+              ? 'min-w-0 flex-1 px-[7px] py-1 text-[11px] text-zinc-200'
+              : 'max-w-72 px-1.5 py-1 text-xs text-zinc-300'
+          }`}
+        >
+          <option value="" disabled>
+            {t.detail.moveTo}
+          </option>
+          {transitionsData.transitions.map((tr) => (
+            <option key={tr.id} value={tr.id}>
+              {tr.name} → {tr.toStatusName}
+            </option>
+          ))}
+        </select>
+        {moveBusy && <Spinner className="text-zinc-500" />}
+        {!moveBusy && moveSuccess && (
+          <span title={t.detail.moved}>
+            <CheckCircle2 size={14} className="text-green-400 light:text-green-600" />
+          </span>
+        )}
+      </>
+    ) : null
+
+  // contagem ao lado do rótulo da aba (só quando há o que contar) — sem
+  // parênteses, como no protótipo: "Comentários 4"
+  const tabCount = (n: number): React.JSX.Element => (
+    <span className="text-[12px] font-semibold text-zinc-500">{n}</span>
+  )
+
+  // rótulos das abas; a de PRs só entra na lista quando há PR para mostrar
+  const tabs: Array<{ id: DetailTab; label: string; badge?: React.JSX.Element }> = [
+    {
+      id: 'comments',
+      label: t.detail.tabComments,
+      badge:
+        liveComments && liveComments.comments.length > 0
+          ? tabCount(liveComments.comments.length)
+          : undefined
+    },
+    { id: 'history', label: t.detail.tabHistory },
+    { id: 'worklogs', label: t.detail.tabWorklogs },
+    ...(showPrsTab
+      ? [{ id: 'prs' as const, label: t.detail.tabPrs, badge: tabCount(prs.length) }]
+      : [])
+  ]
+
+  /**
+   * Composer de comentário. Sai como variável (e não JSX inline) porque muda
+   * de lugar conforme o variant: na gaveta rola junto com o corpo, como
+   * sempre; no docado fica ancorado no rodapé, fora da área rolável. O
+   * conteúdo e o comportamento são os mesmos nos dois — só a moldura muda.
+   */
+  const composer = (
+    <section className={docked ? 'space-y-2' : 'space-y-2 border-t border-zinc-800 pt-4'}>
+      <h3 className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+        {t.detail.commentTitle}
+      </h3>
+      {draftRestored && (
+        <div className="flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-950/60 px-2 py-1 text-xs text-zinc-400">
+          <span>{t.drafts.restored}</span>
+          <button
+            className="text-indigo-400 hover:underline light:text-indigo-600"
+            onClick={discardDraft}
+          >
+            {t.drafts.discard}
+          </button>
+        </div>
+      )}
+      {aiOpen && (
+        <div className="space-y-2 rounded-md border border-zinc-800 bg-zinc-950/60 p-2.5">
+          <textarea
+            className="h-16 w-full resize-y rounded-md border border-zinc-800 bg-zinc-950 p-2 text-sm text-zinc-200 outline-none focus:border-indigo-600"
+            placeholder={t.detail.aiNotesPlaceholder}
+            value={aiNotes}
+            onChange={(e) => setAiNotes(e.target.value)}
+          />
           <div className="flex items-center gap-2">
-            {onBack && (
-              <button
-                className="shrink-0 rounded-md p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
-                onClick={onBack}
-                aria-label={t.detail.backLabel}
-              >
-                <ChevronLeft size={16} />
-              </button>
-            )}
-            <span className="shrink-0 font-mono text-sm whitespace-nowrap text-zinc-400 select-text">
-              {issueKey}
-            </span>
+            <Button
+              variant="secondary"
+              disabled={aiBusy || !aiNotes.trim()}
+              onClick={() => void generateCommentDraft()}
+            >
+              {aiBusy ? <Spinner /> : <Sparkles size={14} />}
+              {aiBusy ? t.detail.aiGenerating : t.detail.aiGenerate}
+            </Button>
+            <Button variant="ghost" onClick={() => setAiOpen(false)}>
+              {t.common.cancel}
+            </Button>
+          </div>
+          {aiError && <p className="text-sm text-amber-400 light:text-amber-600">{aiError}</p>}
+        </div>
+      )}
+      <div className="flex items-center justify-between gap-2">
+        <EditPreviewTabs mode={commentViewMode} onChange={setCommentViewMode} />
+        {commentViewMode === 'edit' && (
+          <div className="flex items-center gap-1">
+            <MarkdownToolbar
+              textareaRef={commentRef}
+              value={comment}
+              onChange={setComment}
+              aiContext="comment"
+            />
+            <TemplatesMenu textareaRef={commentRef} value={comment} onChange={setComment} />
+          </div>
+        )}
+      </div>
+      {commentViewMode === 'edit' ? (
+        <textarea
+          ref={commentRef}
+          className="h-24 w-full resize-y rounded-md border border-zinc-700 bg-zinc-950/60 p-2.5 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+          placeholder={t.detail.commentPlaceholder}
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          onPaste={(e) => void handleCommentPaste(e)}
+        />
+      ) : (
+        <div className="h-24 w-full overflow-y-auto rounded-md border border-zinc-800 p-3">
+          <MarkdownLite text={comment} />
+        </div>
+      )}
+      <p className="-mt-1 text-xs text-zinc-600">
+        Markdown: **negrito**, listas, `código` — cole imagem para anexar
+      </p>
+      <div className="flex items-center gap-2">
+        <Button disabled={commentBusy || !comment.trim()} onClick={() => void submitComment()}>
+          {commentBusy ? <Spinner /> : commentSent ? <CheckCircle2 size={14} /> : null}
+          {commentBusy ? t.detail.commentSending : t.detail.commentSubmit}
+        </Button>
+        {!aiOpen && (
+          <Button
+            variant="secondary"
+            disabled={!aiStatus?.active}
+            title={
+              !aiStatus?.active
+                ? t.detail.aiUnavailableHint(unavailableAiProviderLabel(aiStatus))
+                : undefined
+            }
+            onClick={() => setAiOpen(true)}
+          >
+            <Sparkles size={14} />
+            {t.detail.aiStructure}
+          </Button>
+        )}
+      </div>
+      {commentError && (
+        <p className="text-sm text-amber-400 light:text-amber-600">{commentError}</p>
+      )}
+      {!aiStatus?.active && (
+        <p className="text-xs text-zinc-600">
+          {t.detail.aiUnavailableHint(unavailableAiProviderLabel(aiStatus))}
+        </p>
+      )}
+    </section>
+  )
+
+  // botões de ícone do cabeçalho: no docado o alvo encolhe um degrau para os
+  // cinco caberem ao lado do select e do timer em 380px
+  const headerIconButton = `shrink-0 rounded-md text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200 ${
+    docked ? 'p-1' : 'p-1.5'
+  }`
+
+  return (
+    <>
+      <div className={`border-b border-zinc-800 ${docked ? 'px-3 py-2.5' : 'px-4 py-3'}`}>
+        <div className={`flex items-center ${docked ? 'gap-[7px]' : 'gap-2'}`}>
+          {onBack && (
+            <button
+              className="shrink-0 rounded-md p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+              onClick={onBack}
+              aria-label={t.detail.backLabel}
+            >
+              <ChevronLeft size={16} />
+            </button>
+          )}
+          <span
+            className={`shrink-0 font-mono whitespace-nowrap select-text ${
+              docked ? 'text-xs font-bold text-indigo-400' : 'text-sm text-zinc-400'
+            }`}
+          >
+            {issueKey}
+          </span>
+          {docked ? (
+            <div className="flex min-w-0 flex-1 items-center gap-1.5">{transitionControl}</div>
+          ) : (
             <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
               {issue?.statusCategory && (
                 <Badge color={statusColor(issue.statusCategory)}>{issue.status}</Badge>
               )}
               {issue?.issueType && <Badge color="zinc">{issue.issueType}</Badge>}
             </div>
-            <TimerControl issueKey={issueKey} onError={setTimerError} />
+          )}
+          <TimerControl issueKey={issueKey} onError={setTimerError} />
+          <button
+            className={headerIconButton}
+            onClick={() => void shareIssue()}
+            title={shareCopied ? t.detail.shareCopied : t.detail.share}
+            aria-label={t.detail.share}
+          >
+            {shareCopied ? (
+              <CheckCircle2 size={15} className="text-green-400 light:text-green-600" />
+            ) : (
+              <Link2 size={15} />
+            )}
+          </button>
+          {/* O handoff pedia tirar este ícone no docado de 380px por achar que
+              era o atalho de PR — não é: é o "copiar nome do branch", e não há
+              outro caminho para ele. Fica nos dois modos; quem cede largura é o
+              <select> de status, reduzido logo abaixo. */}
+          {issue && (
             <button
-              className="shrink-0 rounded-md p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
-              onClick={() => void shareIssue()}
-              title={shareCopied ? t.detail.shareCopied : t.detail.share}
-              aria-label={t.detail.share}
+              className={headerIconButton}
+              onClick={() => void copyBranch()}
+              title={branchCopied ? 'Nome do branch copiado!' : 'Copiar nome do branch'}
+              aria-label="Copiar nome do branch"
             >
-              {shareCopied ? (
+              {branchCopied ? (
                 <CheckCircle2 size={15} className="text-green-400 light:text-green-600" />
               ) : (
-                <Link2 size={15} />
+                <GitBranch size={15} />
               )}
             </button>
-            {issue && (
-              <button
-                className="shrink-0 rounded-md p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
-                onClick={() => void copyBranch()}
-                title={branchCopied ? 'Nome do branch copiado!' : 'Copiar nome do branch'}
-                aria-label="Copiar nome do branch"
-              >
-                {branchCopied ? (
-                  <CheckCircle2 size={15} className="text-green-400 light:text-green-600" />
-                ) : (
-                  <GitBranch size={15} />
-                )}
-              </button>
-            )}
-            <button
-              className="shrink-0 rounded-md p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-50"
-              onClick={() => void toggleWatch()}
-              disabled={watchBusy}
-              title={
-                watching ? 'Deixar de seguir (notifica mudanças)' : 'Seguir (notifica mudanças)'
-              }
-              aria-label={watching ? 'Deixar de seguir' : 'Seguir card'}
-            >
-              {watching ? (
-                <Eye size={15} className="text-indigo-400 light:text-indigo-600" />
-              ) : (
-                <EyeOff size={15} />
-              )}
-            </button>
-            <button
-              className="shrink-0 rounded-md p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
-              onClick={openInJira}
-              title={t.detail.openInJira}
-              aria-label={t.detail.openInJira}
-            >
-              <ExternalLink size={15} />
-            </button>
-            <button
-              className="shrink-0 rounded-md p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
-              onClick={onClose}
-              aria-label={t.detail.close}
-            >
-              <X size={16} />
-            </button>
-          </div>
-          {transitionsData && transitionsData.transitions.length > 0 && (
-            <div className="mt-2 flex items-center gap-1.5">
-              <select
-                value={selectedTransitionId}
-                disabled={moveBusy}
-                title={moveBusy ? t.detail.moving : t.detail.moveTo}
-                onChange={(e) => {
-                  setSelectedTransitionId(e.target.value)
-                  void handleTransitionChange(e.target.value)
-                }}
-                className="max-w-72 rounded-md border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-xs text-zinc-300 outline-none focus:border-indigo-500 disabled:opacity-50"
-              >
-                <option value="" disabled>
-                  {t.detail.moveTo}
-                </option>
-                {transitionsData.transitions.map((tr) => (
-                  <option key={tr.id} value={tr.id}>
-                    {tr.name} → {tr.toStatusName}
-                  </option>
-                ))}
-              </select>
-              {moveBusy && <Spinner className="text-zinc-500" />}
-              {!moveBusy && moveSuccess && (
-                <span title={t.detail.moved}>
-                  <CheckCircle2 size={14} className="text-green-400 light:text-green-600" />
-                </span>
-              )}
-            </div>
           )}
+          <button
+            className={`${headerIconButton} disabled:opacity-50`}
+            onClick={() => void toggleWatch()}
+            disabled={watchBusy}
+            title={watching ? 'Deixar de seguir (notifica mudanças)' : 'Seguir (notifica mudanças)'}
+            aria-label={watching ? 'Deixar de seguir' : 'Seguir card'}
+          >
+            {watching ? (
+              <Eye size={15} className="text-indigo-400 light:text-indigo-600" />
+            ) : (
+              <EyeOff size={15} />
+            )}
+          </button>
+          <button
+            className={headerIconButton}
+            onClick={openInJira}
+            title={t.detail.openInJira}
+            aria-label={t.detail.openInJira}
+          >
+            <ExternalLink size={15} />
+          </button>
+          <button className={headerIconButton} onClick={onClose} aria-label={t.detail.close}>
+            <X size={16} />
+          </button>
         </div>
-        {moveError && (
-          <div className="border-b border-zinc-800 bg-zinc-950 px-4 py-2">
-            <p className="text-sm text-amber-400 light:text-amber-600">{moveError}</p>
-          </div>
+        {!docked && transitionControl && (
+          <div className="mt-2 flex items-center gap-1.5">{transitionControl}</div>
         )}
-        {timerError && (
-          <div className="border-b border-zinc-800 bg-zinc-950 px-4 py-2">
-            <p className="text-sm text-amber-400 light:text-amber-600">{timerError}</p>
-          </div>
-        )}
-        {pendingActionsOnIssue.length > 0 && (
-          <div className="border-b border-amber-500/40 bg-amber-950/30 px-4 py-2 light:bg-amber-50">
-            <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-amber-400 light:text-amber-700">
-              <AlertTriangle size={12} />
-              {t.queue.pendingOnIssue}
-            </p>
-            <div className="space-y-1">
-              {pendingActionsOnIssue.map((action) => (
-                <div key={action.id} className="flex items-center justify-between gap-2">
-                  <span className="min-w-0 flex-1 truncate text-xs text-amber-200/90 light:text-amber-800">
-                    {action.summary}
-                  </span>
-                  <span
-                    className="shrink-0"
-                    title={action.status === 'failed' ? (action.lastError ?? undefined) : undefined}
-                  >
-                    <MiniBadge
-                      tone={
-                        action.status === 'failed'
-                          ? 'red'
-                          : action.status === 'inflight'
-                            ? 'amber'
-                            : 'zinc'
-                      }
-                    >
-                      {action.status === 'failed'
-                        ? t.queue.statusFailed
-                        : action.status === 'inflight'
-                          ? t.queue.statusInflight
-                          : t.queue.statusPending}
-                    </MiniBadge>
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* select-text: o app usa user-select none global; aqui o conteúdo é copiável */}
-        <div className="min-h-0 flex-1 overflow-y-auto select-text">
-          {issueLoading ? (
-            <div className="flex justify-center py-12">
-              <Spinner className="text-zinc-500" />
-            </div>
-          ) : !issue ? (
-            <div className="p-6">
-              <EmptyState message={t.detail.notSynced} />
-              <div className="mt-3 flex justify-center">
-                <Button onClick={openInJira}>
-                  <ExternalLink size={14} />
-                  {t.detail.openInJira}
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-5 p-4">
-              <div>
-                <EditableTitle issue={issue} issueKey={issueKey} />
-                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
-                  {issue.assigneeName && (
-                    <span className="flex items-center gap-1">
-                      <UserRound size={12} /> {issue.assigneeName}
-                    </span>
-                  )}
-                  {issue.storyPoints !== null && (
-                    <span className="flex items-center gap-1">
-                      <Ruler size={12} /> {t.detail.storyPoints(issue.storyPoints)}
-                    </span>
-                  )}
-                  {issue.priority && (
-                    <span className="flex items-center gap-1">
-                      <Flag size={12} /> {issue.priority}
-                    </span>
-                  )}
-                  {sprintName && (
-                    <span className="flex items-center gap-1">
-                      <Zap size={12} /> {sprintName}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <section>
-                <button
-                  className="flex w-full items-center gap-1 text-xs font-semibold tracking-wide text-zinc-500 uppercase hover:text-zinc-300"
-                  onClick={() => setEditOpen((v) => !v)}
+      </div>
+      {moveError && (
+        <div className="border-b border-zinc-800 bg-zinc-950 px-4 py-2">
+          <p className="text-sm text-amber-400 light:text-amber-600">{moveError}</p>
+        </div>
+      )}
+      {timerError && (
+        <div className="border-b border-zinc-800 bg-zinc-950 px-4 py-2">
+          <p className="text-sm text-amber-400 light:text-amber-600">{timerError}</p>
+        </div>
+      )}
+      {pendingActionsOnIssue.length > 0 && (
+        <div className="border-b border-amber-500/40 bg-amber-950/30 px-4 py-2 light:bg-amber-50">
+          <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-amber-400 light:text-amber-700">
+            <AlertTriangle size={12} />
+            {t.queue.pendingOnIssue}
+          </p>
+          <div className="space-y-1">
+            {pendingActionsOnIssue.map((action) => (
+              <div key={action.id} className="flex items-center justify-between gap-2">
+                <span className="min-w-0 flex-1 truncate text-xs text-amber-200/90 light:text-amber-800">
+                  {action.summary}
+                </span>
+                <span
+                  className="shrink-0"
+                  title={action.status === 'failed' ? (action.lastError ?? undefined) : undefined}
                 >
-                  {editOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                  {t.detail.editTitle}
-                </button>
-                {editOpen && (
-                  <div className="mt-2">
-                    {editMetaLoading ? (
-                      <Spinner className="text-zinc-500" />
-                    ) : editMeta ? (
-                      <EditPanel meta={editMeta} issue={issue} issueKey={issueKey} />
-                    ) : null}
-                  </div>
-                )}
-              </section>
+                  <MiniBadge
+                    tone={
+                      action.status === 'failed'
+                        ? 'red'
+                        : action.status === 'inflight'
+                          ? 'amber'
+                          : 'zinc'
+                    }
+                  >
+                    {action.status === 'failed'
+                      ? t.queue.statusFailed
+                      : action.status === 'inflight'
+                        ? t.queue.statusInflight
+                        : t.queue.statusPending}
+                  </MiniBadge>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-              <DescriptionSection
+      {/* select-text: o app usa user-select none global; aqui o conteúdo é copiável */}
+      <div className="min-h-0 flex-1 overflow-y-auto select-text">
+        {issueLoading ? (
+          <div className="flex justify-center py-12">
+            <Spinner className="text-zinc-500" />
+          </div>
+        ) : !issue ? (
+          <div className="p-6">
+            <EmptyState message={t.detail.notSynced} />
+            <div className="mt-3 flex justify-center">
+              <Button onClick={openInJira}>
+                <ExternalLink size={14} />
+                {t.detail.openInJira}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className={docked ? 'space-y-4 p-3.5' : 'space-y-5 p-4'}>
+            <div>
+              <EditableTitle issue={issue} issueKey={issueKey} />
+              <IssueMetaFields
+                variant={variant}
                 issue={issue}
-                issueKey={issueKey}
-                liveDescription={liveDescription?.description ?? null}
-                liveMarkdown={liveDescription?.markdown ?? null}
-                descriptionLoading={liveDescriptionLoading}
-                mediaResolver={mediaResolver}
-                descExpanded={descExpanded}
-                onExpand={() => setDescExpanded(true)}
+                reporterName={reporterName}
+                sprintName={sprintName}
               />
+            </div>
 
-              {statusSegments.length > 0 && (
-                <section>
-                  <h3 className="mb-2 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
-                    {t.detail.timeInStatus}
-                  </h3>
-                  <div className="flex flex-wrap gap-1.5">
-                    {statusSegments.map((seg) => (
-                      <Badge key={seg.status} color="zinc">
-                        {seg.status} · {formatDays(seg.durationMs)}
-                      </Badge>
-                    ))}
-                  </div>
-                </section>
+            <section>
+              <button
+                className="flex w-full items-center gap-1 text-xs font-semibold tracking-wide text-zinc-500 uppercase hover:text-zinc-300"
+                onClick={() => setEditOpen((v) => !v)}
+              >
+                {editOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                {t.detail.editTitle}
+              </button>
+              {editOpen && (
+                <div className="mt-2">
+                  {editMetaLoading ? (
+                    <Spinner className="text-zinc-500" />
+                  ) : editMeta ? (
+                    <EditPanel meta={editMeta} issue={issue} issueKey={issueKey} />
+                  ) : null}
+                </div>
               )}
+            </section>
 
-              {showRelatedSection && (
-                <section>
-                  <h3 className="mb-2 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
-                    {t.detail.relatedTitle}
-                  </h3>
-                  <div className="space-y-3">
-                    {issue.parentKey && (
-                      <button
-                        className="block text-left text-sm text-indigo-400 hover:underline light:text-indigo-600"
-                        onClick={() => openIssue(issue.parentKey!)}
-                      >
-                        {t.detail.parentLabel}: {issue.parentKey}
-                      </button>
-                    )}
-                    {(children.length > 0 || subtaskType) && (
-                      <div>
-                        <div className="mb-1 flex items-center justify-between gap-2">
-                          <p className="text-xs text-zinc-500">
-                            {t.detail.subtasksTitle(children.length)}
-                          </p>
-                          {subtaskType && !subtaskFormOpen && (
-                            <button
-                              className="text-xs text-indigo-400 hover:underline light:text-indigo-600"
-                              onClick={() => setSubtaskFormOpen(true)}
-                            >
-                              {t.detail.addSubtask}
-                            </button>
-                          )}
-                        </div>
-                        {children.length > 0 && (
-                          <div className="space-y-1">
-                            {children.map((child) => (
-                              <button
-                                key={child.key}
-                                className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left text-sm text-zinc-300 hover:bg-zinc-900"
-                                onClick={() => openIssue(child.key)}
-                              >
-                                <span className="min-w-0 flex-1 truncate">
-                                  {child.key} — {child.summary}
-                                </span>
-                                {child.statusCategory && (
-                                  <Badge color={statusColor(child.statusCategory)}>
-                                    {child.status}
-                                  </Badge>
-                                )}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                        {subtaskFormOpen && subtaskType && (
-                          <div className="mt-2">
-                            <SubtaskCreateForm
-                              issue={issue}
-                              issueKey={issueKey}
-                              subtaskType={subtaskType}
-                              onCreated={(key) => {
-                                setSubtaskFormOpen(false)
-                                openIssue(key)
-                              }}
-                              onCancel={() => setSubtaskFormOpen(false)}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    )}
+            <DescriptionSection
+              issue={issue}
+              issueKey={issueKey}
+              liveDescription={liveDescription?.description ?? null}
+              liveMarkdown={liveDescription?.markdown ?? null}
+              descriptionLoading={liveDescriptionLoading}
+              mediaResolver={mediaResolver}
+              descExpanded={descExpanded}
+              onExpand={() => setDescExpanded(true)}
+            />
+
+            {statusSegments.length > 0 && (
+              <section>
+                <h3 className="mb-2 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+                  {t.detail.timeInStatus}
+                </h3>
+                <div className="flex flex-wrap gap-1.5">
+                  {statusSegments.map((seg) => (
+                    <Badge key={seg.status} color="zinc">
+                      {seg.status} · {formatDays(seg.durationMs)}
+                    </Badge>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {showRelatedSection && (
+              <section>
+                <h3 className="mb-2 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+                  {t.detail.relatedTitle}
+                </h3>
+                <div className="space-y-3">
+                  {issue.parentKey && (
+                    <button
+                      className="block text-left text-sm text-indigo-400 hover:underline light:text-indigo-600"
+                      onClick={() => openIssue(issue.parentKey!)}
+                    >
+                      {t.detail.parentLabel}: {issue.parentKey}
+                    </button>
+                  )}
+                  {(children.length > 0 || subtaskType) && (
                     <div>
                       <div className="mb-1 flex items-center justify-between gap-2">
-                        <p className="text-xs text-zinc-500">{t.detail.linksTitle}</p>
-                        {!linkFormOpen && (
+                        <p className="text-xs text-zinc-500">
+                          {t.detail.subtasksTitle(children.length)}
+                        </p>
+                        {subtaskType && !subtaskFormOpen && (
                           <button
                             className="text-xs text-indigo-400 hover:underline light:text-indigo-600"
-                            onClick={() => setLinkFormOpen(true)}
+                            onClick={() => setSubtaskFormOpen(true)}
                           >
-                            + Vincular
+                            {t.detail.addSubtask}
                           </button>
                         )}
                       </div>
-                      {links.length > 0 ? (
+                      {children.length > 0 && (
                         <div className="space-y-1">
-                          {links.map((link) => (
+                          {children.map((child) => (
                             <button
-                              key={`${link.label}-${link.key}`}
-                              className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left text-sm text-zinc-300 hover:bg-zinc-900"
-                              onClick={() => openIssue(link.key)}
+                              key={child.key}
+                              className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left text-sm text-zinc-300 hover:bg-zinc-950/60"
+                              onClick={() => openIssue(child.key)}
                             >
                               <span className="min-w-0 flex-1 truncate">
-                                {link.label}: {link.key} — {link.summary ?? ''}
+                                {child.key} — {child.summary}
                               </span>
-                              {link.statusCategory && (
-                                <Badge color={statusColor(link.statusCategory)}>
-                                  {link.status}
+                              {child.statusCategory && (
+                                <Badge color={statusColor(child.statusCategory)}>
+                                  {child.status}
                                 </Badge>
                               )}
                             </button>
                           ))}
                         </div>
-                      ) : linksError ? (
-                        <p className="text-xs text-zinc-600">{t.detail.linksOffline}</p>
-                      ) : (
-                        <p className="text-xs text-zinc-600">Nenhum vínculo ainda.</p>
                       )}
-                      {linkFormOpen && (
+                      {subtaskFormOpen && subtaskType && (
                         <div className="mt-2">
-                          <LinkCreateForm
+                          <SubtaskCreateForm
+                            issue={issue}
                             issueKey={issueKey}
-                            onClose={() => setLinkFormOpen(false)}
+                            subtaskType={subtaskType}
+                            onCreated={(key) => {
+                              setSubtaskFormOpen(false)
+                              openIssue(key)
+                            }}
+                            onCancel={() => setSubtaskFormOpen(false)}
                           />
                         </div>
                       )}
                     </div>
-                  </div>
-                </section>
-              )}
-
-              <PullRequestsSection issueKey={issueKey} />
-
-              <AttachmentsUploadSection issueKey={issueKey} />
-
-              <section>
-                <h3 className="mb-2 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
-                  {t.detail.commentsTitle}
-                  {liveComments && liveComments.comments.length > 0 && (
-                    <span className="ml-1.5 text-zinc-600">({liveComments.comments.length})</span>
                   )}
-                </h3>
-                {commentsLoading ? (
-                  <Spinner className="text-zinc-500" />
-                ) : liveComments ? (
-                  liveComments.comments.length === 0 ? (
-                    <p className="text-sm text-zinc-500">{t.detail.noComments}</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {liveComments.comments.map((c) => (
-                        <CommentItem
-                          key={c.id}
-                          comment={c}
+                  <div>
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <p className="text-xs text-zinc-500">{t.detail.linksTitle}</p>
+                      {!linkFormOpen && (
+                        <button
+                          className="text-xs text-indigo-400 hover:underline light:text-indigo-600"
+                          onClick={() => setLinkFormOpen(true)}
+                        >
+                          + Vincular
+                        </button>
+                      )}
+                    </div>
+                    {links.length > 0 ? (
+                      <div className="space-y-1">
+                        {links.map((link) => (
+                          <button
+                            key={`${link.label}-${link.key}`}
+                            className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left text-sm text-zinc-300 hover:bg-zinc-950/60"
+                            onClick={() => openIssue(link.key)}
+                          >
+                            <span className="min-w-0 flex-1 truncate">
+                              {link.label}: {link.key} — {link.summary ?? ''}
+                            </span>
+                            {link.statusCategory && (
+                              <Badge color={statusColor(link.statusCategory)}>{link.status}</Badge>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    ) : linksError ? (
+                      <p className="text-xs text-zinc-600">{t.detail.linksOffline}</p>
+                    ) : (
+                      <p className="text-xs text-zinc-600">Nenhum vínculo ainda.</p>
+                    )}
+                    {linkFormOpen && (
+                      <div className="mt-2">
+                        <LinkCreateForm
                           issueKey={issueKey}
-                          myAccountId={myAccountId}
-                          mediaResolver={mediaResolver}
+                          onClose={() => setLinkFormOpen(false)}
                         />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </section>
+            )}
+
+            <AttachmentsUploadSection issueKey={issueKey} />
+
+            <section>
+              <button
+                className="flex w-full items-center gap-1 text-xs font-semibold tracking-wide text-zinc-500 uppercase hover:text-zinc-300"
+                onClick={() => setTimelineOpen((v) => !v)}
+              >
+                {timelineOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                {t.detail.cardTimeline}
+                {!activityLoading && <span className="text-zinc-600">({activities.length})</span>}
+              </button>
+              {timelineOpen && (
+                <div className="mt-2">
+                  {activityLoading ? (
+                    <Spinner className="text-zinc-500" />
+                  ) : activities.length === 0 ? (
+                    <p className="text-sm text-zinc-500">{t.detail.noActivity}</p>
+                  ) : (
+                    <div className="space-y-0.5 border-l border-zinc-800 pl-3">
+                      {activities.map((a) => (
+                        <ActivityLine key={a.id} activity={a} />
                       ))}
                     </div>
+                  )}
+                </div>
+              )}
+            </section>
+
+            <section>
+              {/* mesma aba sublinhada do PairTabs; overflow-x só entra em ação
+                  se o painel for encolhido até o mínimo */}
+              <div className="flex overflow-x-auto border-b border-zinc-800">
+                {tabs.map((item) => {
+                  const active = item.id === activeTab
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      aria-current={active ? 'true' : undefined}
+                      className={`-mb-px flex shrink-0 cursor-pointer items-center gap-1 border-b-2 px-3.5 pt-2 pb-2.5 text-[13px] whitespace-nowrap transition-colors first:pl-0 ${
+                        active
+                          ? 'border-indigo-500 font-semibold text-indigo-400'
+                          : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                      }`}
+                      onClick={() => setTab(item.id)}
+                    >
+                      {item.label}
+                      {item.badge}
+                    </button>
                   )
-                ) : commentsOffline && localComments.length > 0 ? (
-                  <div className="space-y-2">
-                    <p className="text-xs text-zinc-600">{t.detail.commentsOfflineHint}</p>
-                    {localComments.map((c) => (
-                      <div
-                        key={c.id}
-                        className="rounded-md border border-zinc-800 bg-zinc-900/60 p-2.5"
-                      >
-                        <div className="mb-1 flex items-baseline justify-between gap-2">
-                          <span className="text-sm font-medium text-zinc-300">
-                            {c.actorName ?? 'Alguém'}
-                          </span>
-                          <span className="shrink-0 text-xs text-zinc-600">
-                            {format(new Date(c.occurredAt), 'dd/MM/yyyy HH:mm')}
-                          </span>
-                        </div>
-                        <p className="text-sm whitespace-pre-wrap text-zinc-400">{c.bodyText}</p>
+                })}
+              </div>
+              <div className="mt-3">
+                {activeTab === 'comments' &&
+                  (commentsLoading ? (
+                    <Spinner className="text-zinc-500" />
+                  ) : liveComments ? (
+                    liveComments.comments.length === 0 ? (
+                      <p className="text-sm text-zinc-500">{t.detail.noComments}</p>
+                    ) : (
+                      /* max-w-[70ch]: largura máxima de leitura (handoff regra 4) */
+                      <div className="max-w-[70ch] space-y-2">
+                        {liveComments.comments.map((c) => (
+                          <CommentItem
+                            key={c.id}
+                            comment={c}
+                            issueKey={issueKey}
+                            myAccountId={myAccountId}
+                            mediaResolver={mediaResolver}
+                          />
+                        ))}
                       </div>
+                    )
+                  ) : commentsOffline && localComments.length > 0 ? (
+                    <div className="max-w-[70ch] space-y-2">
+                      <p className="text-xs text-zinc-600">{t.detail.commentsOfflineHint}</p>
+                      {localComments.map((c) => (
+                        <div
+                          key={c.id}
+                          className="rounded-md border border-zinc-800 bg-zinc-950/60 p-2.5"
+                        >
+                          <div className="mb-1 flex items-baseline justify-between gap-2">
+                            <span className="text-sm font-medium text-zinc-300">
+                              {c.actorName ?? 'Alguém'}
+                            </span>
+                            <span className="shrink-0 text-xs text-zinc-600">
+                              {format(new Date(c.occurredAt), 'dd/MM/yyyy HH:mm')}
+                            </span>
+                          </div>
+                          <p className="text-sm whitespace-pre-wrap text-zinc-400">{c.bodyText}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-zinc-500">{t.detail.noComments}</p>
+                  ))}
+
+                {activeTab === 'history' &&
+                  (changelogLoading ? (
+                    <Spinner className="text-zinc-500" />
+                  ) : changelogFailed ? (
+                    <p className="text-sm text-amber-400 light:text-amber-600">
+                      {t.changelog.error}
+                    </p>
+                  ) : !changelogData || changelogData.entries.length === 0 ? (
+                    <p className="text-sm text-zinc-500">{t.changelog.empty}</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {changelogData.entries.map((entry) => (
+                        <ChangelogEntryRow key={entry.id} entry={entry} />
+                      ))}
+                    </div>
+                  ))}
+
+                {activeTab === 'worklogs' && <WorklogsTab issueKey={issueKey} />}
+
+                {activeTab === 'prs' && (
+                  <div className="space-y-1.5">
+                    {prs.map((pr) => (
+                      <PullRequestRow key={`${pr.repo}#${pr.number}`} pr={pr} />
                     ))}
                   </div>
-                ) : (
-                  <p className="text-sm text-zinc-500">{t.detail.noComments}</p>
                 )}
-              </section>
+              </div>
+            </section>
 
-              <section>
-                <button
-                  className="flex w-full items-center gap-1 text-xs font-semibold tracking-wide text-zinc-500 uppercase hover:text-zinc-300"
-                  onClick={() => setChangelogOpen((v) => !v)}
-                >
-                  {changelogOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                  {t.changelog.title}
-                </button>
-                {changelogOpen && (
-                  <div className="mt-2">
-                    {changelogLoading ? (
-                      <Spinner className="text-zinc-500" />
-                    ) : changelogFailed ? (
-                      <p className="text-sm text-amber-400 light:text-amber-600">
-                        {t.changelog.error}
-                      </p>
-                    ) : !changelogData || changelogData.entries.length === 0 ? (
-                      <p className="text-sm text-zinc-500">{t.changelog.empty}</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {changelogData.entries.map((entry) => (
-                          <ChangelogEntryRow key={entry.id} entry={entry} />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </section>
+            {!docked && composer}
 
-              <section>
-                <button
-                  className="flex w-full items-center gap-1 text-xs font-semibold tracking-wide text-zinc-500 uppercase hover:text-zinc-300"
-                  onClick={() => setTimelineOpen((v) => !v)}
-                >
-                  {timelineOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                  {t.detail.cardTimeline}
-                  {!activityLoading && <span className="text-zinc-600">({activities.length})</span>}
-                </button>
-                {timelineOpen && (
-                  <div className="mt-2">
-                    {activityLoading ? (
-                      <Spinner className="text-zinc-500" />
-                    ) : activities.length === 0 ? (
-                      <p className="text-sm text-zinc-500">{t.detail.noActivity}</p>
-                    ) : (
-                      <div className="space-y-0.5 border-l border-zinc-800 pl-3">
-                        {activities.map((a) => (
-                          <ActivityLine key={a.id} activity={a} />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </section>
-
-              <section className="space-y-2 border-t border-zinc-800 pt-4">
-                <h3 className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
-                  {t.detail.commentTitle}
-                </h3>
-                {draftRestored && (
-                  <div className="flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-1 text-xs text-zinc-400">
-                    <span>{t.drafts.restored}</span>
-                    <button
-                      className="text-indigo-400 hover:underline light:text-indigo-600"
-                      onClick={discardDraft}
-                    >
-                      {t.drafts.discard}
-                    </button>
-                  </div>
-                )}
-                {aiOpen && (
-                  <div className="space-y-2 rounded-md border border-zinc-800 bg-zinc-900/60 p-2.5">
-                    <textarea
-                      className="h-16 w-full resize-y rounded-md border border-zinc-800 bg-zinc-950 p-2 text-sm text-zinc-200 outline-none focus:border-indigo-600"
-                      placeholder={t.detail.aiNotesPlaceholder}
-                      value={aiNotes}
-                      onChange={(e) => setAiNotes(e.target.value)}
-                    />
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="secondary"
-                        disabled={aiBusy || !aiNotes.trim()}
-                        onClick={() => void generateCommentDraft()}
-                      >
-                        {aiBusy ? <Spinner /> : <Sparkles size={14} />}
-                        {aiBusy ? t.detail.aiGenerating : t.detail.aiGenerate}
-                      </Button>
-                      <Button variant="ghost" onClick={() => setAiOpen(false)}>
-                        {t.common.cancel}
-                      </Button>
-                    </div>
-                    {aiError && (
-                      <p className="text-sm text-amber-400 light:text-amber-600">{aiError}</p>
-                    )}
-                  </div>
-                )}
-                <div className="flex items-center justify-between gap-2">
-                  <EditPreviewTabs mode={commentViewMode} onChange={setCommentViewMode} />
-                  {commentViewMode === 'edit' && (
-                    <div className="flex items-center gap-1">
-                      <MarkdownToolbar
-                        textareaRef={commentRef}
-                        value={comment}
-                        onChange={setComment}
-                        aiContext="comment"
-                      />
-                      <TemplatesMenu
-                        textareaRef={commentRef}
-                        value={comment}
-                        onChange={setComment}
-                      />
-                    </div>
-                  )}
-                </div>
-                {commentViewMode === 'edit' ? (
-                  <textarea
-                    ref={commentRef}
-                    className="h-24 w-full resize-y rounded-md border border-zinc-700 bg-zinc-900 p-2.5 text-sm text-zinc-100 outline-none focus:border-indigo-500"
-                    placeholder={t.detail.commentPlaceholder}
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    onPaste={(e) => void handleCommentPaste(e)}
-                  />
-                ) : (
-                  <div className="h-24 w-full overflow-y-auto rounded-md border border-zinc-800 p-3">
-                    <MarkdownLite text={comment} />
-                  </div>
-                )}
-                <p className="-mt-1 text-xs text-zinc-600">
-                  Markdown: **negrito**, listas, `código` — cole imagem para anexar
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button
-                    disabled={commentBusy || !comment.trim()}
-                    onClick={() => void submitComment()}
-                  >
-                    {commentBusy ? <Spinner /> : commentSent ? <CheckCircle2 size={14} /> : null}
-                    {commentBusy ? t.detail.commentSending : t.detail.commentSubmit}
-                  </Button>
-                  {!aiOpen && (
-                    <Button
-                      variant="secondary"
-                      disabled={!aiStatus?.active}
-                      title={
-                        !aiStatus?.active
-                          ? t.detail.aiUnavailableHint(unavailableAiProviderLabel(aiStatus))
-                          : undefined
-                      }
-                      onClick={() => setAiOpen(true)}
-                    >
-                      <Sparkles size={14} />
-                      {t.detail.aiStructure}
-                    </Button>
-                  )}
-                </div>
-                {commentError && (
-                  <p className="text-sm text-amber-400 light:text-amber-600">{commentError}</p>
-                )}
-                {!aiStatus?.active && (
-                  <p className="text-xs text-zinc-600">
-                    {t.detail.aiUnavailableHint(unavailableAiProviderLabel(aiStatus))}
-                  </p>
-                )}
-              </section>
-
-              <NotesSection issueKey={issueKey} />
-            </div>
-          )}
-        </div>
+            <NotesSection issueKey={issueKey} />
+          </div>
+        )}
       </div>
+      {/* docado: composer ancorado no rodapé, fora da área rolável (handoff B3) */}
+      {docked && issue && (
+        <div className="border-t border-zinc-800 bg-zinc-950/60 px-4 pt-2.5 pb-3">{composer}</div>
+      )}
+    </>
+  )
+}
+
+/**
+ * Metadados do card: fila de chips na gaveta (560px) e grade de duas colunas
+ * no painel docado — em 380px não cabe o trilho lateral, então rótulo em cima
+ * e valor embaixo.
+ */
+function IssueMetaFields({
+  variant,
+  issue,
+  reporterName,
+  sprintName
+}: {
+  variant: DetailVariant
+  issue: Issue
+  reporterName: string | null
+  sprintName: string | null
+}): React.JSX.Element {
+  interface MetaField {
+    label: string
+    icon: typeof Zap
+    /** valor da fila de chips (pode repetir o rótulo, ex.: "Relator: Ana") */
+    value: string
+    /** valor da grade, onde o rótulo já aparece em cima */
+    dockedValue?: string
+    /** title do chip — só onde já existia, para não criar tooltip novo na gaveta */
+    title?: string
+  }
+
+  const fields: MetaField[] = []
+  if (issue.assigneeName) {
+    fields.push({
+      label: t.detail.assigneeLabel,
+      icon: UserRound,
+      value: issue.assigneeName,
+      title: t.detail.assigneeLabel
+    })
+  }
+  if (reporterName) {
+    fields.push({
+      label: t.detail.reporterLabel,
+      icon: UserRoundPen,
+      value: t.detail.reporter(reporterName),
+      dockedValue: reporterName,
+      title: t.detail.reporterLabel
+    })
+  }
+  if (issue.storyPoints !== null) {
+    fields.push({
+      label: t.detail.storyPointsLabel,
+      icon: Ruler,
+      value: t.detail.storyPoints(issue.storyPoints)
+    })
+  }
+  if (issue.priority) {
+    fields.push({ label: t.detail.priorityLabel, icon: Flag, value: issue.priority })
+  }
+  if (sprintName) {
+    fields.push({ label: 'Sprint', icon: Zap, value: sprintName })
+  }
+
+  if (variant === 'docked') {
+    return (
+      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2.5">
+        {fields.map((f) => (
+          <div key={f.label} className="min-w-0">
+            <dt className="text-[10px] font-bold tracking-[.06em] text-zinc-500 uppercase">
+              {f.label}
+            </dt>
+            <dd
+              className="mt-0.5 truncate text-[12.5px] text-zinc-200"
+              title={f.dockedValue ?? f.value}
+            >
+              {f.dockedValue ?? f.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    )
+  }
+
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
+      {fields.map((f) => (
+        <span key={f.label} className="flex items-center gap-1" title={f.title}>
+          <f.icon size={12} /> {f.value}
+        </span>
+      ))}
     </div>
   )
 }
@@ -1208,13 +1582,6 @@ function EditPanel({
   const [saveBusy, setSaveBusy] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
-
-  const [registered, setRegistered] = useState(meta.timeSpent)
-  const [timeSpentInput, setTimeSpentInput] = useState('')
-  const [logBusy, setLogBusy] = useState(false)
-  const [logError, setLogError] = useState<string | null>(null)
-  const [logSaved, setLogSaved] = useState(false)
-  const [worklogsOpen, setWorklogsOpen] = useState(false)
 
   const storyPointsDirty = meta.storyPointsEditable && storyPoints !== initialStoryPoints
   const priorityDirty = meta.priority.editable && priorityId !== initialPriorityId
@@ -1286,40 +1653,15 @@ function EditPanel({
     }
   }
 
-  const handleLogWork = async (): Promise<void> => {
-    if (!timeSpentInput.trim()) return
-    setLogBusy(true)
-    setLogError(null)
-    try {
-      const res = await invoke('issues:logWork', {
-        key: issueKey,
-        timeSpent: timeSpentInput.trim()
-      })
-      setRegistered(res.totalTimeSpent)
-      setTimeSpentInput('')
-      void queryClient.invalidateQueries({ queryKey: ['issue-editmeta', issueKey] })
-      if (res.queued) {
-        setLogError(t.queue.queuedToast)
-      } else {
-        setLogSaved(true)
-        setTimeout(() => setLogSaved(false), 3000)
-      }
-    } catch (err) {
-      setLogError(err instanceof IpcError ? err.message : t.common.error)
-    } finally {
-      setLogBusy(false)
-    }
-  }
-
   return (
-    <div className="space-y-3 rounded-md border border-zinc-800 bg-zinc-900/40 p-3">
+    <div className="space-y-3 rounded-md border border-zinc-800 bg-zinc-950/40 p-3">
       <div className="space-y-2">
         <div className="grid grid-cols-[130px_1fr] items-center gap-2">
           <span className="text-xs text-zinc-500">{t.detail.assigneeLabel}</span>
           <select
             value={assigneeId}
             onChange={(e) => setAssigneeId(e.target.value)}
-            className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+            className="w-full rounded-md border border-zinc-700 bg-zinc-950/60 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
           >
             {assigneeOptions.map((o) => (
               <option key={o.id} value={o.id}>
@@ -1333,7 +1675,7 @@ function EditPanel({
           <select
             value={sprintTarget}
             onChange={(e) => setSprintTarget(e.target.value)}
-            className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+            className="w-full rounded-md border border-zinc-700 bg-zinc-950/60 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
           >
             {sprintTarget === '' && (
               <option value="" disabled>
@@ -1357,7 +1699,7 @@ function EditPanel({
               step={0.5}
               value={storyPoints}
               onChange={(e) => setStoryPoints(e.target.value)}
-              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+              className="w-full rounded-md border border-zinc-700 bg-zinc-950/60 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
             />
           </div>
         )}
@@ -1367,7 +1709,7 @@ function EditPanel({
             <select
               value={priorityId}
               onChange={(e) => setPriorityId(e.target.value)}
-              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+              className="w-full rounded-md border border-zinc-700 bg-zinc-950/60 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
             >
               {meta.priority.options.map((o) => (
                 <option key={o.id} value={o.id}>
@@ -1383,7 +1725,7 @@ function EditPanel({
             <select
               value={severityId}
               onChange={(e) => setSeverityId(e.target.value)}
-              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+              className="w-full rounded-md border border-zinc-700 bg-zinc-950/60 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
             >
               {severityId === '' && (
                 <option value="" disabled>
@@ -1406,7 +1748,7 @@ function EditPanel({
               placeholder={t.detail.originalEstimatePlaceholder}
               value={originalEstimate}
               onChange={(e) => setOriginalEstimate(e.target.value)}
-              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+              className="w-full rounded-md border border-zinc-700 bg-zinc-950/60 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
             />
           </div>
         )}
@@ -1425,45 +1767,6 @@ function EditPanel({
           </Button>
         </div>
         {saveError && <p className="text-sm text-amber-400 light:text-amber-600">{saveError}</p>}
-      </div>
-
-      <div className="space-y-2 border-t border-zinc-800 pt-3">
-        <p className="text-xs text-zinc-500">
-          {t.detail.timeSpentRegistered(registered)}
-          {meta.originalEstimate && ` · ${t.detail.timeSpentEstimated(meta.originalEstimate)}`}
-        </p>
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            placeholder={t.detail.timeSpentPlaceholder}
-            value={timeSpentInput}
-            onChange={(e) => setTimeSpentInput(e.target.value)}
-            className="flex-1 rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
-          />
-          <Button
-            variant="secondary"
-            disabled={!timeSpentInput.trim() || logBusy}
-            onClick={() => void handleLogWork()}
-          >
-            {logBusy ? (
-              <Spinner />
-            ) : logSaved ? (
-              <CheckCircle2 size={14} className="text-green-400 light:text-green-600" />
-            ) : null}
-            {logBusy ? t.detail.logging : t.detail.logWork}
-          </Button>
-        </div>
-        <p className="text-xs text-zinc-600">{t.detail.timeSpentHint}</p>
-        {logError && <p className="text-sm text-amber-400 light:text-amber-600">{logError}</p>}
-      </div>
-
-      <div className="border-t border-zinc-800 pt-2">
-        <WorklogsAccordion
-          issueKey={issueKey}
-          open={worklogsOpen}
-          onToggle={() => setWorklogsOpen((v) => !v)}
-          onTotalChanged={setRegistered}
-        />
       </div>
     </div>
   )
@@ -1515,7 +1818,7 @@ function SubtaskCreateForm({
   }
 
   return (
-    <div className="space-y-2 rounded-md border border-zinc-800 bg-zinc-900/60 p-2.5">
+    <div className="space-y-2 rounded-md border border-zinc-800 bg-zinc-950/60 p-2.5">
       <Input
         placeholder={t.detail.subtaskTitlePlaceholder}
         value={title}
@@ -1655,8 +1958,9 @@ function TemplatesMenu({
       >
         <LibraryBig size={14} />
       </button>
+      {/* popover flutuante: superfície opaca e um degrau acima do painel */}
       {open && (
-        <div className="absolute top-full right-0 z-20 mt-1 max-h-64 min-w-56 overflow-y-auto rounded-md border border-zinc-700 bg-zinc-900 shadow-lg">
+        <div className="absolute top-full right-0 z-20 mt-1 max-h-64 min-w-56 overflow-y-auto rounded-md border border-zinc-700 bg-zinc-800 shadow-lg">
           {templates.length === 0 ? (
             <p className="px-3 py-2 text-xs text-zinc-500">
               Nenhum template — salve um comentário como template.
@@ -1803,7 +2107,7 @@ function CommentItem({
   }
 
   return (
-    <div className="rounded-md border border-zinc-800 bg-zinc-900/60 p-2.5">
+    <div className="rounded-md border border-zinc-800 bg-zinc-950/60 p-2.5">
       <div className="mb-1.5 flex items-baseline justify-between gap-2">
         <span className="text-sm font-medium text-zinc-300">{comment.authorName ?? 'Alguém'}</span>
         <div className="flex shrink-0 items-center gap-2">
@@ -1981,7 +2285,7 @@ function DescriptionSection({
         {viewMode === 'edit' ? (
           <textarea
             ref={descriptionRef}
-            className="min-h-40 w-full resize-y rounded-md border border-zinc-700 bg-zinc-900 p-2.5 font-mono text-xs text-zinc-100 outline-none focus:border-indigo-500"
+            className="min-h-40 w-full resize-y rounded-md border border-zinc-700 bg-zinc-950/60 p-2.5 font-mono text-xs text-zinc-100 outline-none focus:border-indigo-500"
             value={value}
             onChange={(e) => setValue(e.target.value)}
             disabled={busy}
@@ -2020,18 +2324,25 @@ function DescriptionSection({
           Editar
         </button>
       </div>
-      {liveDescription ? (
-        <AdfDescriptionBody
-          doc={liveDescription}
-          mediaResolver={mediaResolver}
-          expanded={descExpanded}
-          onExpand={onExpand}
-        />
-      ) : issue.descriptionText ? (
-        <DescriptionBody text={issue.descriptionText} expanded={descExpanded} onExpand={onExpand} />
-      ) : (
-        <p className="text-sm text-zinc-500">Sem descrição.</p>
-      )}
+      {/* max-w-[70ch]: largura máxima de leitura (handoff regra 4) */}
+      <div className="max-w-[70ch]">
+        {liveDescription ? (
+          <AdfDescriptionBody
+            doc={liveDescription}
+            mediaResolver={mediaResolver}
+            expanded={descExpanded}
+            onExpand={onExpand}
+          />
+        ) : issue.descriptionText ? (
+          <DescriptionBody
+            text={issue.descriptionText}
+            expanded={descExpanded}
+            onExpand={onExpand}
+          />
+        ) : (
+          <p className="text-sm text-zinc-500">Sem descrição.</p>
+        )}
+      </div>
     </section>
   )
 }
@@ -2084,7 +2395,7 @@ function DescriptionBody({
   const shown = truncated ? lines.slice(0, DESCRIPTION_LINE_LIMIT).join('\n') : text
   return (
     <div>
-      <p className="rounded-md bg-zinc-900/60 p-3 text-sm whitespace-pre-wrap text-zinc-300">
+      <p className="rounded-md bg-zinc-950/60 p-3 text-sm whitespace-pre-wrap text-zinc-300">
         {shown}
         {truncated && '…'}
       </p>
@@ -2125,7 +2436,7 @@ function ActivityLine({ activity }: { activity: IssueActivity }): React.JSX.Elem
           )}
         </div>
         {activity.kind === 'comment' && activity.bodyText && (
-          <div className="mt-1 line-clamp-2 rounded bg-zinc-900 px-2 py-1 text-xs text-zinc-400">
+          <div className="mt-1 line-clamp-2 rounded-sm bg-zinc-950/60 px-2 py-1 text-xs text-zinc-400">
             {activity.bodyText}
           </div>
         )}
@@ -2140,7 +2451,7 @@ function ActivityLine({ activity }: { activity: IssueActivity }): React.JSX.Elem
 /** Uma entrada do histórico (changelog) do Jira: autor + data relativa, uma linha por campo alterado. */
 function ChangelogEntryRow({ entry }: { entry: ChangelogEntry }): React.JSX.Element {
   return (
-    <div className="rounded-md border border-zinc-800 bg-zinc-900/60 p-2.5">
+    <div className="rounded-md border border-zinc-800 bg-zinc-950/60 p-2.5">
       <div className="mb-1 flex items-baseline justify-between gap-2">
         <span className="text-sm font-medium text-zinc-300">{entry.authorName ?? '—'}</span>
         <span className="shrink-0 text-xs text-zinc-600">{compactAgo(entry.createdAt)}</span>
@@ -2253,18 +2564,20 @@ function TimerControl({
   }
 
   if (timer.running) {
+    // rodando é o único estado que vira pílula preenchida: é o sinal mais forte
+    // do cabeçalho (indigo-600 preenche, texto branco — regra de cor do DS)
     return (
-      <div className="flex shrink-0 items-center gap-1">
-        <span className="font-mono text-xs tabular-nums text-zinc-300">
+      <div className="flex shrink-0 items-center gap-1 rounded-md bg-indigo-600 py-0.5 pr-0.5 pl-2 text-white">
+        <span className="font-mono text-[11.5px] font-semibold tabular-nums">
           {formatTimer(timer.seconds)}
         </span>
         <button
-          className="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+          className="rounded p-1 hover:bg-white/15"
           onClick={timer.pause}
           title="Pausar timer"
           aria-label="Pausar timer"
         >
-          <Pause size={15} />
+          <Pause size={13} />
         </button>
       </div>
     )
@@ -2353,7 +2666,7 @@ function EditableTitle({ issue, issueKey }: { issue: Issue; issueKey: string }):
         <div className="flex items-center gap-1.5">
           <input
             autoFocus
-            className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-lg font-semibold text-zinc-100 outline-none focus:border-indigo-500"
+            className="w-full rounded-md border border-zinc-700 bg-zinc-950/60 px-2 py-1 text-lg font-semibold text-zinc-100 outline-none focus:border-indigo-500"
             value={value}
             disabled={busy}
             onChange={(e) => setValue(e.target.value)}
@@ -2386,7 +2699,9 @@ function EditableTitle({ issue, issueKey }: { issue: Issue; issueKey: string }):
 
   return (
     <div className="group flex items-start gap-1.5">
-      <h2 className="text-lg font-semibold text-zinc-100">{issue.summary}</h2>
+      <h2 className="max-w-[70ch] text-base leading-[1.35] font-bold text-pretty text-zinc-50">
+        {issue.summary}
+      </h2>
       <button
         className="mt-1 shrink-0 rounded p-0.5 text-zinc-600 opacity-0 hover:bg-zinc-800 hover:text-zinc-300 group-hover:opacity-100"
         onClick={startEdit}
@@ -2400,52 +2715,100 @@ function EditableTitle({ issue, issueKey }: { issue: Issue; issueKey: string }):
 }
 
 /**
- * Accordion "Lançamentos": fechado por padrão, só busca `useWorklogs` ao
- * abrir. `onTotalChanged` propaga o novo total pro "Registrado: X" do painel
- * de edição depois de editar/apagar um lançamento.
+ * Aba "Worklogs": total registrado, formulário de apontamento e a lista de
+ * lançamentos. Só é montada quando a aba está ativa — é isso que mantém o
+ * `worklog:list` lazy, como era no accordion.
+ *
+ * O "Registrado: X" mora aqui, e não mais no painel Editar, porque quem
+ * dispara as três mutações que mudam o total (apontar, editar, apagar) é esta
+ * aba: sem fio pai→filho atravessando o corpo do card. `pendingTotal` guarda
+ * o total que a própria resposta do IPC devolveu — é a mesma autoridade que
+ * alimenta `worklog:list.totalTimeSpent` (ambos vêm de `issueTimeTracking`) e
+ * chega antes do refetch da lista, então o valor troca na hora.
  */
-function WorklogsAccordion({
-  issueKey,
-  open,
-  onToggle,
-  onTotalChanged
-}: {
-  issueKey: string
-  open: boolean
-  onToggle: () => void
-  onTotalChanged: (total: string | null) => void
-}): React.JSX.Element {
-  const { data, isLoading } = useWorklogs(issueKey, open)
-  const total = data?.totalTimeSpent ?? null
+function WorklogsTab({ issueKey }: { issueKey: string }): React.JSX.Element {
+  const queryClient = useQueryClient()
+  const { data, isLoading } = useWorklogs(issueKey)
+
+  const [pendingTotal, setPendingTotal] = useState<string | null | undefined>(undefined)
+  const registered = pendingTotal !== undefined ? pendingTotal : (data?.totalTimeSpent ?? null)
+
+  const [timeSpentInput, setTimeSpentInput] = useState('')
+  const [logBusy, setLogBusy] = useState(false)
+  const [logError, setLogError] = useState<string | null>(null)
+  const [logSaved, setLogSaved] = useState(false)
+
+  const handleLogWork = async (): Promise<void> => {
+    if (!timeSpentInput.trim()) return
+    setLogBusy(true)
+    setLogError(null)
+    try {
+      const res = await invoke('issues:logWork', {
+        key: issueKey,
+        timeSpent: timeSpentInput.trim()
+      })
+      setPendingTotal(res.totalTimeSpent)
+      setTimeSpentInput('')
+      void queryClient.invalidateQueries({ queryKey: ['worklogs', issueKey] })
+      void queryClient.invalidateQueries({ queryKey: ['issue-editmeta', issueKey] })
+      if (res.queued) {
+        setLogError(t.queue.queuedToast)
+      } else {
+        setLogSaved(true)
+        setTimeout(() => setLogSaved(false), 3000)
+      }
+    } catch (err) {
+      setLogError(err instanceof IpcError ? err.message : t.common.error)
+    } finally {
+      setLogBusy(false)
+    }
+  }
 
   return (
-    <div>
-      <button
-        className="flex w-full items-center gap-1 text-xs font-semibold tracking-wide text-zinc-500 uppercase hover:text-zinc-300"
-        onClick={onToggle}
-      >
-        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        Lançamentos
-        {total && <span className="normal-case text-zinc-600">({total})</span>}
-      </button>
-      {open && (
-        <div className="mt-2 space-y-1.5">
-          {isLoading ? (
-            <Spinner className="text-zinc-500" />
-          ) : !data || data.worklogs.length === 0 ? (
-            <p className="text-sm text-zinc-500">Nenhum lançamento ainda.</p>
-          ) : (
-            data.worklogs.map((w) => (
-              <WorklogItem
-                key={w.id}
-                worklog={w}
-                issueKey={issueKey}
-                onTotalChanged={onTotalChanged}
-              />
-            ))
-          )}
+    <div className="space-y-3">
+      <div className="space-y-2">
+        <p className="text-xs text-zinc-500">{t.detail.timeSpentRegistered(registered)}</p>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            placeholder={t.detail.timeSpentPlaceholder}
+            value={timeSpentInput}
+            onChange={(e) => setTimeSpentInput(e.target.value)}
+            className="flex-1 rounded-md border border-zinc-700 bg-zinc-950/60 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+          />
+          <Button
+            variant="secondary"
+            disabled={!timeSpentInput.trim() || logBusy}
+            onClick={() => void handleLogWork()}
+          >
+            {logBusy ? (
+              <Spinner />
+            ) : logSaved ? (
+              <CheckCircle2 size={14} className="text-green-400 light:text-green-600" />
+            ) : null}
+            {logBusy ? t.detail.logging : t.detail.logWork}
+          </Button>
         </div>
-      )}
+        <p className="text-xs text-zinc-600">{t.detail.timeSpentHint}</p>
+        {logError && <p className="text-sm text-amber-400 light:text-amber-600">{logError}</p>}
+      </div>
+
+      <div className="space-y-1.5 border-t border-zinc-800 pt-3">
+        {isLoading ? (
+          <Spinner className="text-zinc-500" />
+        ) : !data || data.worklogs.length === 0 ? (
+          <p className="text-sm text-zinc-500">Nenhum lançamento ainda.</p>
+        ) : (
+          data.worklogs.map((w) => (
+            <WorklogItem
+              key={w.id}
+              worklog={w}
+              issueKey={issueKey}
+              onTotalChanged={setPendingTotal}
+            />
+          ))
+        )}
+      </div>
     </div>
   )
 }
@@ -2514,7 +2877,7 @@ function WorklogItem({
   }
 
   return (
-    <div className="rounded-md border border-zinc-800 bg-zinc-900/60 p-2.5 text-sm">
+    <div className="rounded-md border border-zinc-800 bg-zinc-950/60 p-2.5 text-sm">
       <div className="flex items-baseline justify-between gap-2">
         <span className="font-medium text-zinc-300">{worklog.authorName ?? 'Alguém'}</span>
         <div className="flex shrink-0 items-center gap-2">
@@ -2652,11 +3015,11 @@ function LinkCreateForm({
   }
 
   return (
-    <div className="space-y-2 rounded-md border border-zinc-800 bg-zinc-900/60 p-2.5">
+    <div className="space-y-2 rounded-md border border-zinc-800 bg-zinc-950/60 p-2.5">
       <select
         value={typeValue}
         onChange={(e) => setTypeValue(e.target.value)}
-        className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+        className="w-full rounded-md border border-zinc-700 bg-zinc-950/60 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-indigo-500"
       >
         <option value="" disabled>
           Tipo de vínculo
@@ -2743,34 +3106,6 @@ function MiniBadge({
   )
 }
 
-/**
- * Seção "Pull requests" — opcional e silenciosa: some por completo se a
- * integração estiver desligada, o `gh` não estiver disponível, ou não houver
- * PRs para o card (não é erro, é estado normal pra maioria dos cards).
- */
-function PullRequestsSection({ issueKey }: { issueKey: string }): React.JSX.Element | null {
-  const { data: prStatus } = usePrStatus()
-  const enabled = !!prStatus?.enabled && !!prStatus?.ghAvailable
-  const { data: prsData } = usePrsForIssue(issueKey, enabled)
-
-  if (!enabled || !prsData || prsData.available === false || prsData.prs.length === 0) {
-    return null
-  }
-
-  return (
-    <section>
-      <h3 className="mb-2 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
-        Pull requests
-      </h3>
-      <div className="space-y-1.5">
-        {prsData.prs.map((pr) => (
-          <PullRequestRow key={`${pr.repo}#${pr.number}`} pr={pr} />
-        ))}
-      </div>
-    </section>
-  )
-}
-
 function PullRequestRow({
   pr
 }: {
@@ -2803,7 +3138,7 @@ function PullRequestRow({
 
   return (
     <button
-      className="flex w-full items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900/40 px-2.5 py-1.5 text-left text-sm hover:bg-zinc-900"
+      className="flex w-full items-center gap-2 rounded-md border border-zinc-800 bg-zinc-950/40 px-2.5 py-1.5 text-left text-sm hover:bg-zinc-950/60"
       onClick={() => window.open(pr.url, '_blank')}
     >
       <span className="min-w-0 flex-1 truncate text-zinc-300">
@@ -2967,7 +3302,7 @@ function NoteEditor({
   return (
     <>
       <textarea
-        className="h-20 w-full resize-y rounded-md border border-zinc-700 bg-zinc-900 p-2.5 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+        className="h-20 w-full resize-y rounded-md border border-zinc-700 bg-zinc-950/60 p-2.5 text-sm text-zinc-100 outline-none focus:border-indigo-500"
         placeholder="Notas privadas — ficam só neste app, nunca vão para o Jira."
         value={value}
         onChange={handleChange}

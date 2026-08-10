@@ -16,7 +16,7 @@ const makeClient = (): JiraClient =>
 afterEach(() => vi.unstubAllGlobals())
 
 describe('JiraClient.boardConfiguration', () => {
-  it('GET /rest/agile/1.0/board/{id}/configuration e mapeia columnConfig.columns -> {name, statusIds}', async () => {
+  it('GET /rest/agile/1.0/board/{id}/configuration e mapeia columnConfig.columns -> {name, statusIds, wipMax}', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(
       jsonRes({
         columnConfig: {
@@ -36,10 +36,37 @@ describe('JiraClient.boardConfiguration', () => {
 
     const config = await makeClient().boardConfiguration(5)
 
-    expect(config).toEqual({ columns: [{ name: 'Em teste', statusIds: ['10004', '10005'] }] })
+    // coluna sem constraint configurada no board -> wipMax null (caso comum)
+    expect(config).toEqual({
+      columns: [{ name: 'Em teste', statusIds: ['10004', '10005'], wipMax: null }]
+    })
     const url = fetchMock.mock.calls[0][0] as string
     expect(url).toBe('https://x.atlassian.net/rest/agile/1.0/board/5/configuration')
     expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe('GET')
+  })
+
+  it('coluna com constraint de WIP configurada -> wipMax vem de columnConfig.columns[].max', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      jsonRes({
+        columnConfig: {
+          columns: [
+            {
+              name: 'Em andamento',
+              statuses: [{ id: '3' }],
+              min: 1,
+              max: 4
+            }
+          ]
+        }
+      })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const config = await makeClient().boardConfiguration(5)
+
+    expect(config).toEqual({
+      columns: [{ name: 'Em andamento', statusIds: ['3'], wipMax: 4 }]
+    })
   })
 })
 

@@ -93,27 +93,14 @@ describe('IssueDetailProvider — transição de status', () => {
 })
 
 describe('IssueDetailProvider — lançamentos (worklogs)', () => {
-  async function openWorklogsAccordion(): Promise<void> {
+  async function openWorklogsTab(): Promise<void> {
     await openCard()
-    const editToggles = screen.getAllByRole('button', { name: 'Editar' })
-    await userEvent.click(editToggles[0])
-    await waitFor(() => expect(screen.getByText(/Lançamentos/)).toBeInTheDocument())
-    await userEvent.click(screen.getByRole('button', { name: /Lançamentos/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Worklogs' }))
   }
 
   it('lista, edita e apaga um lançamento', async () => {
     const api = installMockApi({
       ...baseHandlers(),
-      'issues:editMeta': () => ({
-        storyPointsEditable: false,
-        priority: { editable: false, current: null, options: [] },
-        severity: null,
-        timeSpent: '1h',
-        originalEstimate: null,
-        timeTrackingEditable: false
-      }),
-      'issues:assignable': () => ({ users: [] }),
-      'sprint:moveTargets': () => ({ sprints: [] }),
       'worklog:list': () => ({
         worklogs: [
           {
@@ -133,9 +120,10 @@ describe('IssueDetailProvider — lançamentos (worklogs)', () => {
       'worklog:delete': () => ({ ok: true, totalTimeSpent: '0h' })
     })
     renderWithProviders(<OpenIssueButton issueKey="BT-1" />)
-    await openWorklogsAccordion()
+    await openWorklogsTab()
 
     await waitFor(() => expect(screen.getByText('trabalho inicial')).toBeInTheDocument())
+    expect(screen.getByText('Registrado: 1h')).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Editar lançamento' }))
     const timeInput = screen.getByDisplayValue('1h')
@@ -164,22 +152,64 @@ describe('IssueDetailProvider — lançamentos (worklogs)', () => {
   it('sem lançamentos mostra o estado vazio', async () => {
     installMockApi({
       ...baseHandlers(),
-      'issues:editMeta': () => ({
-        storyPointsEditable: false,
-        priority: { editable: false, current: null, options: [] },
-        severity: null,
-        timeSpent: null,
-        originalEstimate: null,
-        timeTrackingEditable: false
-      }),
-      'issues:assignable': () => ({ users: [] }),
-      'sprint:moveTargets': () => ({ sprints: [] }),
       'worklog:list': () => ({ worklogs: [], totalTimeSpent: null })
     })
     renderWithProviders(<OpenIssueButton issueKey="BT-1" />)
-    await openWorklogsAccordion()
+    await openWorklogsTab()
 
     await waitFor(() => expect(screen.getByText('Nenhum lançamento ainda.')).toBeInTheDocument())
+    expect(screen.getByText('Registrado: —')).toBeInTheDocument()
+  })
+
+  it('busca worklog:list só quando a aba abre', async () => {
+    const api = installMockApi({
+      ...baseHandlers(),
+      'worklog:list': () => ({ worklogs: [], totalTimeSpent: null })
+    })
+    renderWithProviders(<OpenIssueButton issueKey="BT-1" />)
+    await openCard()
+
+    expect(api.count('worklog:list')).toBe(0)
+    await userEvent.click(screen.getByRole('button', { name: 'Worklogs' }))
+    await waitFor(() => expect(api.count('worklog:list')).toBe(1))
+  })
+
+  it('registra tempo trabalhado e atualiza o total exibido', async () => {
+    const api = installMockApi({
+      ...baseHandlers(),
+      'worklog:list': () => ({ worklogs: [], totalTimeSpent: '1h' }),
+      'issues:logWork': () => ({ ok: true, totalTimeSpent: '3h', queued: false })
+    })
+    renderWithProviders(<OpenIssueButton issueKey="BT-1" />)
+    await openWorklogsTab()
+
+    await waitFor(() => expect(screen.getByText('Registrado: 1h')).toBeInTheDocument())
+    await userEvent.type(screen.getByPlaceholderText('1h 30m'), '2h')
+    await userEvent.click(screen.getByRole('button', { name: 'Registrar' }))
+
+    await waitFor(() => expect(api.count('issues:logWork')).toBe(1))
+    expect(api.lastPayload('issues:logWork')).toEqual({ key: 'BT-1', timeSpent: '2h' })
+    // o total vem da resposta do IPC e vence o refetch da lista (que devolve 1h)
+    await waitFor(() => expect(screen.getByText('Registrado: 3h')).toBeInTheDocument())
+  })
+
+  it('registro de tempo enfileirado offline mostra o aviso da fila', async () => {
+    installMockApi({
+      ...baseHandlers(),
+      'worklog:list': () => ({ worklogs: [], totalTimeSpent: null }),
+      'issues:logWork': () => ({ ok: true, totalTimeSpent: null, queued: true })
+    })
+    renderWithProviders(<OpenIssueButton issueKey="BT-1" />)
+    await openWorklogsTab()
+
+    await userEvent.type(screen.getByPlaceholderText('1h 30m'), '1h')
+    await userEvent.click(screen.getByRole('button', { name: 'Registrar' }))
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('Sem rede — a ação ficou na fila e será enviada quando a conexão voltar.')
+      ).toBeInTheDocument()
+    )
   })
 })
 
@@ -356,6 +386,25 @@ describe('IssueDetailProvider — timer do header', () => {
     )
   })
 
+  it('rodando, o timer vira pílula preenchida de marca (indigo-600 + text-white)', async () => {
+    installMockApi(baseHandlers())
+    renderWithProviders(<OpenIssueButton issueKey="BT-1" />)
+    await openCard()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Iniciar timer' }))
+    const pause = await screen.findByRole('button', { name: 'Pausar timer' })
+    const pill = pause.parentElement as HTMLElement
+    expect(pill.className).toContain('bg-indigo-600')
+    expect(pill.className).toContain('text-white')
+
+    // o timer é global (mesmo estado entre montagens): pausa antes de sair para
+    // não vazar "rodando" para o próximo teste
+    await userEvent.click(pause)
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Iniciar timer' })).toBeInTheDocument()
+    )
+  })
+
   it('descarta o tempo acumulado com confirmação', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     installMockApi(baseHandlers())
@@ -405,13 +454,15 @@ describe('IssueDetailProvider — pull requests', () => {
     renderWithProviders(<OpenIssueButton issueKey="BT-1" />)
     await openCard()
 
-    await waitFor(() => expect(screen.getByText('Pull requests')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: /^PRs/ })).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: /^PRs/ }))
+
     expect(screen.getByText(/Corrige bug do login/)).toBeInTheDocument()
     expect(screen.getByText('aberto')).toBeInTheDocument()
     expect(screen.getByText('aprovado')).toBeInTheDocument()
   })
 
-  it('não mostra a seção quando a integração está desabilitada', async () => {
+  it('não mostra a aba quando a integração está desabilitada', async () => {
     installMockApi({
       ...baseHandlers(),
       'prs:status': () => ({ ghAvailable: false, enabled: false })
@@ -420,7 +471,20 @@ describe('IssueDetailProvider — pull requests', () => {
     await openCard()
 
     await waitFor(() => expect(screen.getByText('Comentários')).toBeInTheDocument())
-    expect(screen.queryByText('Pull requests')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^PRs/ })).not.toBeInTheDocument()
+  })
+
+  it('não mostra a aba quando a integração está ligada mas o card não tem PR', async () => {
+    installMockApi({
+      ...baseHandlers(),
+      'prs:status': () => ({ ghAvailable: true, enabled: true }),
+      'prs:forIssue': () => ({ available: true, prs: [] })
+    })
+    renderWithProviders(<OpenIssueButton issueKey="BT-1" />)
+    await openCard()
+
+    await waitFor(() => expect(screen.getByText('Comentários')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /^PRs/ })).not.toBeInTheDocument()
   })
 })
 

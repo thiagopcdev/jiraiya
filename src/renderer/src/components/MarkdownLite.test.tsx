@@ -71,4 +71,15 @@ describe('MarkdownLite', () => {
     render(<MarkdownLite text="apenas um texto comum" />)
     expect(screen.getByText('apenas um texto comum').closest('p')).toBeInTheDocument()
   })
+
+  it('variant "chat" usa a escala de leitura da resposta da IA', () => {
+    render(<MarkdownLite text={'## Resumo\n- primeiro item'} variant="chat" />)
+    expect(screen.getByText('Resumo').className).toContain('text-[13.5px]')
+    expect(screen.getByText('primeiro item').className).toContain('leading-[1.65]')
+  })
+
+  it('sem variant fica na escala padrão (comentário da gaveta)', () => {
+    render(<MarkdownLite text={'## Resumo'} />)
+    expect(screen.getByText('Resumo').className).toContain('text-sm')
+  })
 })

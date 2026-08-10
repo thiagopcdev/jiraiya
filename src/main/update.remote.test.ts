@@ -290,6 +290,18 @@ describe('downloadUpdate', () => {
     ]
   }
 
+  // o download lê process.platform direto, e o app só publica instalador de
+  // macOS e Windows. Sem fixar a plataforma, a suíte inteira passa no mac do
+  // dev e quebra no CI (ubuntu), onde pickUpdateAsset devolve null e todo
+  // caso falha por "instalador não encontrado" em vez do que ele testa.
+  // A escolha por plataforma tem cobertura própria em update.pick.test.ts.
+  const realPlatform = process.platform
+  const setPlatform = (value: NodeJS.Platform): void => {
+    Object.defineProperty(process, 'platform', { value, configurable: true })
+  }
+  beforeEach(() => setPlatform('darwin'))
+  afterEach(() => setPlatform(realPlatform))
+
   it('baixa o .dmg para a pasta temp e reporta progresso por percentual', async () => {
     const fetchMock = stubFetch((url) =>
       url === LATEST_URL

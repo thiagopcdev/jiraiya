@@ -71,6 +71,7 @@ function baseHandlers(): MockHandlers {
         assigneeAccountId: null,
         assigneeName: null,
         reporterAccountId: null,
+        reporterName: null,
         storyPoints: null,
         sprintJiraId: null,
         labels: [],
@@ -83,7 +84,7 @@ function baseHandlers(): MockHandlers {
       }
     }),
     'issues:comments': () => ({ comments: [] }),
-    'issues:description': () => ({ description: null, markdown: null }),
+    'issues:description': () => ({ description: null, markdown: null, reporterName: null }),
     'issues:transitions': () => ({ transitions: [] }),
     'issues:children': () => ({ issues: [] }),
     'issues:links': () => ({ links: [] }),
@@ -110,7 +111,7 @@ function setup(overrides?: (api: MockApiControl) => void, route?: string): MockA
 }
 
 async function waitReady(): Promise<void> {
-  await waitFor(() => expect(screen.getByText('Onde')).toBeInTheDocument())
+  await waitFor(() => expect(screen.getByText('Comece pela ideia')).toBeInTheDocument())
 }
 
 describe('Create', () => {
@@ -138,7 +139,7 @@ describe('Create', () => {
     const idea = screen.getByLabelText('Descreva a ideia da task')
     await user.type(idea, 'permitir login via OAuth do Google')
 
-    await user.click(screen.getByRole('button', { name: /Gerar título e descrição/ }))
+    await user.click(screen.getByRole('button', { name: 'Rascunhar' }))
     await waitFor(() => expect(api.count('issues:draft')).toBe(1))
     expect(api.lastPayload('issues:draft')).toEqual({
       idea: 'permitir login via OAuth do Google',
@@ -161,7 +162,7 @@ describe('Create', () => {
         'Configure um provider de IA em Ajustes (Claude, Gemini, Codex ou OpenRouter)'
       )
     ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Gerar título e descrição/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Rascunhar' })).toBeDisabled()
   })
 
   it('mostra erro quando gerar com IA falha', async () => {
@@ -174,7 +175,7 @@ describe('Create', () => {
     await waitReady()
 
     await user.type(screen.getByLabelText('Descreva a ideia da task'), 'algo')
-    await user.click(screen.getByRole('button', { name: /Gerar título e descrição/ }))
+    await user.click(screen.getByRole('button', { name: 'Rascunhar' }))
     await waitFor(() => expect(screen.getByText('Falha ao gerar com IA.')).toBeInTheDocument())
   })
 
@@ -200,10 +201,9 @@ describe('Create', () => {
     const titleInput = screen.getByRole('textbox', { name: /^Título/ })
     await user.type(titleInput, 'Login OAuth Google integração')
 
-    await waitFor(
-      () => expect(screen.getByText('Cards parecidos já existem:')).toBeInTheDocument(),
-      { timeout: 3000 }
-    )
+    await waitFor(() => expect(screen.getByText('Possíveis duplicados')).toBeInTheDocument(), {
+      timeout: 3000
+    })
     expect(screen.getByText('Login com OAuth já implementado')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'BT-050' })).toBeInTheDocument()
   })
@@ -217,7 +217,7 @@ describe('Create', () => {
       screen.getByRole('textbox', { name: /^Título/ }),
       'Migrar autenticação para OAuth'
     )
-    await user.click(screen.getByRole('button', { name: 'Criar no Jira' }))
+    await user.click(screen.getByRole('button', { name: 'Criar card' }))
 
     await waitFor(() => expect(api.count('issues:create')).toBe(1))
     expect(api.lastPayload('issues:create')).toMatchObject({
@@ -235,7 +235,7 @@ describe('Create', () => {
     expect(screen.getByRole('button', { name: 'Iniciar timer' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Criar outra' }))
-    await waitFor(() => expect(screen.getByText('Onde')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Comece pela ideia')).toBeInTheDocument())
     expect(screen.queryByText('Task BT-201 criada')).not.toBeInTheDocument()
   })
 
@@ -249,7 +249,7 @@ describe('Create', () => {
     await waitReady()
 
     await user.type(screen.getByRole('textbox', { name: /^Título/ }), 'Algo')
-    await user.click(screen.getByRole('button', { name: 'Criar no Jira' }))
+    await user.click(screen.getByRole('button', { name: 'Criar card' }))
     await waitFor(() => expect(screen.getByText('Falha ao criar a task.')).toBeInTheDocument())
   })
 
@@ -281,5 +281,71 @@ describe('Create', () => {
     await waitFor(() =>
       expect(screen.getByText('Adicionar à sprint ativa — Sprint 42')).toBeInTheDocument()
     )
+  })
+
+  it('story points sai da escala do select e vai junto na criação', async () => {
+    const user = userEvent.setup()
+    const api = setup()
+    await waitReady()
+
+    await user.type(screen.getByRole('textbox', { name: /^Título/ }), 'Ajustar cálculo')
+    await user.selectOptions(screen.getByLabelText('Story points'), '5')
+    await user.click(screen.getByRole('button', { name: 'Criar card' }))
+
+    await waitFor(() => expect(api.count('issues:create')).toBe(1))
+    expect(api.lastPayload('issues:create')).toMatchObject({ storyPoints: 5 })
+  })
+
+  it('os interruptores de atribuição e sprint mandam o estado escolhido', async () => {
+    const user = userEvent.setup()
+    const api = setup((mock) => {
+      mock.set('sprint:active', () => ({
+        sprint: {
+          jiraId: 1,
+          boardId: 1,
+          name: 'Sprint 42',
+          state: 'active',
+          startDate: null,
+          endDate: null,
+          completeDate: null,
+          goal: null
+        } as never
+      }))
+    })
+    await waitReady()
+
+    const assign = await screen.findByRole('switch', { name: 'Atribuir a mim' })
+    const sprint = await screen.findByRole('switch', {
+      name: 'Adicionar à sprint ativa — Sprint 42'
+    })
+    expect(assign).toHaveAttribute('aria-checked', 'true')
+    expect(sprint).toHaveAttribute('aria-checked', 'false')
+
+    await user.click(assign)
+    await user.click(sprint)
+    await user.type(screen.getByRole('textbox', { name: /^Título/ }), 'Algo')
+    await user.click(screen.getByRole('button', { name: 'Criar card' }))
+
+    await waitFor(() => expect(api.count('issues:create')).toBe(1))
+    expect(api.lastPayload('issues:create')).toMatchObject({
+      assignToMe: false,
+      addToActiveSprint: true
+    })
+  })
+
+  it('a faixa de abas Criar/Dividir marca a aba ativa pela rota e navega ao clicar', async () => {
+    const user = userEvent.setup()
+    setup(undefined, '/criar')
+    await waitReady()
+
+    const createTab = screen.getByRole('link', { name: 'Criar task' })
+    const splitTab = screen.getByRole('link', { name: 'Dividir task' })
+    expect(createTab).toHaveAttribute('aria-current', 'page')
+    expect(splitTab).not.toHaveAttribute('aria-current')
+    expect(splitTab).toHaveAttribute('href', '/dividir')
+
+    await user.click(splitTab)
+    expect(splitTab).toHaveAttribute('aria-current', 'page')
+    expect(createTab).not.toHaveAttribute('aria-current')
   })
 })

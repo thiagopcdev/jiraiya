@@ -57,6 +57,7 @@ export interface Issue {
   assigneeAccountId: string | null
   assigneeName: string | null
   reporterAccountId: string | null
+  reporterName: string | null
   storyPoints: number | null
   sprintJiraId: number | null
   labels: string[]
@@ -230,6 +231,14 @@ export interface Prefs {
   syncIntervalMinutes: number
   backfillDays: number
   stalledDays: number
+  /**
+   * Nomes de status que contam como trabalho EM CURSO. Vazio = toda a categoria
+   * "em progresso" do Jira, que é o comportamento histórico — e que mistura
+   * "Em andamento" com "Code Review", "Pronto para Teste" e "Aguardando Deploy".
+   * Comparação normalizada (sem acento, sem caixa): o mesmo status aparece com
+   * grafias diferentes entre projetos.
+   */
+  inProgressStatuses: string[]
   syncMode: 'project' | 'personal'
   notifyCriticalAlerts: boolean
   notifyAssignedToMe: boolean
@@ -259,6 +268,8 @@ export interface Prefs {
   /** escopo extra da busca de PRs (ex. 'org:biudtech'); vazio = busca global */
   prSearchScope: string
   theme: ThemePref
+  /** densidade visual (só padding/line-height, nunca fonte ou hierarquia) */
+  density: DensityPref
   /** último board aberto no Quadro — vira o default do board:view (gravado pelo main, sem UI) */
   lastBoardJiraId: number | null
   /** lembra de registrar tempo em dias úteis quando nenhum worklog foi lançado no dia */
@@ -283,6 +294,9 @@ export interface SprintTrend {
 
 /** Tema visual do app; 'system' segue o modo claro/escuro do SO. */
 export type ThemePref = 'dark' | 'light' | 'system'
+
+/** Densidade visual do app; sem opção 'system' (não há equivalente no SO). */
+export type DensityPref = 'comfortable' | 'compact'
 
 /** Ação proposta pelo Perguntar — só executa com confirmação explícita do usuário. */
 export interface AskAction {
@@ -326,6 +340,10 @@ export const DEFAULT_PREFS: Prefs = {
   syncIntervalMinutes: 15,
   backfillDays: 30,
   stalledDays: 3,
+  // "Em andamento" e não a categoria inteira: o padrão do Jira misturava code
+  // review, teste e deploy com trabalho realmente em curso. Quem usa outro nome
+  // de coluna reescolhe em Configurações → Sincronização.
+  inProgressStatuses: ['Em andamento'],
   syncMode: 'project',
   notifyCriticalAlerts: false,
   notifyAssignedToMe: true,
@@ -345,6 +363,7 @@ export const DEFAULT_PREFS: Prefs = {
   prIntegration: false,
   prSearchScope: '',
   theme: 'dark',
+  density: 'comfortable',
   lastBoardJiraId: null,
   worklogReminder: true,
   worklogReminderTime: '17:30'

@@ -184,6 +184,22 @@ describe('sprint:moveIssue', () => {
     expect(e.message).toContain('sprint fechada')
   })
 
+  // BT-907: mover card já excluído no Jira devolvia só "404" e o card ficava
+  it('card excluído no Jira → ISSUE_GONE e sai do cache local', async () => {
+    const t = setup({
+      moveIssuesToSprint: async () => {
+        throw new JiraHttpError(404, 'Jira respondeu 404')
+      },
+      issueExists: async () => false
+    })
+    seedIssue(t.db, 'ABC-1')
+
+    const e = err(await invokeHandler('sprint:moveIssue', { key: 'ABC-1', target: 70 }))
+    expect(e.code).toBe('ISSUE_GONE')
+    expect(e.message).toContain('ABC-1')
+    expect(t.db.prepare('SELECT key FROM issue WHERE key = ?').get('ABC-1')).toBeUndefined()
+  })
+
   it('erro genérico sobe como INTERNAL', async () => {
     const t = setup({
       moveIssuesToBacklog: async () => {

@@ -108,6 +108,29 @@ describe('board:view', () => {
     expect(data.unmapped.map((i) => i.key)).toEqual(['ABC-2'])
   })
 
+  it('coluna com limite de WIP no Jira chega em columns[].wipMax; as demais (sem constraint) ficam null', async () => {
+    const boardId = nextBoardId()
+    const t = setup({
+      boardConfiguration: async () => ({
+        columns: [
+          { name: 'A fazer', statusIds: ['1'], wipMax: null },
+          { name: 'Em andamento', statusIds: ['3'], wipMax: 2 },
+          { name: 'Pronto', statusIds: ['5'], wipMax: null }
+        ]
+      }),
+      listStatuses: async () => statuses
+    })
+    upsertBoards(t.db, 1, [{ jiraId: boardId, name: 'K', type: 'kanban', projectKey: 'ABC' }])
+
+    const data = ok(await invokeHandler('board:view', { boardJiraId: boardId }))
+
+    expect(data.columns.map((c) => [c.name, c.wipMax])).toEqual([
+      ['A fazer', null],
+      ['Em andamento', 2],
+      ['Pronto', null]
+    ])
+  })
+
   it('segunda chamada usa o cache de colunas', async () => {
     const boardId = nextBoardId()
     const cols = jiraColumns()
@@ -444,6 +467,55 @@ describe('board:move', () => {
         })
       ).code
     ).toBe('NOT_CONNECTED')
+  })
+
+  // BT-907: card excluído no Jira continuava no quadro e respondia 404 a cada
+  // tentativa de mover
+  it('card excluído no Jira → ISSUE_GONE e sai do cache local', async () => {
+    const t = setup({
+      issueTransitions: async () => transitions,
+      doTransition: async () => {
+        throw new JiraHttpError(404, 'Jira respondeu 404')
+      },
+      issueExists: async () => false
+    })
+    seedIssue(t.db, 'ABC-1')
+
+    const e = err(
+      await invokeHandler('board:move', {
+        issueKey: 'ABC-1',
+        targetStatusIds: ['5'],
+        targetColumnName: 'Pronto'
+      })
+    )
+    expect(e.code).toBe('ISSUE_GONE')
+    expect(e.message).toContain('ABC-1')
+    expect(t.db.prepare('SELECT key FROM issue WHERE key = ?').get('ABC-1')).toBeUndefined()
+    expect(t.pushes).toEqual([{ channel: 'push:issue-gone', payload: { key: 'ABC-1' } }])
+  })
+
+  it('404 com o card ainda vivo no Jira → erro original, cache intacto', async () => {
+    const t = setup({
+      issueTransitions: async () => transitions,
+      doTransition: async () => {
+        throw new JiraHttpError(404, 'Jira respondeu 404')
+      },
+      issueExists: async () => true
+    })
+    seedIssue(t.db, 'ABC-1')
+
+    expect(
+      err(
+        await invokeHandler('board:move', {
+          issueKey: 'ABC-1',
+          targetStatusIds: ['5'],
+          targetColumnName: 'Pronto'
+        })
+      ).code
+    ).toBe('TRANSITION_FAILED')
+    expect(t.db.prepare('SELECT key FROM issue WHERE key = ?').get('ABC-1')).toEqual({
+      key: 'ABC-1'
+    })
   })
 
   it('lista de status vazia → INVALID_PAYLOAD', async () => {

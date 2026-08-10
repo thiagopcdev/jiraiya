@@ -280,6 +280,11 @@ const migrations: string[] = [
     ok INTEGER NOT NULL,
     error TEXT
   );
+  `,
+  // 010: nome do relator no card. Cards já sincronizados só ganham o valor
+  // quando o sync voltar a tocá-los; até lá a gaveta usa o relator ao vivo.
+  `
+  ALTER TABLE issue ADD COLUMN reporter_name TEXT;
   `
 ]
 

@@ -25,11 +25,14 @@ function sprintLabel(sprint: VelocitySprint, prefix: string): string {
 
 /**
  * Entregas por sprint (velocity): barra EMPILHADA por sprint — sua fatia
- * (índigo, na base) + o restante do time (neutro) somam o total da sprint.
- * Uma escala só (SP), total rotulado no topo de cada barra, sua fatia
- * rotulada quando cabe. Paleta validada p/ CVD/contraste via
+ * (marca, na base) + o restante do time (neutro) somam o total da sprint.
+ * Uma escala só (SP), total rotulado no topo de cada barra.
+ *
+ * O viewBox é estreito (340) de propósito: o gráfico mora no trilho de 380px
+ * da tela Time, então uma moldura larga seria reduzida pelo `w-full` e os
+ * rótulos de 10px virariam 6px ilegíveis. Paleta validada p/ CVD/contraste via
  * var(--chart-accent) você · var(--chart-muted) resto neutro (ajustam sozinhas
- * por tema), gap de 2px entre segmentos.
+ * por tema), topo arredondado e gap de 2px entre segmentos.
  */
 export function VelocityChart({
   velocity
@@ -39,12 +42,12 @@ export function VelocityChart({
   const { sprints } = velocity
   if (sprints.length === 0) return null
 
-  const W = 600
-  const H = 170
-  const padL = 28
-  const padR = 12
-  const padT = 24
-  const padB = 24
+  const W = 340
+  const H = 150
+  const padL = 6
+  const padR = 6
+  const padT = 20
+  const padB = 20
   const plotW = W - padL - padR
   const plotH = H - padT - padB
 
@@ -58,13 +61,13 @@ export function VelocityChart({
   const names = sprints.map((s) => s.name).filter((name): name is string => !!name)
   const prefix = commonPrefix(names)
 
-  const barW = Math.min(44, slotW * 0.6)
+  const barW = Math.min(30, slotW * 0.72)
 
   return (
     <div>
-      <div className="mb-1 flex items-center gap-3 text-xs text-zinc-500">
+      <div className="mb-1.5 flex items-center gap-3 text-[10.5px] text-zinc-500">
         <span className="inline-flex items-center gap-1">
-          <span className="inline-block size-2 rounded-sm bg-indigo-400 light:bg-indigo-600" /> Você
+          <span className="inline-block size-2 rounded-sm bg-indigo-400" /> Você
         </span>
         <span className="inline-flex items-center gap-1">
           <span className="inline-block size-2 rounded-sm bg-zinc-500" /> Restante do time
@@ -81,7 +84,7 @@ export function VelocityChart({
           y1={y(0)}
           x2={W - padR}
           y2={y(0)}
-          className="stroke-zinc-700"
+          className="stroke-zinc-800"
           strokeWidth="1"
         />
 
@@ -113,7 +116,15 @@ export function VelocityChart({
                 />
               )}
               {mine > 0 && (
-                <rect x={x0} y={mineTop} width={barW} height={mineH} fill="var(--chart-accent)" />
+                <rect
+                  x={x0}
+                  y={mineTop}
+                  width={barW}
+                  height={mineH}
+                  // só arredonda o topo quando a sua fatia É o topo da barra
+                  rx={rest > 0 ? 0 : 4}
+                  fill="var(--chart-accent)"
+                />
               )}
               {total > 0 && (
                 // sempre visível: seus pontos / total da sprint
@@ -127,21 +138,21 @@ export function VelocityChart({
               )}
               <text
                 x={cx(i)}
-                y={H - 6}
+                y={H - 5}
                 fontSize="10"
-                className={isActive ? 'fill-zinc-200' : 'fill-zinc-500'}
+                fontWeight={isActive ? 700 : 400}
+                className={isActive ? 'fill-indigo-400' : 'fill-zinc-500'}
                 textAnchor="middle"
               >
                 {sprintLabel(s, prefix)}
-                {isActive ? ' •' : ''}
               </text>
             </g>
           )
         })}
       </svg>
-      <p className="mt-1 text-xs text-zinc-600">
-        Rótulo: <span className="font-semibold text-indigo-300 light:text-indigo-600">seus SP</span>
-        <span> / total da sprint</span> — a base índigo da barra é a sua parte. • = sprint ativa.
+      <p className="mt-1 text-[10.5px] leading-snug text-zinc-600">
+        Rótulo: seus SP / total da sprint — a base da barra é a sua parte. A sprint ativa fica
+        destacada no rótulo.
       </p>
     </div>
   )

@@ -60,20 +60,18 @@ export function CommandLogModal({ onClose }: { onClose: () => void }): React.JSX
       onClick={onClose}
     >
       <div
-        className="flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900 shadow-xl light:border-zinc-200 light:bg-white"
+        className="flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-zinc-800 p-4 light:border-zinc-200">
+        <div className="flex items-start justify-between gap-4 border-b border-zinc-800 px-4 py-3">
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-zinc-100 light:text-zinc-900">
-              Comandos executados
-            </h3>
-            <p className="mt-1 text-xs text-zinc-500">
+            <h3 className="text-sm font-bold text-zinc-50">Comandos executados</h3>
+            <p className="mt-0.5 text-[11.5px] text-zinc-500">
               Comandos externos disparados pelo app (IA e gh), com argumentos truncados.
             </p>
           </div>
           <button
-            className="shrink-0 rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200 light:hover:bg-zinc-100"
+            className="shrink-0 rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
             onClick={onClose}
             aria-label="Fechar"
           >
@@ -85,9 +83,9 @@ export function CommandLogModal({ onClose }: { onClose: () => void }): React.JSX
           {isLoading ? (
             <Spinner className="text-zinc-500" />
           ) : entries.length === 0 ? (
-            <p className="text-sm text-zinc-500">Nenhum comando registrado.</p>
+            <p className="text-[13px] text-zinc-500">Nenhum comando registrado.</p>
           ) : (
-            <div className="divide-y divide-zinc-800 light:divide-zinc-200">
+            <div className="divide-y divide-zinc-800">
               {entries.map((entry) => (
                 <div key={entry.id} className="space-y-1 py-2.5 first:pt-0">
                   <div className="flex items-center gap-2 text-xs text-zinc-500">
@@ -103,7 +101,7 @@ export function CommandLogModal({ onClose }: { onClose: () => void }): React.JSX
                     )}
                   </div>
                   <button
-                    className={`block w-full rounded bg-zinc-950/60 px-2 py-1 text-left font-mono text-xs text-zinc-400 hover:bg-zinc-900 hover:text-zinc-300 light:bg-zinc-100 light:text-zinc-600 light:hover:bg-zinc-200 ${
+                    className={`block w-full rounded-sm bg-zinc-950/60 px-2 py-1 text-left font-mono text-[11.5px] text-zinc-400 hover:text-zinc-300 ${
                       expanded.has(entry.id) ? 'break-all whitespace-pre-wrap' : 'truncate'
                     }`}
                     onClick={() => toggleExpand(entry.id)}
@@ -125,7 +123,7 @@ export function CommandLogModal({ onClose }: { onClose: () => void }): React.JSX
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-zinc-800 p-3 light:border-zinc-200">
+        <div className="flex items-center justify-end gap-2 border-t border-zinc-800 p-3">
           {confirmClear ? (
             <>
               <span className="text-xs text-zinc-500">Limpar histórico?</span>

@@ -1,11 +1,10 @@
 export const t = {
   app: {
     name: 'Jiraiya',
-    paletteHint: '⌘K busca',
     updateAvailable: (version: string) => `v${version} disponível`
   },
   nav: {
-    dashboard: 'Dashboard',
+    dashboard: 'Hoje',
     board: 'Quadro',
     epics: 'Épicos',
     ask: 'Perguntar',
@@ -17,7 +16,59 @@ export const t = {
     summaries: 'Resumos',
     team: 'Time',
     alerts: 'Alertas',
-    settings: 'Configurações'
+    settings: 'Configurações',
+    /** pares agrupados: apontam para a 1ª rota e mostram a 2ª como aba na tela */
+    createSplit: 'Criar · Dividir',
+    filtersTimeline: 'Filtros · Timeline',
+    groupEntries: 'Entradas',
+    groupTools: 'Ferramentas'
+  },
+  density: {
+    label: 'Densidade',
+    comfortable: 'confortável',
+    compact: 'denso'
+  },
+  today: {
+    title: 'Hoje',
+    /** linha de contexto do cabeçalho: "quinta, 2 de agosto · Sprint 47 · 4 em andamento" */
+    context: (date: string, sprint: string | null, inProgress: number) =>
+      [date, sprint, `${inProgress} ${inProgress === 1 ? 'card seu' : 'cards seus'} em andamento`]
+        .filter(Boolean)
+        .join(' · '),
+    dailyReady: 'Daily pronta',
+    periodToday: 'Hoje',
+    period7d: '7 dias',
+    periodSprint: 'Sprint',
+    sprintNone: 'Sem sprint ativa',
+    sprintEnded: 'encerrada',
+    sprintEndsToday: 'termina hoje',
+    sprintEndsIn: (days: number) => `termina em ${days} dia${days === 1 ? '' : 's'}`,
+    statInSprint: 'na sprint',
+    statDone: 'concluídas',
+    statOpen: 'abertas',
+    statPointsLeft: 'sp restantes',
+    attentionRejected: 'Reprovados',
+    attentionStalled: 'Parados',
+    attentionNoEstimate: 'Sem estimativa',
+    allClear: 'Nada exigindo atenção',
+    inProgressTitle: 'Em andamento',
+    sortMostStalled: 'ordenar: mais parado',
+    startTimer: 'iniciar',
+    noStoryPoints: 'sem sp',
+    todoInSprint: 'A fazer nesta sprint',
+    footerTotal: (count: number, points: number) =>
+      `${count} card${count === 1 ? '' : 's'} · ${points} sp`,
+    openInBoard: 'abrir no quadro',
+    activityTitle: 'Sua atividade',
+    chipAll: 'Tudo',
+    chipDone: 'Concluí',
+    chipMoved: 'Movi',
+    chipCommented: 'Comentei',
+    activityEmpty: 'Nada registrado no período.',
+    whereTimeGoes: 'Onde seu tempo passa',
+    whereTimeGoesHint: (cards: number, days: number) =>
+      `média por status dos seus últimos ${cards} cards concluídos (${days} dias)`,
+    emptyInProgress: 'Nada em andamento atribuído a você.'
   },
   sync: {
     syncNow: 'Sincronizar',
@@ -26,6 +77,7 @@ export const t = {
     never: 'Nunca sincronizado',
     phases: {
       issues: 'Buscando issues…',
+      reconcile: 'Conferindo cards excluídos…',
       activities: 'Processando atividades…',
       sprints: 'Atualizando sprints…'
     } as Record<string, string>,
@@ -60,7 +112,6 @@ export const t = {
     cancel: 'Cancelar',
     copy: 'Copiar',
     copied: 'Copiado!',
-    export: 'Exportar .md',
     delete: 'Excluir',
     dismiss: 'Dispensar',
     loading: 'Carregando…',
@@ -70,23 +121,18 @@ export const t = {
   },
   authInvalid: 'Credenciais do Jira expiraram — reconecte em Configurações.',
   create: {
-    title: 'Criar task',
-    whereTitle: 'Onde',
     project: 'Projeto',
     issueType: 'Tipo',
     loadingIssueTypes: 'Carregando tipos…',
     noIssueTypes: 'Não é possível criar issues neste projeto por aqui.',
-    aiTitle: 'Gerar com IA',
     ideaLabel: 'Descreva a ideia da task',
     ideaPlaceholder:
       'Ex.: contexto (onde/por que isso importa), o que precisa ser feito e o comportamento esperado ao final.',
-    generate: 'Gerar título e descrição',
     generating: 'Gerando…',
     aiUnavailableHint: (provider: string | null) =>
       provider
         ? `${provider} indisponível — verifique em Ajustes`
         : 'Configure um provider de IA em Ajustes (Claude, Gemini, Codex ou OpenRouter)',
-    cardTitle: 'Card',
     summary: 'Título',
     description: 'Descrição',
     descriptionHint:
@@ -94,8 +140,6 @@ export const t = {
     assignToMe: 'Atribuir a mim',
     addToActiveSprint: (sprintName: string) => `Adicionar à sprint ativa — ${sprintName}`,
     storyPoints: 'Story points',
-    storyPointsHint: 'Opcional',
-    submit: 'Criar no Jira',
     submitting: 'Criando…',
     createdTitle: (key: string) => `Task ${key} criada`,
     createdHint: 'Ela aparece no app após a sincronização (alguns segundos).',
@@ -103,8 +147,6 @@ export const t = {
     createAnother: 'Criar outra'
   },
   split: {
-    title: 'Dividir task',
-    whichCardTitle: 'Qual card dividir?',
     selectLabel: 'Meus cards abertos',
     selectPlaceholder: 'Selecione um card',
     orManualKey: 'ou informe a key',
@@ -119,8 +161,6 @@ export const t = {
       provider
         ? `${provider} indisponível — verifique em Ajustes`
         : 'Configure um provider de IA em Ajustes (Claude, Gemini, Codex ou OpenRouter)',
-    rationaleTitle: 'Critério da divisão',
-    itemsTitle: 'Itens da divisão',
     itemTitleLabel: 'Título',
     itemDescriptionLabel: 'Descrição',
     removeItem: 'Remover item',
@@ -128,10 +168,6 @@ export const t = {
     feedbackLabel: 'Feedback para a IA',
     feedbackPlaceholder: 'Ex.: junte os itens 2 e 3; adicione um item de testes e2e',
     refine: (provider: string | null) => `Refinar com ${provider ?? 'IA'}`,
-    refining: 'Analisando… pode levar alguns minutos',
-    structureTitle: 'Estrutura',
-    modeSubtask: 'Subtarefas do card original',
-    modeSibling: 'Cards irmãos (mesmo projeto)',
     noSubtaskType: 'Este projeto não tem tipo de subtarefa',
     issueType: 'Tipo',
     assignToMe: 'Atribuir a mim',
@@ -162,9 +198,7 @@ export const t = {
     ] as string[]
   },
   filters: {
-    title: 'Filtros',
     savedTitle: 'Salvos',
-    newFilter: '+ Novo filtro',
     noSavedFilters: 'Nenhum filtro salvo ainda.',
     nameLabel: 'Nome',
     namePlaceholder: 'Ex.: Bugs críticos abertos',
@@ -206,21 +240,29 @@ export const t = {
     empty: 'Nenhum card nesta coluna.',
     backlogBadge: 'Backlog',
     backlogHint:
-      'Coluna de backlog do kanban — no Jira ela não aparece no quadro: o conteúdo fica na tela "Backlog"'
+      'Coluna de backlog do kanban — no Jira ela não aparece no quadro: o conteúdo fica na tela "Backlog"',
+    /** linha de contexto do ScreenHeader: "Bitcap · Sprint 47 (ativa) · 24 cards · 46 sp restantes" */
+    context: (board: string, sprint: string | null, cards: number, pointsLeft: number) =>
+      [board, sprint, `${cards} card${cards === 1 ? '' : 's'}`, `${pointsLeft} sp restantes`]
+        .filter(Boolean)
+        .join(' · '),
+    /** rótulo do indicador flutuante de rolagem horizontal das colunas */
+    scrollHint: 'Rolagem horizontal do quadro',
+    wipLimit: (current: number, limit: number) => `${current}/${limit}`,
+    columnSummary: (count: number, points: number) => `${count}·${points}sp`
   },
   detail: {
     openInJira: 'Abrir no Jira',
     share: 'Copiar link do card',
     shareCopied: 'Link copiado!',
     close: 'Fechar',
-    notSynced: 'Este card ainda não foi sincronizado localmente.',
+    notSynced: 'Este card não está aqui: ainda não sincronizou ou não existe mais no Jira.',
     storyPoints: (n: number) => `${n} pts`,
     description: 'Descrição',
     showAll: 'mostrar tudo',
     timeInStatus: 'Tempo por status',
     cardTimeline: 'Timeline do card',
     noActivity: 'Nenhuma atividade registrada.',
-    commentsTitle: 'Comentários',
     noComments: 'Nenhum comentário ainda.',
     commentsOfflineHint: 'Sem conexão com o Jira — mostrando versão local em texto simples.',
     commentTitle: 'Comentar',
@@ -245,7 +287,6 @@ export const t = {
     originalEstimateLabel: 'Estimativa original',
     originalEstimatePlaceholder: '2d 4h',
     timeSpentRegistered: (value: string | null) => `Registrado: ${value ?? '—'}`,
-    timeSpentEstimated: (value: string) => `estimado: ${value}`,
     timeSpentPlaceholder: '1h 30m',
     timeSpentHint: 'Formato: 1w 2d 3h 30m',
     logWork: 'Registrar',
@@ -260,6 +301,8 @@ export const t = {
     linksTitle: 'Vinculados',
     linksOffline: 'Sem conexão com o Jira para listar vínculos.',
     assigneeLabel: 'Responsável',
+    reporterLabel: 'Relator',
+    reporter: (name: string) => `Relator: ${name}`,
     unassigned: 'Sem responsável',
     meSuffix: ' (eu)',
     attachmentsTitle: 'Anexos',
@@ -272,7 +315,13 @@ export const t = {
     deleteConfirm: 'Excluir?',
     yes: 'Sim',
     no: 'Não',
-    commentEditHint: 'salvar substitui a formatação original pela do editor (###, **, listas)'
+    commentEditHint: 'salvar substitui a formatação original pela do editor (###, **, listas)',
+    /** abas do painel docado / da gaveta */
+    tabComments: 'Comentários',
+    tabHistory: 'Histórico',
+    tabWorklogs: 'Worklogs',
+    tabPrs: 'PRs',
+    resizeHandle: 'Redimensionar painel'
   },
   palette: {
     placeholder: 'Buscar card por key, título ou texto…',
@@ -304,7 +353,6 @@ export const t = {
     actionLoading: 'Executando…'
   },
   changelog: {
-    title: 'Histórico',
     empty: 'Sem alterações registradas.',
     error: 'Não foi possível carregar o histórico (sem conexão?).',
     cleared: '(vazio)'

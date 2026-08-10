@@ -8,8 +8,13 @@ import { useQueue } from '../lib/queue'
 import { Badge, Button, Spinner } from './ui'
 import { t } from '../strings/ptBR'
 
-/** Badge discreto na sidebar (Shell.tsx) — só aparece com ações pendentes/falhadas
- * na fila offline. Clique abre o QueueCenter (modal por cima de tudo, via portal). */
+/**
+ * Crachá da fila offline — só aparece com ações pendentes/falhadas. Clique abre
+ * o QueueCenter (modal por cima de tudo, via portal). Compacto e sem largura
+ * própria: o rodapé da sidebar passou a mostrar o número no estado de sync, e
+ * quem hospeda o crachá agora é a linha "Estado da sincronização" em
+ * Configurações.
+ */
 export function QueueBadge(): React.JSX.Element | null {
   const { pendingCount, failedCount } = useQueue()
   const [open, setOpen] = useState(false)
@@ -21,7 +26,7 @@ export function QueueBadge(): React.JSX.Element | null {
   return (
     <>
       <button
-        className={`mb-2 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium hover:bg-zinc-800 ${
+        className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] font-semibold transition-colors hover:bg-zinc-800 ${
           failedCount > 0
             ? 'text-red-400 light:text-red-600'
             : 'text-amber-400 light:text-amber-600'
@@ -176,11 +181,11 @@ function QueueCenter({ onClose }: { onClose: () => void }): React.JSX.Element {
   return createPortal(
     <div className="fixed inset-0 z-50 bg-black/50" onClick={onClose}>
       <div
-        className="mx-auto mt-24 w-[520px] max-w-[90vw] overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl"
+        className="mx-auto mt-24 w-[520px] max-w-[90vw] overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-2.5">
-          <h2 className="text-sm font-semibold text-zinc-100">{t.queue.title}</h2>
+        <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
+          <h2 className="text-sm font-bold text-zinc-50">{t.queue.title}</h2>
           <div className="flex items-center gap-2">
             {failedCount > 0 && (
               <Button

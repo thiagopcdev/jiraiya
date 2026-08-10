@@ -32,6 +32,7 @@ function baseIssue(key: string, over: Partial<IssueUpsert> = {}): IssueUpsert {
     assigneeAccountId: 'acc-someone',
     assigneeName: 'Alguém',
     reporterAccountId: 'acc-other',
+    reporterName: null,
     storyPoints: 3,
     sprintJiraId: null,
     labels: [],
@@ -59,6 +60,7 @@ function fakeIssue(over: Partial<Issue>): Issue {
     assigneeAccountId: null,
     assigneeName: null,
     reporterAccountId: null,
+    reporterName: null,
     storyPoints: null,
     sprintJiraId: null,
     labels: [],
@@ -74,7 +76,9 @@ function fakeIssue(over: Partial<Issue>): Issue {
 
 describe('resolveColumns', () => {
   it('resolve nomes na ordem dos statusIds da coluna', () => {
-    const config = { columns: [{ name: 'Em teste', statusIds: ['10004', '10005'] }] }
+    const config = {
+      columns: [{ name: 'Em teste', statusIds: ['10004', '10005'], wipMax: null }]
+    }
     const statuses: Array<{
       id: string
       name: string
@@ -88,13 +92,14 @@ describe('resolveColumns', () => {
       {
         name: 'Em teste',
         statusIds: ['10004', '10005'],
-        statusNames: ['Em teste', 'Homologando']
+        statusNames: ['Em teste', 'Homologando'],
+        wipMax: null
       }
     ])
   })
 
   it('id sem match no catálogo é omitido de statusNames, mas a coluna permanece', () => {
-    const config = { columns: [{ name: 'Feito', statusIds: ['1', '999'] }] }
+    const config = { columns: [{ name: 'Feito', statusIds: ['1', '999'], wipMax: null }] }
     const statuses: Array<{
       id: string
       name: string
@@ -102,15 +107,15 @@ describe('resolveColumns', () => {
     }> = [{ id: '1', name: 'Concluído', categoryKey: 'done' }]
     const resolved = resolveColumns(config, statuses)
     expect(resolved).toEqual([
-      { name: 'Feito', statusIds: ['1', '999'], statusNames: ['Concluído'] }
+      { name: 'Feito', statusIds: ['1', '999'], statusNames: ['Concluído'], wipMax: null }
     ])
   })
 
   it('múltiplas colunas', () => {
     const config = {
       columns: [
-        { name: 'A fazer', statusIds: ['1'] },
-        { name: 'Feito', statusIds: ['2'] }
+        { name: 'A fazer', statusIds: ['1'], wipMax: null },
+        { name: 'Feito', statusIds: ['2'], wipMax: null }
       ]
     }
     const statuses: Array<{
@@ -125,6 +130,32 @@ describe('resolveColumns', () => {
     expect(resolved.map((c) => c.name)).toEqual(['A fazer', 'Feito'])
     expect(resolved[0].statusNames).toEqual(['To Do'])
     expect(resolved[1].statusNames).toEqual(['Done'])
+  })
+
+  it('coluna com limite de WIP configurado -> wipMax repassado', () => {
+    const config = {
+      columns: [{ name: 'Em andamento', statusIds: ['1'], wipMax: 3 }]
+    }
+    const statuses: Array<{
+      id: string
+      name: string
+      categoryKey: 'new' | 'indeterminate' | 'done'
+    }> = [{ id: '1', name: 'Em andamento', categoryKey: 'indeterminate' }]
+    const resolved = resolveColumns(config, statuses)
+    expect(resolved[0].wipMax).toBe(3)
+  })
+
+  it('coluna sem limite configurado (caso comum) -> wipMax null', () => {
+    const config = {
+      columns: [{ name: 'A fazer', statusIds: ['1'], wipMax: null }]
+    }
+    const statuses: Array<{
+      id: string
+      name: string
+      categoryKey: 'new' | 'indeterminate' | 'done'
+    }> = [{ id: '1', name: 'A fazer', categoryKey: 'new' }]
+    const resolved = resolveColumns(config, statuses)
+    expect(resolved[0].wipMax).toBeNull()
   })
 })
 
@@ -153,9 +184,14 @@ describe('isBacklogColumn', () => {
 
 describe('groupIssuesIntoColumns', () => {
   const columns: ResolvedColumn[] = [
-    { name: 'Fazendo', statusIds: ['1'], statusNames: ['Em andamento'] },
-    { name: 'Aguardando Deploy', statusIds: ['2'], statusNames: ['AGUARDANDO DEPLOY HMG'] },
-    { name: 'Impedimento', statusIds: ['3'], statusNames: ['IMPEDIMENTO'] }
+    { name: 'Fazendo', statusIds: ['1'], statusNames: ['Em andamento'], wipMax: null },
+    {
+      name: 'Aguardando Deploy',
+      statusIds: ['2'],
+      statusNames: ['AGUARDANDO DEPLOY HMG'],
+      wipMax: null
+    },
+    { name: 'Impedimento', statusIds: ['3'], statusNames: ['IMPEDIMENTO'], wipMax: null }
   ]
 
   it('casa status por nome com normalização trim+lowercase', () => {
@@ -184,8 +220,8 @@ describe('groupIssuesIntoColumns', () => {
 
   it('issue entra só na primeira coluna que casar', () => {
     const dupColumns: ResolvedColumn[] = [
-      { name: 'Col A', statusIds: ['1'], statusNames: ['Em andamento'] },
-      { name: 'Col B', statusIds: ['2'], statusNames: ['EM ANDAMENTO'] }
+      { name: 'Col A', statusIds: ['1'], statusNames: ['Em andamento'], wipMax: null },
+      { name: 'Col B', statusIds: ['2'], statusNames: ['EM ANDAMENTO'], wipMax: null }
     ]
     const issues = [fakeIssue({ key: 'BT-1', status: 'Em Andamento' })]
     const { columns: grouped } = groupIssuesIntoColumns(issues, dupColumns)

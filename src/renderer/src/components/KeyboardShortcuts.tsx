@@ -167,81 +167,66 @@ export default function KeyboardShortcuts(): React.JSX.Element | null {
   return (
     <div className="fixed inset-0 z-50 bg-black/50" onClick={() => setHelpOpen(false)}>
       <div
-        className="mx-auto mt-24 w-[560px] max-w-[90vw] rounded-lg border border-zinc-700 bg-zinc-900 p-5 shadow-xl"
+        className="mx-auto mt-24 w-[560px] max-w-[90vw] rounded-lg border border-zinc-700 bg-zinc-900 p-5 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-4 text-sm font-semibold text-zinc-100">Atalhos de teclado</h2>
-        <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
-          <div>
-            <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Navegação
-            </h3>
-            <ul className="space-y-1 text-zinc-300">
-              {G_SHORTCUTS.map(([keys, label]) => (
-                <li key={keys} className="flex items-center gap-2">
-                  <kbd className="rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 font-mono text-xs text-zinc-300">
-                    {keys}
-                  </kbd>
-                  <span>{label}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
+        <h2 className="mb-4 text-sm font-bold text-zinc-50">Atalhos de teclado</h2>
+        <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-[13px]">
+          <Section title="Navegação">
+            {G_SHORTCUTS.map(([keys, label]) => (
+              <Shortcut key={keys} keys={[keys]} label={label} />
+            ))}
+          </Section>
           <div className="space-y-4">
-            <div>
-              <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Listas
-              </h3>
-              <ul className="space-y-1 text-zinc-300">
-                <li className="flex items-center gap-2">
-                  <kbd className="rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 font-mono text-xs text-zinc-300">
-                    j
-                  </kbd>
-                  <kbd className="rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 font-mono text-xs text-zinc-300">
-                    k
-                  </kbd>
-                  <span>Avançar / voltar card</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <kbd className="rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 font-mono text-xs text-zinc-300">
-                    Enter
-                  </kbd>
-                  <span>Abrir card selecionado</span>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Busca
-              </h3>
-              <ul className="space-y-1 text-zinc-300">
-                <li className="flex items-center gap-2">
-                  <kbd className="rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 font-mono text-xs text-zinc-300">
-                    ⌘K
-                  </kbd>
-                  <span>Busca rápida</span>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Fechar
-              </h3>
-              <ul className="space-y-1 text-zinc-300">
-                <li className="flex items-center gap-2">
-                  <kbd className="rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 font-mono text-xs text-zinc-300">
-                    Esc
-                  </kbd>
-                  <kbd className="rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 font-mono text-xs text-zinc-300">
-                    ?
-                  </kbd>
-                  <span>Fechar esta ajuda</span>
-                </li>
-              </ul>
-            </div>
+            <Section title="Listas">
+              <Shortcut keys={['j', 'k']} label="Avançar / voltar card" />
+              <Shortcut keys={['Enter']} label="Abrir card selecionado" />
+            </Section>
+            <Section title="Busca">
+              <Shortcut keys={['⌘K']} label="Busca rápida" />
+            </Section>
+            <Section title="Barra lateral">
+              <Shortcut keys={['⌘B']} label="Recolher / fixar o menu" />
+            </Section>
+            <Section title="Fechar">
+              <Shortcut keys={['Esc', '?']} label="Fechar esta ajuda" />
+            </Section>
           </div>
         </div>
       </div>
     </div>
+  )
+}
+
+function Section({
+  title,
+  children
+}: {
+  title: string
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <div>
+      <h3 className="mb-1.5 text-[11px] font-bold uppercase tracking-[.06em] text-zinc-600">
+        {title}
+      </h3>
+      <ul className="space-y-1 text-zinc-300">{children}</ul>
+    </div>
+  )
+}
+
+function Shortcut({ keys, label }: { keys: string[]; label: string }): React.JSX.Element {
+  return (
+    <li className="flex items-center gap-2">
+      {keys.map((key) => (
+        <kbd
+          key={key}
+          className="rounded-sm border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 font-mono text-[11px] text-zinc-300"
+        >
+          {key}
+        </kbd>
+      ))}
+      <span>{label}</span>
+    </li>
   )
 }

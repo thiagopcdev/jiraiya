@@ -56,19 +56,19 @@ export function BurndownChart({
         y1={y(0)}
         x2={W - padR}
         y2={y(0)}
-        className="stroke-zinc-700"
+        className="stroke-zinc-800"
         strokeWidth="1"
       />
-      <line x1={padL} y1={padT} x2={padL} y2={y(0)} className="stroke-zinc-700" strokeWidth="1" />
+      <line x1={padL} y1={padT} x2={padL} y2={y(0)} className="stroke-zinc-800" strokeWidth="1" />
 
       <line
         x1={x(0)}
         y1={y(scope)}
         x2={x(totalDays)}
         y2={y(0)}
-        className="stroke-zinc-600"
+        className="stroke-zinc-700"
         strokeWidth="1.5"
-        strokeDasharray="5 4"
+        strokeDasharray="4 4"
       />
 
       <path
@@ -85,8 +85,10 @@ export function BurndownChart({
         fontSize="11"
         fill="var(--chart-accent)"
         textAnchor={labelFlips ? 'end' : 'start'}
-        // halo da cor do fundo: legível mesmo cruzando a linha ideal tracejada
-        stroke="var(--tone-950)"
+        // halo da cor do fundo: legível mesmo cruzando a linha ideal tracejada.
+        // O gráfico mora dentro de cartão (superfície zinc-900), não no fundo da
+        // janela — por isso o halo é zinc-900, senão sobra um contorno escuro.
+        stroke="var(--color-zinc-900)"
         strokeWidth="3"
         paintOrder="stroke"
       >

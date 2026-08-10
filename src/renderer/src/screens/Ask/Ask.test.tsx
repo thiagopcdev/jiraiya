@@ -67,7 +67,7 @@ describe('Ask', () => {
     expect(screen.queryByPlaceholderText(/Pergunte algo/)).not.toBeInTheDocument()
   })
 
-  it('mostra sugestões no estado vazio e envia uma delas', async () => {
+  it('chip de sugestão preenche e envia; os chips somem depois da primeira pergunta', async () => {
     const user = userEvent.setup()
     const api = setup((mock) => {
       mock.set('ask:question', () => ({
@@ -79,7 +79,13 @@ describe('Ask', () => {
     await waitReady()
 
     const suggestion = 'O que travou a sprint essa semana?'
-    expect(screen.getByText(suggestion)).toBeInTheDocument()
+    const others = [
+      'Resume o feedback que recebi nos meus cards',
+      'Quais cards estão parados e por quê?'
+    ]
+    expect(screen.getByRole('button', { name: suggestion })).toBeInTheDocument()
+    others.forEach((chip) => expect(screen.getByRole('button', { name: chip })).toBeInTheDocument())
+
     await user.click(screen.getByRole('button', { name: suggestion }))
 
     await waitFor(() => expect(api.count('ask:question')).toBe(1))
@@ -89,8 +95,11 @@ describe('Ask', () => {
         screen.getByText('A sprint travou por causa de um bloqueio externo.')
       ).toBeInTheDocument()
     )
-    // a pergunta do usuário também aparece na conversa
+    // a pergunta do usuário aparece na conversa, mas os chips saíram do composer
     expect(screen.getByText(suggestion)).toBeInTheDocument()
+    others.forEach((chip) =>
+      expect(screen.queryByRole('button', { name: chip })).not.toBeInTheDocument()
+    )
   })
 
   it('digita e envia com Enter (sem Shift); Shift+Enter não envia', async () => {
@@ -186,7 +195,7 @@ describe('Ask', () => {
     // tenta de novo, agora com sucesso
     executeShouldFail = false
     await user.click(screen.getByRole('button', { name: 'Tentar de novo' }))
-    await waitFor(() => expect(screen.getByText('✓ Atribuído a você.')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Atribuído a você.')).toBeInTheDocument())
     expect(api.count('ask:execute')).toBe(2)
 
     // descarta a segunda ação (comentário)
@@ -219,5 +228,43 @@ describe('Ask', () => {
       ).toBeInTheDocument()
     )
     expect(screen.queryByText('resposta')).not.toBeInTheDocument()
+  })
+
+  it('cabeçalho mostra o provider ativo e o botão de limpar só existe com conversa', async () => {
+    const user = userEvent.setup()
+    setup((mock) => {
+      mock.set('ask:question', () => ({
+        answer: 'resposta',
+        generatedBy: 'claude' as const,
+        actions: []
+      }))
+    })
+    await waitReady()
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          'Claude Code · Responde com base nos seus dados locais (janela de backfill)'
+        )
+      ).toBeInTheDocument()
+    )
+    expect(screen.queryByRole('button', { name: /Limpar conversa/ })).not.toBeInTheDocument()
+
+    await user.type(screen.getByPlaceholderText(/Pergunte algo/), 'oi{enter}')
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Limpar conversa/ })).toBeInTheDocument()
+    )
+  })
+
+  it('enquanto espera a resposta mostra os pontinhos com rótulo acessível', async () => {
+    const user = userEvent.setup()
+    setup((mock) => {
+      mock.set('ask:question', () => new Promise(() => {}))
+    })
+    await waitReady()
+
+    await user.type(screen.getByPlaceholderText(/Pergunte algo/), 'demora?{enter}')
+    const status = await screen.findByRole('status')
+    expect(status).toHaveTextContent('Pensando…')
   })
 })

@@ -1,18 +1,35 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { AlertTriangle, ExternalLink, Info, Sparkles } from 'lucide-react'
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+  Info,
+  Sparkles
+} from 'lucide-react'
 import { standupReference, type Period } from '@shared/periods'
 import type { Issue, SprintTrend, TeamMemberSummary } from '@shared/domain'
 import { invoke, IpcError } from '../../api/client'
 import { t } from '../../strings/ptBR'
 import { useAiStatus, useTeam, useTrends, useVelocity } from '../../api/hooks'
-import { Badge, Button, Card, EmptyState, Spinner } from '../../components/ui'
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  ScreenHeader,
+  SegmentedControl,
+  Spinner
+} from '../../components/ui'
 import { statusColor } from '../../components/statusColor'
 import { IssuesByStatus } from '../../components/IssuesByStatus'
 import { VelocityChart } from '../../components/VelocityChart'
 import { useIssueDetail } from '../../components/issueDetail'
 
-const periodOptions: Array<{ key: string; label: string; period: Period }> = [
+type PeriodKey = 'today' | '7d' | 'sprint'
+
+const periodOptions: Array<{ key: PeriodKey; label: string; period: Period }> = [
   { key: 'today', label: 'Hoje', period: { type: 'today' } },
   { key: '7d', label: '7 dias', period: { type: '7d' } },
   { key: 'sprint', label: 'Sprint', period: { type: 'sprint' } }
@@ -23,7 +40,7 @@ function isBlocked(issue: Issue): boolean {
 }
 
 export default function Team(): React.JSX.Element {
-  const [periodKey, setPeriodKey] = useState('7d')
+  const [periodKey, setPeriodKey] = useState<PeriodKey>('7d')
   const period = periodOptions.find((p) => p.key === periodKey)!.period
   const { data, isLoading } = useTeam(period)
   const { data: velocity, isLoading: velocityLoading } = useVelocity()
@@ -45,131 +62,145 @@ export default function Team(): React.JSX.Element {
   }
 
   const members = data?.members ?? []
+  // O contexto conta exatamente as linhas que a coluna renderiza — e no modo
+  // standup quem renderiza é o StandupView, com outra query, outro período e a
+  // lista de cada pessoa cortada em 3. Anunciar os números desta query ali
+  // descreveria uma tela que não está na frente do usuário.
+  const inPlay = members.reduce((sum, m) => sum + m.inProgress.length, 0)
+  const context =
+    data && !standup
+      ? [
+          data.periodLabel,
+          `${members.length} pessoa${members.length === 1 ? '' : 's'}`,
+          `${inPlay} card${inPlay === 1 ? '' : 's'} em andamento`
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : undefined
 
   return (
-    <div className="p-6">
-      <div className="mb-5 flex flex-wrap items-center gap-3">
-        <h2 className="mr-auto text-xl font-semibold text-zinc-100">Time</h2>
-        <Button
-          variant="secondary"
-          disabled={narrativeBusy || members.length === 0 || !aiStatus?.active}
-          title={
-            !aiStatus?.active
-              ? 'Nenhum provider de IA disponível — configure em Ajustes'
-              : undefined
-          }
-          onClick={() => void generateNarrative()}
-        >
-          {narrativeBusy ? (
-            <Spinner />
-          ) : (
-            <Sparkles size={14} className="text-indigo-400 light:text-indigo-600" />
-          )}
-          {narrativeBusy ? 'Resumindo…' : 'Resumir time'}
-        </Button>
-        <div className="flex rounded-lg border border-zinc-800 bg-zinc-900 p-0.5">
-          {periodOptions.map((p) => (
+    <div className="flex h-full flex-col">
+      <ScreenHeader
+        title="Time"
+        context={context}
+        actions={
+          <>
             <button
-              key={p.key}
-              className={`rounded-md px-2.5 py-1 text-sm font-medium ${
-                periodKey === p.key
-                  ? 'bg-zinc-700 text-zinc-100'
-                  : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-              onClick={() => {
-                setPeriodKey(p.key)
+              type="button"
+              className="flex items-center gap-1.5 rounded-md border border-zinc-800 px-2.5 py-[5px] text-[12.5px] font-semibold text-indigo-400 transition-colors hover:bg-zinc-800/60 disabled:cursor-not-allowed disabled:text-zinc-600"
+              disabled={narrativeBusy || members.length === 0 || !aiStatus?.active}
+              title={
+                !aiStatus?.active
+                  ? 'Nenhum provider de IA disponível — configure em Ajustes'
+                  : undefined
+              }
+              onClick={() => void generateNarrative()}
+            >
+              {narrativeBusy ? <Spinner /> : <Sparkles size={13} />}
+              {narrativeBusy ? 'Resumindo…' : 'Resumir time'}
+            </button>
+            <SegmentedControl
+              aria-label="Período"
+              options={periodOptions.map((p) => ({ value: p.key, label: p.label }))}
+              value={periodKey}
+              onChange={(next) => {
+                setPeriodKey(next)
                 setNarrative(null)
               }}
+            />
+            <button
+              type="button"
+              className={`rounded-md border px-3 py-[5px] text-[12.5px] transition-colors ${
+                standup
+                  ? 'border-indigo-600 bg-indigo-600/12 font-semibold text-indigo-400'
+                  : 'border-zinc-800 text-zinc-400 hover:text-zinc-200'
+              }`}
+              onClick={() => setStandup((s) => !s)}
+              title="Visão compacta pra acompanhar a daily (dados do último dia útil)"
             >
-              {p.label}
+              Standup
             </button>
-          ))}
-        </div>
-        <button
-          className={`rounded-md border px-2.5 py-1 text-sm font-medium transition-colors ${
-            standup
-              ? 'border-indigo-600 bg-indigo-950/60 text-indigo-200 light:bg-indigo-50 light:text-indigo-700'
-              : 'border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'
-          }`}
-          onClick={() => setStandup((s) => !s)}
-          title="Visão compacta pra acompanhar a daily (dados do último dia útil)"
-        >
-          Standup
-        </button>
-      </div>
+          </>
+        }
+      />
 
-      {data?.syncMode === 'personal' && (
-        <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-sm text-amber-200 light:border-amber-300 light:bg-amber-50 light:text-amber-800">
-          <Info size={15} className="mt-0.5 shrink-0" />
-          <span>
-            O sync está em modo pessoal, então esta visão só mostra quem aparece no seu próprio
-            trabalho. Para ver o time completo, troque para o modo projeto em Configurações.
-          </span>
-        </div>
-      )}
-
-      {(velocityLoading || (velocity && velocity.sprints.length > 0)) && (
-        <Card
-          title={
+      <div className="flex-1 overflow-y-auto px-6 py-[18px]">
+        {data?.syncMode === 'personal' && (
+          <div className="mb-3.5 flex items-start gap-2 rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-[12.5px] text-amber-200 light:border-amber-300 light:bg-amber-50 light:text-amber-800">
+            <Info size={15} className="mt-0.5 shrink-0" />
             <span>
-              Entregas por sprint
-              <span className="ml-2 font-normal text-zinc-500">
-                últimas 8 sprints · pontos concluídos na janela de cada sprint
-              </span>
+              O sync está em modo pessoal, então esta visão só mostra quem aparece no seu próprio
+              trabalho. Para ver o time completo, troque para o modo projeto em Configurações.
             </span>
-          }
-          className="mb-4"
-        >
-          {velocityLoading ? (
-            <Spinner className="text-zinc-500" />
-          ) : (
-            velocity && (
-              <>
-                <VelocityChart velocity={velocity} />
-                <p className="mt-2 text-xs text-zinc-400">
-                  No período: {velocity.totals.myPoints} SP seus · {velocity.totals.teamPoints} SP
-                  do time · {velocity.totals.teamCount} cards
-                </p>
-              </>
-            )
-          )}
-        </Card>
-      )}
-
-      <TrendsCard />
-
-      <RiskRadar />
-
-      {narrative && (
-        <Card
-          title={
-            <span className="flex items-center gap-2">
-              <Sparkles size={13} className="text-indigo-400 light:text-indigo-600" /> Panorama do
-              time ({aiLabel})
-            </span>
-          }
-          className="mb-4"
-        >
-          <pre className="whitespace-pre-wrap font-sans text-sm text-zinc-300">{narrative}</pre>
-        </Card>
-      )}
-
-      {standup ? (
-        <StandupView />
-      ) : (
-        <>
-          {isLoading && <Spinner className="text-zinc-500" />}
-          {!isLoading && members.length === 0 && (
-            <EmptyState message="Ninguém com atividade no período. Sincronize ou amplie o período." />
-          )}
-
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            {members.map((m) => (
-              <MemberCard key={m.accountId} member={m} />
-            ))}
           </div>
-        </>
-      )}
+        )}
+
+        {standup ? (
+          <StandupView />
+        ) : (
+          <div className="flex items-start gap-3.5">
+            <div className="flex min-w-0 flex-1 flex-col gap-3.5">
+              {narrative && (
+                <Card
+                  title={
+                    <span className="flex items-center gap-2">
+                      <Sparkles size={13} className="text-indigo-400" /> Panorama do time ({aiLabel}
+                      )
+                    </span>
+                  }
+                >
+                  <p className="max-w-[70ch] text-[13px] leading-[1.65] whitespace-pre-wrap text-zinc-300">
+                    {narrative}
+                  </p>
+                </Card>
+              )}
+
+              {isLoading && <Spinner className="text-zinc-500" />}
+              {!isLoading && members.length === 0 && (
+                <EmptyState message="Ninguém com atividade no período. Sincronize ou amplie o período." />
+              )}
+
+              {members.map((m) => (
+                <MemberCard key={m.accountId} member={m} />
+              ))}
+
+              <TrendsCard />
+            </div>
+
+            <div className="flex w-[380px] shrink-0 flex-col gap-3.5">
+              {(velocityLoading || (velocity && velocity.sprints.length > 0)) && (
+                <Card title="Entregas por sprint">
+                  {velocityLoading ? (
+                    <Spinner className="text-zinc-500" />
+                  ) : (
+                    velocity && (
+                      <>
+                        <VelocityChart velocity={velocity} />
+                        <p className="mt-2.5 text-[11.5px] leading-relaxed text-zinc-400">
+                          No período:{' '}
+                          <span className="font-bold text-zinc-200">
+                            {velocity.totals.myPoints} SP
+                          </span>{' '}
+                          seus ·{' '}
+                          <span className="font-bold text-zinc-200">
+                            {velocity.totals.teamPoints} SP
+                          </span>{' '}
+                          do time · {velocity.totals.teamCount} cards
+                        </p>
+                        <p className="mt-1 text-[11px] text-zinc-600">
+                          últimas 8 sprints · pontos concluídos na janela de cada sprint
+                        </p>
+                      </>
+                    )
+                  )}
+                </Card>
+              )}
+
+              <RiskRadar />
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -201,35 +232,41 @@ function RiskRadar(): React.JSX.Element | null {
   return (
     <Card
       title={
-        <span className="flex items-center gap-2">
-          <AlertTriangle size={13} className="text-amber-400 light:text-amber-600" /> Radar de risco
-          <span className="font-normal text-zinc-500">{data.sprint.name}</span>
+        <span className="flex items-center gap-2.5">
+          <AlertTriangle size={15} className="text-amber-400 light:text-amber-600" />
+          Radar de risco
+          <span className="text-[11.5px] font-normal text-zinc-500">{data.sprint.name}</span>
         </span>
       }
-      className="mb-4"
+      bodyClassName="px-4 pt-0.5 pb-3"
     >
-      <div className="space-y-1">
+      <div className="flex flex-col">
         {items.map(({ issue, signals, score }) => (
           <button
             key={issue.key}
-            className={`group flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-zinc-800/70 ${
-              score >= 2 ? 'border-l-2 border-amber-500 pl-1.5' : ''
-            }`}
+            className="flex w-full items-center gap-3 border-b border-zinc-800/60 py-2.5 text-left last:border-0"
             onClick={() => openIssue(issue.key)}
             title={`Abrir ${issue.key}`}
           >
-            <span className="shrink-0 font-mono text-xs text-zinc-500">{issue.key}</span>
-            <span className="min-w-0 flex-1 truncate text-sm text-zinc-300">{issue.summary}</span>
-            <div className="flex shrink-0 flex-wrap justify-end gap-1">
-              {signals.map((s) => (
-                <span
-                  key={s}
-                  className="rounded-full bg-amber-950/60 px-2 text-xs whitespace-nowrap text-amber-300 light:bg-amber-100 light:text-amber-700"
-                >
-                  {s}
-                </span>
-              ))}
-            </div>
+            <span className="block min-w-0 flex-1">
+              <span className="block truncate text-[13px] text-zinc-200">{issue.summary}</span>
+              <span className="mt-0.5 block truncate text-[11.5px] text-zinc-500">
+                <span className="font-mono">{issue.key}</span>
+                {signals.length > 0 && (
+                  <>
+                    {' · '}
+                    {/* score alto colore os sinais: é o que distingue risco de ruído */}
+                    <span
+                      className={
+                        score >= 2 ? 'text-amber-400 light:text-amber-600' : 'text-zinc-500'
+                      }
+                    >
+                      {signals.join(' · ')}
+                    </span>
+                  </>
+                )}
+              </span>
+            </span>
           </button>
         ))}
       </div>
@@ -245,19 +282,15 @@ function RiskRadar(): React.JSX.Element | null {
           }
           onClick={() => void explainRisk()}
         >
-          {explainBusy ? (
-            <Spinner />
-          ) : (
-            <Sparkles size={14} className="text-indigo-400 light:text-indigo-600" />
-          )}
+          {explainBusy ? <Spinner /> : <Sparkles size={14} className="text-indigo-400" />}
           {explainBusy ? 'Analisando…' : `Explicar com ${aiLabel}`}
         </Button>
       </div>
 
       {explain && (
-        <pre className="mt-3 border-t border-zinc-800 pt-3 whitespace-pre-wrap font-sans text-sm text-zinc-300">
+        <p className="mt-3 border-t border-zinc-800 pt-3 text-[13px] leading-[1.65] whitespace-pre-wrap text-zinc-300">
           {explain}
-        </pre>
+        </p>
       )}
     </Card>
   )
@@ -287,7 +320,7 @@ function Sparkline({ title, values }: { title: string; values: number[] }): Reac
   const H = 28
   return (
     <div>
-      <div className="mb-1 text-xs text-zinc-500">{title}</div>
+      <div className="mb-1 text-[11.5px] text-zinc-500">{title}</div>
       <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="overflow-visible">
         <polyline
           points={sparklinePoints(values, W, H)}
@@ -311,34 +344,36 @@ function TrendsCard(): React.JSX.Element | null {
   const { data, isLoading } = useTrends()
   const sprints: SprintTrend[] = data?.sprints ?? []
 
+  // sem material para comparar não é cartão, é linha de ~26px (regra 3)
   if (!isLoading && sprints.length < 2) {
     return (
-      <Card title="Tendências (últimas sprints)" className="mb-4">
-        <EmptyState message="Poucas sprints fechadas para tendências." />
-      </Card>
+      <div className="flex items-center gap-2.5 rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-[12.5px] text-zinc-400">
+        <span className="font-semibold text-zinc-200">Tendências</span>
+        <span>poucas sprints fechadas para comparar</span>
+      </div>
     )
   }
 
   return (
-    <Card title="Tendências (últimas sprints)" className="mb-4">
+    <Card title="Tendências (últimas sprints)">
       {isLoading ? (
         <Spinner className="text-zinc-500" />
       ) : (
         <>
-          <div className="mb-1 flex items-center gap-3 px-2 text-xs text-zinc-500">
+          <div className="mb-1 flex items-center gap-3 px-2 text-[11px] font-semibold tracking-[.04em] text-zinc-600 uppercase">
             <span className="min-w-0 flex-1">Sprint</span>
             <span className="w-16 text-right">SP</span>
             <span className="w-16 text-right">Cards</span>
             <span className="w-20 text-right">Lead</span>
             <span className="w-24 text-right">Criados</span>
           </div>
-          <div className="space-y-0.5">
+          <div className="flex flex-col">
             {sprints.map((s) => (
               <div
                 key={s.jiraId}
-                className="flex items-center gap-3 rounded px-2 py-1.5 text-sm text-zinc-300 odd:bg-zinc-800/40"
+                className="flex items-center gap-3 border-b border-zinc-800/60 px-2 py-2 text-[13px] text-zinc-300 last:border-0"
               >
-                <span className="min-w-0 flex-1 truncate font-medium text-zinc-200">
+                <span className="min-w-0 flex-1 truncate text-zinc-200">
                   {s.name ?? `Sprint ${s.jiraId}`}
                 </span>
                 <span className="w-16 text-right tabular-nums">{s.deliveredSp} SP</span>
@@ -361,7 +396,7 @@ function TrendsCard(): React.JSX.Element | null {
             <Sparkline title="Criados durante" values={sprints.map((s) => s.createdDuringCount)} />
           </div>
 
-          <p className="mt-3 text-xs text-zinc-500">
+          <p className="mt-3 text-[11.5px] text-zinc-500">
             Janela temporal por sprint fechada; lead = criação→resolução.
           </p>
         </>
@@ -397,7 +432,7 @@ function StandupView(): React.JSX.Element {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+    <div className="grid grid-cols-1 items-start gap-3.5 xl:grid-cols-2">
       {members.map((m) => (
         <StandupCard key={m.accountId} member={m} label={label} />
       ))}
@@ -418,23 +453,21 @@ function StandupCard({
   return (
     <Card
       title={
-        <span className="flex items-center gap-2">
-          <span className="flex size-6 items-center justify-center rounded-full bg-zinc-700 text-xs font-semibold text-zinc-200">
-            {initials(member.name)}
-          </span>
+        <span className="flex items-center gap-2.5">
+          <Avatar name={member.name} />
           {member.name}
           {member.isMe && <Badge color="indigo">você</Badge>}
         </span>
       }
     >
-      <p className="mb-3 text-xs text-zinc-400">
+      <p className="mb-3 text-[11.5px] text-zinc-500">
         {label.charAt(0).toUpperCase() + label.slice(1)}: moveu {member.movedCount} · comentou{' '}
         {member.commentedCount}
       </p>
 
       {member.done.length > 0 && (
         <div className="mb-2">
-          <div className="mb-1 text-xs font-semibold text-green-400 light:text-green-600">
+          <div className="mb-1 text-[11px] font-bold tracking-[.04em] text-green-400 uppercase light:text-green-600">
             Concluiu
           </div>
           <div className="space-y-0.5">
@@ -446,22 +479,24 @@ function StandupCard({
       )}
 
       <div className="mb-2">
-        <div className="mb-1 text-xs font-semibold text-zinc-400">Em andamento</div>
+        <div className="mb-1 text-[11px] font-bold tracking-[.04em] text-zinc-500 uppercase">
+          Em andamento
+        </div>
         {shown.length === 0 ? (
-          <p className="text-xs text-zinc-600">Nada em andamento.</p>
+          <p className="text-[12.5px] text-zinc-600">Nada em andamento.</p>
         ) : (
           <div className="space-y-0.5">
             {shown.map((i) => (
               <MiniIssue key={i.key} issueKey={i.key} summary={i.summary} trailing={null} />
             ))}
-            {extra > 0 && <p className="px-1.5 text-xs text-zinc-600">+{extra}</p>}
+            {extra > 0 && <p className="px-1.5 text-[12.5px] text-zinc-600">+{extra}</p>}
           </div>
         )}
       </div>
 
       {member.stalled.length > 0 && (
         <div>
-          <div className="mb-1 text-xs font-semibold text-amber-400 light:text-amber-600">
+          <div className="mb-1 text-[11px] font-bold tracking-[.04em] text-amber-400 uppercase light:text-amber-600">
             Atenção
           </div>
           <div className="space-y-0.5">
@@ -471,7 +506,7 @@ function StandupCard({
                 issueKey={i.key}
                 summary={i.summary}
                 trailing={
-                  <span className="text-xs text-amber-500 light:text-amber-700">
+                  <span className="text-[11.5px] text-amber-400 light:text-amber-600">
                     {i.stalledDays}d
                   </span>
                 }
@@ -484,77 +519,132 @@ function StandupCard({
   )
 }
 
-function MemberCard({ member }: { member: TeamMemberSummary }): React.JSX.Element {
-  const blocked = member.inProgress.filter(isBlocked)
+/** Iniciais em círculo de 34px — a âncora visual da linha de pessoa. */
+function Avatar({ name }: { name: string }): React.JSX.Element {
   return (
-    <Card
-      title={
-        <span className="flex items-center gap-2">
-          <span className="flex size-6 items-center justify-center rounded-full bg-zinc-700 text-xs font-semibold text-zinc-200">
-            {initials(member.name)}
+    <span className="flex size-[34px] shrink-0 items-center justify-center rounded-full bg-indigo-900 text-[11.5px] font-bold text-indigo-400">
+      {initials(name)}
+    </span>
+  )
+}
+
+function MemberStat({ value, label }: { value: number; label: string }): React.JSX.Element {
+  return (
+    <span className="block text-right">
+      <span className="block text-[15px] leading-tight font-bold text-zinc-50 tabular-nums">
+        {value}
+      </span>
+      <span className="block text-[10.5px] text-zinc-500">{label}</span>
+    </span>
+  )
+}
+
+/**
+ * Pessoa é uma LINHA, não um cartão de conteúdo: os três números resolvem a
+ * leitura de varredura. A lista de cards de cada um continua acessível, mas
+ * atrás de um clique — senão cinco pessoas ocupam três telas de rolagem.
+ */
+function MemberCard({ member }: { member: TeamMemberSummary }): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  const blocked = member.inProgress.filter(isBlocked)
+  const donePoints = member.done.reduce((sum, i) => sum + (i.storyPoints ?? 0), 0)
+
+  const subtitleParts = [
+    member.isMe ? 'você' : null,
+    member.movedCount > 0 ? `${member.movedCount} movida(s)` : null,
+    member.commentedCount > 0 ? `${member.commentedCount} comentada(s)` : null
+  ].filter(Boolean)
+
+  return (
+    <Card bodyClassName="">
+      <button
+        type="button"
+        className="flex w-full items-center gap-3 px-3.5 py-3 text-left"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        title={open ? 'Recolher os cards' : 'Ver os cards'}
+      >
+        <Avatar name={member.name} />
+        <span className="block min-w-0 flex-1">
+          <span className="block truncate text-[13.5px] font-semibold text-zinc-50">
+            {member.name}
           </span>
-          {member.name}
-          {member.isMe && <Badge color="indigo">você</Badge>}
+          <span className="mt-px block truncate text-[11.5px] text-zinc-500">
+            {subtitleParts.length > 0 ? subtitleParts.join(' · ') : 'sem movimentações no período'}
+          </span>
         </span>
-      }
-    >
-      <div className="mb-3 flex flex-wrap gap-2 text-xs text-zinc-400">
-        <span>{member.inProgress.length} em andamento</span>
-        <span aria-hidden>·</span>
-        <span>{member.done.length} concluída(s)</span>
-        {member.movedCount > 0 && (
-          <>
-            <span aria-hidden>·</span>
-            <span>{member.movedCount} movida(s)</span>
-          </>
+
+        <span className="flex shrink-0 gap-3.5">
+          <MemberStat value={member.inProgress.length} label="em andamento" />
+          <MemberStat value={member.done.length} label="concluídas" />
+          <MemberStat value={donePoints} label="sp" />
+        </span>
+
+        {blocked.length > 0 && (
+          <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-red-600/16 px-2.5 py-[3px] text-[11px] font-semibold text-red-400 light:text-red-600">
+            <AlertTriangle size={11} />
+            {blocked.length} bloqueado(s)
+          </span>
         )}
-        {member.commentedCount > 0 && (
-          <>
-            <span aria-hidden>·</span>
-            <span>{member.commentedCount} comentada(s)</span>
-          </>
+        {member.stalled.length > 0 && (
+          <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-amber-600/16 px-2.5 py-[3px] text-[11px] font-semibold text-amber-400 light:text-amber-600">
+            <AlertTriangle size={11} />
+            {member.stalled.length} parado(s)
+          </span>
         )}
-      </div>
 
-      {blocked.length > 0 && (
-        <div className="mb-2">
-          <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-red-400 light:text-red-600">
-            <AlertTriangle size={12} /> Bloqueado
-          </div>
-          <IssueList issues={blocked} />
-        </div>
-      )}
-
-      {member.stalled.length > 0 && (
-        <div className="mb-2">
-          <div className="mb-1 text-xs font-semibold text-amber-400 light:text-amber-600">
-            Parado
-          </div>
-          <div className="space-y-0.5">
-            {member.stalled.map((i) => (
-              <MiniIssue
-                key={i.key}
-                issueKey={i.key}
-                summary={i.summary}
-                trailing={
-                  <span className="text-xs text-amber-500 light:text-amber-700">
-                    {i.stalledDays}d
-                  </span>
-                }
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div>
-        <div className="mb-1 text-xs font-semibold text-zinc-400">Em andamento</div>
-        {member.inProgress.length === 0 ? (
-          <p className="text-xs text-zinc-600">Nada em andamento.</p>
+        {open ? (
+          <ChevronDown size={14} className="shrink-0 text-zinc-600" />
         ) : (
-          <IssuesByStatus issues={member.inProgress} />
+          <ChevronRight size={14} className="shrink-0 text-zinc-600" />
         )}
-      </div>
+      </button>
+
+      {open && (
+        <div className="border-t border-zinc-800 px-3.5 py-3">
+          {blocked.length > 0 && (
+            <div className="mb-2">
+              <div className="mb-1 flex items-center gap-1.5 text-[11px] font-bold tracking-[.04em] text-red-400 uppercase light:text-red-600">
+                <AlertTriangle size={12} /> Bloqueado
+              </div>
+              <IssueList issues={blocked} />
+            </div>
+          )}
+
+          {member.stalled.length > 0 && (
+            <div className="mb-2">
+              <div className="mb-1 text-[11px] font-bold tracking-[.04em] text-amber-400 uppercase light:text-amber-600">
+                Parado
+              </div>
+              <div className="space-y-0.5">
+                {member.stalled.map((i) => (
+                  <MiniIssue
+                    key={i.key}
+                    issueKey={i.key}
+                    summary={i.summary}
+                    trailing={
+                      <span className="text-[11.5px] text-amber-400 light:text-amber-600">
+                        {i.stalledDays}d
+                      </span>
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <div className="mb-1 text-[11px] font-bold tracking-[.04em] text-zinc-500 uppercase">
+              Em andamento
+            </div>
+            {member.inProgress.length === 0 ? (
+              <p className="text-[12.5px] text-zinc-600">Nada em andamento.</p>
+            ) : (
+              <IssuesByStatus issues={member.inProgress} />
+            )}
+          </div>
+        </div>
+      )}
     </Card>
   )
 }
@@ -589,12 +679,12 @@ function MiniIssue({
 
   return (
     <button
-      className="group flex w-full items-center gap-2 rounded px-1.5 py-1 text-left hover:bg-zinc-800/70"
+      className="group flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-zinc-800/70"
       onClick={() => openIssue(issueKey)}
       title={`Abrir ${issueKey}`}
     >
-      <span className="shrink-0 font-mono text-xs text-zinc-500">{issueKey}</span>
-      <span className="min-w-0 flex-1 truncate text-sm text-zinc-300">{summary}</span>
+      <span className="shrink-0 font-mono text-[11px] text-zinc-500">{issueKey}</span>
+      <span className="min-w-0 flex-1 truncate text-[13px] text-zinc-300">{summary}</span>
       {trailing}
       <span
         role="button"

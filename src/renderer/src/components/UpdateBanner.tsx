@@ -65,13 +65,13 @@ export default function UpdateBanner(): React.JSX.Element | null {
   }
 
   return (
-    <div className="fixed right-4 bottom-16 z-50 flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900/95 px-3 py-2 text-sm shadow-lg backdrop-blur">
+    <div className="fixed right-4 bottom-16 z-50 flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900 px-3 py-2 text-[13px] shadow-card">
       {phase === 'error' ? (
         <>
           <span className="text-amber-400 light:text-amber-600">{error}</span>
           <button
             type="button"
-            className="rounded px-2 py-1 text-xs font-medium text-indigo-400 hover:bg-zinc-800 light:text-indigo-600"
+            className="rounded-md px-2 py-1 text-[12.5px] font-semibold text-indigo-400 transition-colors hover:bg-zinc-800"
             onClick={() => void download()}
           >
             Tentar de novo
@@ -84,7 +84,7 @@ export default function UpdateBanner(): React.JSX.Element | null {
           <span className="text-zinc-200">Versão {update.version} disponível</span>
           <button
             type="button"
-            className="flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-indigo-400 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:text-zinc-600 light:text-indigo-600"
+            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[12.5px] font-semibold text-indigo-400 transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:text-zinc-600"
             disabled={phase === 'downloading'}
             onClick={() => void download()}
           >
@@ -93,7 +93,7 @@ export default function UpdateBanner(): React.JSX.Element | null {
           </button>
           <button
             type="button"
-            className="flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[12.5px] font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
             onClick={() => window.open(update.url, '_blank')}
           >
             <ExternalLink size={13} />
@@ -104,7 +104,7 @@ export default function UpdateBanner(): React.JSX.Element | null {
       {phase !== 'done' && (
         <button
           type="button"
-          className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+          className="rounded-md p-1 text-zinc-600 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
           title="Fechar"
           onClick={() => setDismissed(true)}
         >

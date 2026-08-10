@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
 import type { IssueActivity, Project } from '@shared/domain'
@@ -61,22 +62,35 @@ describe('Timeline', () => {
     )
   })
 
-  it('agrupa atividades por dia e mostra a mudança de status', async () => {
+  it('agrupa atividades por dia e mostra a mudança de status numa linha só', async () => {
     installMockApi({
       'activity:timeline': () => ({ activities: [makeActivity()] }),
       'projects:list': () => ({ projects: [] })
     })
     renderWithProviders(<Timeline />, { withIssueDetail: false })
-    await waitFor(() => expect(screen.getByText('Ajustar layout')).toBeInTheDocument())
-    expect(screen.getAllByText('Hoje').length).toBeGreaterThan(0)
-    expect(screen.getByText('moveu')).toBeInTheDocument()
-    expect(screen.getByText('BT-1')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('BT-1')).toBeInTheDocument())
     expect(
-      screen.getByText((_, element) => element?.textContent === 'A fazer → Em andamento')
+      screen.getByText((_, element) => element?.textContent === 'moveu BT-1 para Em andamento')
     ).toBeInTheDocument()
+    // o resumo do card não some: desce para a linha de detalhe junto com o "de"
+    expect(screen.getByText('de A fazer · Ajustar layout')).toBeInTheDocument()
   })
 
-  it('atividade de comentário mostra o trecho do corpo', async () => {
+  it('o cartão do dia traz o contador com o número de linhas renderizadas', async () => {
+    installMockApi({
+      'activity:timeline': () => ({
+        activities: [makeActivity(), makeActivity({ id: 2, issueKey: 'BT-2' })]
+      }),
+      'projects:list': () => ({ projects: [] })
+    })
+    renderWithProviders(<Timeline />, { withIssueDetail: false })
+    const heading = await screen.findByRole('heading', { name: /Hoje/ })
+    expect(within(heading).getByText('2')).toBeInTheDocument()
+    expect(screen.getByText('BT-1')).toBeInTheDocument()
+    expect(screen.getByText('BT-2')).toBeInTheDocument()
+  })
+
+  it('atividade de comentário mostra o trecho do corpo entre aspas', async () => {
     installMockApi({
       'activity:timeline': () => ({
         activities: [
@@ -91,11 +105,15 @@ describe('Timeline', () => {
       'projects:list': () => ({ projects: [] })
     })
     renderWithProviders(<Timeline />, { withIssueDetail: false })
-    await waitFor(() => expect(screen.getByText('comentou')).toBeInTheDocument())
-    expect(screen.getByText('ficou pronto')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(
+        screen.getByText((_, element) => element?.textContent === 'comentou BT-1')
+      ).toBeInTheDocument()
+    )
+    expect(screen.getByText('“ficou pronto”')).toBeInTheDocument()
   })
 
-  it('desmarcar "somente minhas ações" mostra o autor da atividade', async () => {
+  it('desligar "só meus cards" mostra o autor da atividade', async () => {
     installMockApi({
       'activity:timeline': () => ({ activities: [makeActivity({ actorName: 'Fulano' })] }),
       'projects:list': () => ({ projects: [] })
@@ -105,7 +123,10 @@ describe('Timeline', () => {
     await waitFor(() => expect(screen.getByText('BT-1')).toBeInTheDocument())
     expect(screen.queryByText('Fulano')).not.toBeInTheDocument()
 
-    await user.click(screen.getByLabelText('Somente minhas ações'))
+    const toggle = screen.getByRole('switch', { name: 'só meus cards' })
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
+    await user.click(toggle)
+    expect(toggle).toHaveAttribute('aria-checked', 'false')
     expect(screen.getByText('Fulano')).toBeInTheDocument()
   })
 
@@ -150,6 +171,25 @@ describe('Timeline', () => {
     expect(api.lastPayload('shell:openIssue')).toEqual({ issueKey: 'BT-1' })
   })
 
+  it('a faixa de abas Filtros/Timeline marca a aba ativa pela rota e navega ao clicar', async () => {
+    installMockApi({
+      'activity:timeline': () => ({ activities: [] }),
+      'projects:list': () => ({ projects: [] })
+    })
+    const user = userEvent.setup()
+    renderWithProviders(<Timeline />, { withIssueDetail: false, route: '/timeline' })
+
+    const filtersTab = await screen.findByRole('link', { name: 'Filtros' })
+    const timelineTab = screen.getByRole('link', { name: 'Timeline' })
+    expect(timelineTab).toHaveAttribute('aria-current', 'page')
+    expect(filtersTab).not.toHaveAttribute('aria-current')
+    expect(filtersTab).toHaveAttribute('href', '/filtros')
+
+    await user.click(filtersTab)
+    expect(filtersTab).toHaveAttribute('aria-current', 'page')
+    expect(timelineTab).not.toHaveAttribute('aria-current')
+  })
+
   it('clicar na linha abre a gaveta com a key da atividade', async () => {
     installMockApi({
       'activity:timeline': () => ({ activities: [makeActivity()] }),
@@ -160,12 +200,14 @@ describe('Timeline', () => {
     const client = makeQueryClient()
     render(
       <QueryClientProvider client={client}>
-        <IssueDetailContext.Provider value={{ openIssue, close: vi.fn() }}>
-          <Timeline />
-        </IssueDetailContext.Provider>
+        <MemoryRouter initialEntries={['/timeline']}>
+          <IssueDetailContext.Provider value={{ openIssue, close: vi.fn() }}>
+            <Timeline />
+          </IssueDetailContext.Provider>
+        </MemoryRouter>
       </QueryClientProvider>
     )
-    await waitFor(() => expect(screen.getByText('Ajustar layout')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('de A fazer · Ajustar layout')).toBeInTheDocument())
     await user.click(screen.getByTitle('BT-1'))
     expect(openIssue).toHaveBeenCalledWith('BT-1')
   })

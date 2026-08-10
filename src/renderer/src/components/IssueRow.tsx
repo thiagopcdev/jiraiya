@@ -12,12 +12,12 @@ export function IssueRow({ issue }: { issue: Issue }): React.JSX.Element {
     <button
       data-kb-row
       tabIndex={-1}
-      className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-zinc-800/70 focus:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500"
+      className="group flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors compact:py-1.5 hover:bg-zinc-800/70 focus:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500"
       onClick={() => openIssue(issue.key)}
       title={issue.key}
     >
-      <span className="shrink-0 font-mono text-xs text-zinc-500">{issue.key}</span>
-      <span className="min-w-0 flex-1 truncate text-sm text-zinc-200">{issue.summary}</span>
+      <span className="shrink-0 font-mono text-[11.5px] text-zinc-400">{issue.key}</span>
+      <span className="min-w-0 flex-1 truncate text-[13.5px] text-zinc-200">{issue.summary}</span>
       {issue.storyPoints !== null && <Badge color="indigo">{issue.storyPoints}</Badge>}
       {issue.status && <Badge color={statusColor(issue.statusCategory)}>{issue.status}</Badge>}
       <span

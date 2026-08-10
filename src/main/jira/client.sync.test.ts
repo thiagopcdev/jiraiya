@@ -188,24 +188,39 @@ describe('JiraClient.issueChangelog', () => {
   })
 })
 
-describe('JiraClient.issueDescription', () => {
-  it('devolve o ADF da descrição', async () => {
+describe('JiraClient.issueLiveFields', () => {
+  it('devolve o ADF da descrição e o relator', async () => {
     const doc = { type: 'doc', version: 1, content: [] }
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonRes({ fields: { description: doc } })))
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        jsonRes({ fields: { description: doc, reporter: { accountId: 'a1', displayName: 'Ana' } } })
+      )
+    vi.stubGlobal('fetch', fetchMock)
 
-    await expect(makeClient().issueDescription('BT-1')).resolves.toEqual(doc)
+    await expect(makeClient().issueLiveFields('BT-1')).resolves.toEqual({
+      description: doc,
+      reporter: { accountId: 'a1', displayName: 'Ana' }
+    })
+    expect(urlsOf(fetchMock)[0]).toContain('fields=description,reporter')
   })
 
-  it('descrição ausente devolve null', async () => {
+  it('descrição/relator ausentes devolvem null', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonRes({ fields: {} })))
 
-    await expect(makeClient().issueDescription('BT-1')).resolves.toBeNull()
+    await expect(makeClient().issueLiveFields('BT-1')).resolves.toEqual({
+      description: null,
+      reporter: null
+    })
   })
 
   it('corpo sem fields devolve null', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonRes({})))
 
-    await expect(makeClient().issueDescription('BT-1')).resolves.toBeNull()
+    await expect(makeClient().issueLiveFields('BT-1')).resolves.toEqual({
+      description: null,
+      reporter: null
+    })
   })
 })
 

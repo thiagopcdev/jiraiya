@@ -197,6 +197,9 @@ export interface JiraBoardConfiguration {
     columns?: Array<{
       name?: string
       statuses?: Array<{ id: string; self?: string }>
+      // presentes só quando a coluna tem constraint de WIP configurada no board
+      min?: number
+      max?: number
     }>
   }
 }

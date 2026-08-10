@@ -4,7 +4,7 @@ import { getWorkspaceRow } from '../../db/repos/workspace'
 import { getActiveSprint, listRecentSprints } from '../../db/repos/catalog'
 import { getPrefs } from '../../db/repos/misc'
 import { queryTimeline, listIssueActivities } from '../../db/repos/activity'
-import { queryIssues, searchIssues } from '../../queries/issues'
+import { listInProgressStatuses, queryIssues, searchIssues } from '../../queries/issues'
 import { buildLeadTime } from '../../queries/leadTime'
 import { getIssueByKey, listChildIssues, rowToIssue } from '../../db/repos/issue'
 import { mapIssueLinks } from '../../issues/links'
@@ -49,10 +49,23 @@ export function registerIssueHandlers(ctx: AppContext): void {
         start: range.start,
         end: range.end,
         bucket: bucket ?? 'all',
-        stalledDays: prefs.stalledDays
+        stalledDays: prefs.stalledDays,
+        inProgressStatuses: prefs.inProgressStatuses
       }
     )
     return { issues }
+  })
+
+  handle('issues:inProgressStatuses', () => {
+    const workspace = requireWorkspace(ctx)
+    return {
+      statuses: listInProgressStatuses({
+        db: ctx.db,
+        workspaceId: workspace.id,
+        accountId: workspace.account_id,
+        siteUrl: workspace.site_url
+      })
+    }
   })
 
   handle('issues:get', ({ key }) => {

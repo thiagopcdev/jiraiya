@@ -105,7 +105,11 @@ export function registerSprintMoveHandlers(ctx: AppContext): void {
       }
     } catch (err) {
       if (err instanceof JiraHttpError) {
-        throw new AppError('MOVE_FAILED', 'O Jira recusou a movimentação: ' + parseCreateError(err))
+        throw new AppError(
+          'MOVE_FAILED',
+          'O Jira recusou a movimentação: ' + parseCreateError(err),
+          err
+        )
       }
       throw err
     }

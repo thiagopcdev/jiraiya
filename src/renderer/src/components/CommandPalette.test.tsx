@@ -46,6 +46,18 @@ describe('CommandPalette', () => {
     expect(screen.queryByPlaceholderText(/Buscar card por key/)).not.toBeInTheDocument()
   })
 
+  it('o evento jiraiya:open-palette (campo de busca da sidebar) abre o modal', () => {
+    installMockApi()
+    renderWithProviders(<CommandPalette />, { withIssueDetail: false })
+
+    fireEvent(window, new Event('jiraiya:open-palette'))
+    expect(screen.getByPlaceholderText(/Buscar card por key/)).toBeInTheDocument()
+
+    // já aberto, o evento não fecha (diferente do ⌘K, que alterna)
+    fireEvent(window, new Event('jiraiya:open-palette'))
+    expect(screen.getByPlaceholderText(/Buscar card por key/)).toBeInTheDocument()
+  })
+
   it('Escape fecha o modal', () => {
     installMockApi()
     renderWithProviders(<CommandPalette />, { withIssueDetail: false })

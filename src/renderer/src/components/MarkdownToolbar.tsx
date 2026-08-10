@@ -210,7 +210,8 @@ const lineButtons: ToolbarButton[] = [
   }
 ]
 
-const buttonClass = 'rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200'
+const buttonClass =
+  'rounded p-1 text-zinc-600 transition-colors hover:bg-zinc-800 hover:text-zinc-200'
 
 /**
  * Tooltip instantâneo no hover (o title nativo demora ~1s). Posicionado ABAIXO
@@ -250,13 +251,16 @@ export function MarkdownToolbar({
   textareaRef,
   value,
   onChange,
-  aiContext
+  aiContext,
+  className = 'mb-1'
 }: {
   textareaRef: RefObject<HTMLTextAreaElement | null>
   value: string
   onChange: (next: string) => void
   /** habilita o botão "Formatar com IA"; define o tom (descrição × comentário) */
   aiContext?: 'description' | 'comment'
+  /** espaçamento externo da barra; em Criar ela fica na linha do rótulo, sem `mb-1` */
+  className?: string
 }): React.JSX.Element {
   const { data: aiStatus } = useAiStatus()
   const [polishBusy, setPolishBusy] = useState(false)
@@ -316,7 +320,7 @@ export function MarkdownToolbar({
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => runButton(btn)}
         >
-          <Icon size={14} />
+          <Icon size={13} />
         </button>
       </ToolbarTip>
     )
@@ -325,20 +329,20 @@ export function MarkdownToolbar({
   const showPolish = Boolean(aiContext) && Boolean(aiStatus?.active)
 
   return (
-    <div className="mb-1 flex items-center gap-0.5">
+    <div className={`flex items-center gap-0.5 ${className}`}>
       {buttons.map(renderButton)}
-      <div className="mx-1 h-4 border-l border-zinc-700" />
+      <div className="mx-1 h-4 border-l border-zinc-800" />
       {lineButtons.map(renderButton)}
       {showPolish && (
         <>
-          <div className="mx-1 h-4 border-l border-zinc-700" />
+          <div className="mx-1 h-4 border-l border-zinc-800" />
           <ToolbarTip
             label={polishError ?? 'Formatar com IA — reescreve com formatação profissional'}
             align="right"
           >
             <button
               type="button"
-              className={`rounded p-1 disabled:opacity-60 ${
+              className={`flex items-center gap-1 rounded px-1 py-1 text-[11.5px] font-semibold disabled:opacity-60 ${
                 polishError
                   ? 'text-amber-400 light:text-amber-600'
                   : 'text-indigo-400 hover:bg-zinc-800 hover:text-indigo-300 light:hover:bg-zinc-200'
@@ -348,7 +352,8 @@ export function MarkdownToolbar({
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => void runPolish()}
             >
-              {polishBusy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+              {polishBusy ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+              Melhorar
             </button>
           </ToolbarTip>
           {previous !== null && (

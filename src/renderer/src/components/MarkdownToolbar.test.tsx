@@ -177,6 +177,13 @@ describe('MarkdownToolbar', () => {
     expect(screen.getByText('Negrito (Cmd+B)')).toBeInTheDocument()
   })
 
+  it('a barra sai com mb-1 por padrão (o caller troca por className)', () => {
+    installMockApi({ 'ai:status': () => aiUnavailable as never })
+    renderWithProviders(<Harness initialValue="" />, { withIssueDetail: false })
+    const bar = screen.getByRole('button', { name: 'Negrito (Cmd+B)' }).closest('div')
+    expect(bar?.className).toContain('mb-1')
+  })
+
   describe('botão "Formatar com IA"', () => {
     it('fica escondido sem aiContext mesmo com provider ativo', () => {
       installMockApi({ 'ai:status': () => aiActive as never })
@@ -204,6 +211,7 @@ describe('MarkdownToolbar', () => {
         withIssueDetail: false
       })
       const btn = await screen.findByRole('button', { name: 'Formatar com IA' })
+      expect(btn).toHaveTextContent('Melhorar')
       await userEvent.click(btn)
 
       await waitFor(() => expect(getTextarea().value).toBe('texto reescrito'))

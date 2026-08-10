@@ -16,6 +16,8 @@ import icon from '../../resources/icon.png?asset'
 import { openDb } from './db'
 import { AppContext } from './appContext'
 import { SyncScheduler } from './sync/scheduler'
+import { setIssueGoneResolver } from './ipc/registry'
+import { makeIssueGoneResolver } from './issues/gone'
 import { registerAuthHandlers } from './ipc/handlers/auth'
 import { registerProjectHandlers } from './ipc/handlers/projects'
 import { registerSyncHandlers } from './ipc/handlers/sync'
@@ -357,6 +359,10 @@ app.whenReady().then(() => {
     }
   })
   initGhLogging(ctx.db)
+
+  // 404 em qualquer canal que trabalhe sobre um card → confirma e purga o card
+  // excluído no Jira (precisa do ctx, que o registry não conhece)
+  setIssueGoneResolver(makeIssueGoneResolver(ctx))
 
   registerAuthHandlers(ctx)
   registerProjectHandlers(ctx)
