@@ -355,6 +355,21 @@ describe('usePushInvalidation', () => {
     await waitFor(() => expect(api.count('alerts:list')).toBe(2))
   })
 
+  it('recarrega tudo ao receber push:issue-gone (card excluído saiu do cache)', async () => {
+    const api = installMockApi({ 'alerts:list': () => ({ alerts: [] }) })
+    const client = makeQueryClient()
+    const { result } = renderHook(() => useAlerts(), { wrapper: wrapper(client) })
+    renderHook(() => usePushInvalidation(), { wrapper: wrapper(client) })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    act(() => {
+      api.push('push:issue-gone', { key: 'BT-907' })
+    })
+
+    await waitFor(() => expect(api.count('alerts:list')).toBe(2))
+  })
+
   it('invalida o cache de auth ao receber push:auth-invalid', async () => {
     const api = installMockApi({
       'auth:status': () => ({ connected: true, workspace: null })

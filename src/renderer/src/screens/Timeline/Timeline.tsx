@@ -16,16 +16,34 @@ import type { Period } from '@shared/periods'
 import type { ActivityKind, IssueActivity } from '@shared/domain'
 import { useProjects, useTimeline } from '../../api/hooks'
 import { invoke } from '../../api/client'
-import { EmptyState, Spinner } from '../../components/ui'
+import {
+  Badge,
+  Card,
+  EmptyState,
+  ScreenHeader,
+  SegmentedControl,
+  Spinner,
+  Toggle
+} from '../../components/ui'
+import { PairTabs } from '../../components/PairTabs'
+import { t } from '../../strings/ptBR'
 import { useIssueDetail } from '../../components/issueDetail'
 
-const periodOptions: Array<{ key: string; label: string; period: Period }> = [
-  { key: 'today', label: 'Hoje', period: { type: 'today' } },
-  { key: '7d', label: '7 dias', period: { type: '7d' } },
-  { key: '30d', label: '30 dias', period: { type: '30d' } },
-  { key: 'sprint', label: 'Sprint', period: { type: 'sprint' } }
+/**
+ * Faixa de abas do par "Filtros · Timeline" (item único na sidebar, handoff Tela C).
+ * Navegação de verdade — não estado local: a aba ativa é a rota atual.
+ */
+const periodOptions: Array<{ value: string; label: string; period: Period }> = [
+  { value: 'today', label: 'Hoje', period: { type: 'today' } },
+  { value: '7d', label: '7 dias', period: { type: '7d' } },
+  { value: '30d', label: '30 dias', period: { type: '30d' } },
+  { value: 'sprint', label: 'Sprint', period: { type: 'sprint' } }
 ]
 
+/**
+ * Cor por tipo de evento. `sprint_change` e `estimate_change` compartilham o
+ * teal: o roxo antigo brigava com o azul de marca das chaves de card.
+ */
 const kindMeta: Record<ActivityKind, { icon: typeof Zap; label: string; color: string }> = {
   created: { icon: Plus, label: 'criou', color: 'text-zinc-400' },
   status_change: {
@@ -51,7 +69,7 @@ const kindMeta: Record<ActivityKind, { icon: typeof Zap; label: string; color: s
   sprint_change: {
     icon: Zap,
     label: 'mudou sprint',
-    color: 'text-purple-400 light:text-purple-600'
+    color: 'text-teal-400 light:text-teal-600'
   },
   priority_change: {
     icon: Flag,
@@ -65,7 +83,7 @@ export default function Timeline(): React.JSX.Element {
   const [periodKey, setPeriodKey] = useState('7d')
   const [onlyMine, setOnlyMine] = useState(true)
   const [projectKey, setProjectKey] = useState<string>('')
-  const period = periodOptions.find((p) => p.key === periodKey)!.period
+  const period = periodOptions.find((p) => p.value === periodKey)!.period
 
   const { data, isLoading } = useTimeline(period, onlyMine, projectKey || undefined)
   const { data: projectsData } = useProjects()
@@ -74,11 +92,20 @@ export default function Timeline(): React.JSX.Element {
   const groups = useMemo(() => groupByDay(data?.activities ?? []), [data])
 
   return (
-    <div className="p-6">
-      <div className="mb-5 flex flex-wrap items-center gap-3">
-        <h2 className="mr-auto text-xl font-semibold text-zinc-100">Timeline</h2>
+    <div className="flex h-full flex-col">
+      <ScreenHeader title={t.nav.filtersTimeline} flush />
+      <PairTabs
+        tabs={[
+          { to: '/filtros', label: t.nav.filters },
+          { to: '/timeline', label: t.nav.timeline }
+        ]}
+      />
+      {/* barra de filtro da tela: fica abaixo das abas porque é controle de
+          conteúdo, não navegação (as abas trocam de rota) */}
+      <div className="flex shrink-0 items-center gap-2.5 border-b border-zinc-800 bg-zinc-950/60 px-6 py-2.5">
         <select
-          className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-300"
+          aria-label="Projeto"
+          className="rounded-md border border-zinc-700 bg-zinc-950/60 px-2.5 py-1 text-[12.5px] text-zinc-200"
           value={projectKey}
           onChange={(e) => setProjectKey(e.target.value)}
         >
@@ -89,48 +116,43 @@ export default function Timeline(): React.JSX.Element {
             </option>
           ))}
         </select>
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-400">
-          <input
-            type="checkbox"
-            className="accent-indigo-600"
-            checked={onlyMine}
-            onChange={(e) => setOnlyMine(e.target.checked)}
-          />
-          Somente minhas ações
-        </label>
-        <div className="flex rounded-lg border border-zinc-800 bg-zinc-900 p-0.5">
-          {periodOptions.map((p) => (
-            <button
-              key={p.key}
-              className={`rounded-md px-2.5 py-1 text-sm font-medium ${
-                periodKey === p.key
-                  ? 'bg-zinc-700 text-zinc-100'
-                  : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-              onClick={() => setPeriodKey(p.key)}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
+        <Toggle checked={onlyMine} onChange={setOnlyMine} aria-labelledby="timeline-only-mine" />
+        <span id="timeline-only-mine" className="text-[12.5px] text-zinc-200">
+          só meus cards
+        </span>
+        <SegmentedControl
+          className="ml-auto"
+          aria-label="Período"
+          options={periodOptions.map((p) => ({ value: p.value, label: p.label }))}
+          value={periodKey}
+          onChange={setPeriodKey}
+        />
       </div>
 
-      {isLoading && <Spinner className="text-zinc-500" />}
-      {!isLoading && groups.length === 0 && (
-        <EmptyState message="Nenhuma atividade no período selecionado." />
-      )}
+      <div className="min-h-0 flex-1 overflow-y-auto p-[18px_24px]">
+        {isLoading && <Spinner className="text-zinc-500" />}
+        {!isLoading && groups.length === 0 && (
+          <EmptyState message="Nenhuma atividade no período selecionado." />
+        )}
 
-      <div className="space-y-6">
-        {groups.map(({ day, items }) => (
-          <section key={day}>
-            <h3 className="mb-2 text-sm font-semibold text-zinc-400">{dayLabel(day)}</h3>
-            <div className="space-y-0.5 border-l border-zinc-800 pl-4">
+        <div className="flex max-w-[900px] flex-col gap-3.5">
+          {groups.map(({ day, items }) => (
+            <Card
+              key={day}
+              title={
+                <span className="flex items-center gap-2.5">
+                  {dayLabel(day)}
+                  <Badge color={isDayToday(day) ? 'brand' : 'zinc'}>{items.length}</Badge>
+                </span>
+              }
+              bodyClassName="px-4 py-0.5"
+            >
               {items.map((a) => (
                 <ActivityRow key={a.id} activity={a} showActor={!onlyMine} />
               ))}
-            </div>
-          </section>
-        ))}
+            </Card>
+          ))}
+        </div>
       </div>
     </div>
   )
@@ -145,43 +167,26 @@ function ActivityRow({
 }): React.JSX.Element {
   const meta = kindMeta[activity.kind]
   const Icon = meta.icon
+  const { trailing, detail } = activityText(activity)
   const { openIssue } = useIssueDetail()
   return (
     <button
-      className="group flex w-full items-start gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-zinc-800/60"
+      className="group flex w-full items-start gap-2.5 border-b border-zinc-800/60 py-2 text-left transition-colors last:border-0 hover:bg-zinc-800/40"
       onClick={() => openIssue(activity.issueKey)}
       title={activity.issueKey}
     >
-      <Icon size={15} className={`mt-0.5 shrink-0 ${meta.color}`} />
+      <Icon size={14} className={`mt-0.5 shrink-0 ${meta.color}`} />
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-baseline gap-x-1.5 text-sm">
+        {/* uma linha só: quem, o verbo, a chave e o complemento */}
+        <div className="truncate text-[13px] text-zinc-200">
           {showActor && (
-            <span className="font-medium text-zinc-300">{activity.actorName ?? '?'}</span>
+            <span className="font-semibold text-zinc-50">{activity.actorName ?? '?'} </span>
           )}
-          <span className="text-zinc-400">{meta.label}</span>
-          <span className="font-mono text-xs text-zinc-500">{activity.issueKey}</span>
-          {activity.kind === 'status_change' && (
-            <span className="text-zinc-400">
-              {activity.fromValue} → <span className="text-zinc-200">{activity.toValue}</span>
-            </span>
-          )}
-          {activity.kind === 'assignment' && (
-            <span className="text-zinc-400">para {activity.toValue ?? 'ninguém'}</span>
-          )}
-          {(activity.kind === 'priority_change' || activity.kind === 'estimate_change') && (
-            <span className="text-zinc-400">
-              {activity.fromValue ?? '—'} → {activity.toValue ?? '—'}
-            </span>
-          )}
+          {meta.label}{' '}
+          <span className="font-mono text-[11.5px] text-indigo-400">{activity.issueKey}</span>
+          {trailing && ` ${trailing}`}
         </div>
-        {activity.issueSummary && (
-          <div className="truncate text-xs text-zinc-500">{activity.issueSummary}</div>
-        )}
-        {activity.kind === 'comment' && activity.bodyText && (
-          <div className="mt-1 line-clamp-2 rounded bg-zinc-900 px-2 py-1 text-xs text-zinc-400">
-            {activity.bodyText}
-          </div>
-        )}
+        {detail && <div className="mt-0.5 truncate text-[11.5px] text-zinc-500">{detail}</div>}
       </div>
       <span
         role="button"
@@ -195,11 +200,38 @@ function ActivityRow({
       >
         <ExternalLink size={13} />
       </span>
-      <span className="shrink-0 text-xs text-zinc-600">
+      <span className="shrink-0 text-[11.5px] text-zinc-600">
         {format(new Date(activity.occurredAt), 'HH:mm')}
       </span>
     </button>
   )
+}
+
+/**
+ * Divide o texto do evento entre o fim da linha principal (`trailing`) e a
+ * linha de detalhe. O resumo do card cai no detalhe quando o complemento já
+ * ocupou a linha principal — assim nada some, mas a linha continua sendo uma só.
+ */
+function activityText(a: IssueActivity): { trailing: string | null; detail: string | null } {
+  const summary = a.issueSummary ?? null
+  switch (a.kind) {
+    case 'status_change':
+      return {
+        trailing: a.toValue ? `para ${a.toValue}` : null,
+        detail:
+          [a.fromValue ? `de ${a.fromValue}` : null, summary].filter(Boolean).join(' · ') || null
+      }
+    case 'assignment':
+      return { trailing: `para ${a.toValue ?? 'ninguém'}`, detail: summary }
+    case 'comment':
+      return { trailing: null, detail: a.bodyText ? `“${a.bodyText}”` : summary }
+    case 'sprint_change':
+    case 'priority_change':
+    case 'estimate_change':
+      return { trailing: summary, detail: `${a.fromValue ?? '—'} → ${a.toValue ?? '—'}` }
+    default:
+      return { trailing: summary, detail: null }
+  }
 }
 
 function groupByDay(activities: IssueActivity[]): Array<{ day: string; items: IssueActivity[] }> {
@@ -215,8 +247,17 @@ function groupByDay(activities: IssueActivity[]): Array<{ day: string; items: Is
     .map(([day, items]) => ({ day, items }))
 }
 
+/** meio-dia para não escorregar de dia por fuso na conversão */
+function dayDate(day: string): Date {
+  return new Date(`${day}T12:00:00`)
+}
+
+function isDayToday(day: string): boolean {
+  return isToday(dayDate(day))
+}
+
 function dayLabel(day: string): string {
-  const date = new Date(`${day}T12:00:00`)
+  const date = dayDate(day)
   if (isToday(date)) return 'Hoje'
   if (isYesterday(date)) return 'Ontem'
   return format(date, "EEEE, d 'de' MMMM", { locale: ptBR })

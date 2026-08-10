@@ -1,4 +1,4 @@
-import { JiraHttp } from './http'
+import { JiraAuthError, JiraHttp, JiraHttpError } from './http'
 import type { BoardTransition } from '../queries/board'
 import type {
   AdfNode,
@@ -27,6 +27,7 @@ import type {
   JiraSearchResponse,
   JiraStatus,
   JiraTransitionsResponse,
+  JiraUserRef,
   JiraWorklog,
   JiraWorklogsResponse
 } from './types'
@@ -93,6 +94,60 @@ export class JiraClient {
     }
   }
 
+  /**
+   * A issue existe e está visível para esta conta? GET mínimo na issue: o Jira
+   * responde 404 tanto para card excluído quanto para card sem permissão de
+   * leitura — os dois casos significam "não dá para trabalhar nele daqui".
+   * Erros que não sejam 404 propagam: com eles não se conclui nada.
+   */
+  async issueExists(issueKey: string): Promise<boolean> {
+    try {
+      await this.http.get<{ key: string }>(
+        `/rest/api/3/issue/${encodeURIComponent(issueKey)}?fields=summary`
+      )
+      return true
+    } catch (err) {
+      if (err instanceof JiraHttpError && !(err instanceof JiraAuthError) && err.status === 404) {
+        return false
+      }
+      throw err
+    }
+  }
+
+  /**
+   * Das keys informadas, quais a BUSCA do Jira não alcança mais.
+   *
+   * A pergunta certa é essa, e não "a issue existe?". O cache é populado pela
+   * busca JQL, então ele só deveria conter o que a busca devolve. Card que
+   * sumiu da busca — excluído, arquivado, movido para fora do escopo ou sem
+   * permissão — não tem como voltar a ser atualizado e vira fantasma.
+   *
+   * Perguntar por existência (bulkfetch/GET por key) não serve: card arquivado
+   * some da busca mas continua respondendo 200 quando buscado pela key, e por
+   * isso ficava no app para sempre.
+   *
+   * `key in (...)` não tem filtro de período: é pura pergunta de alcance.
+   * Lote de 80 para o JQL não estourar limite de tamanho.
+   */
+  async unreachableIssueKeys(issueKeys: string[]): Promise<string[]> {
+    const unreachable: string[] = []
+    for (let i = 0; i < issueKeys.length; i += 80) {
+      const batch = issueKeys.slice(i, i + 80)
+      const res = await this.http.post<{ issues?: Array<{ key?: string }> }>(
+        '/rest/api/3/search/jql',
+        { jql: `key in (${batch.join(',')})`, fields: ['summary'], maxResults: batch.length }
+      )
+      const found = new Set((res.issues ?? []).map((issue) => issue.key?.toUpperCase()))
+      // lote inteiro vazio é sintoma sistêmico (JQL recusada, permissão), não
+      // 80 cards sumidos de uma vez — ignora o lote em vez de apagar tudo
+      if (found.size === 0) continue
+      for (const key of batch) {
+        if (!found.has(key.toUpperCase())) unreachable.push(key)
+      }
+    }
+    return unreachable
+  }
+
   /** Changelogs em lote (até 1000 issues por request, paginado por token). */
   async bulkChangelogs(issueKeys: string[]): Promise<Map<string, JiraChangelogHistory[]>> {
     const result = new Map<string, JiraChangelogHistory[]>()
@@ -148,12 +203,21 @@ export class JiraClient {
     }
   }
 
-  /** Descrição da issue como ADF cru (null se vazia). */
-  async issueDescription(issueKey: string): Promise<AdfNode | null> {
-    const res = await this.http.get<{ fields?: { description?: AdfNode | null } }>(
-      `/rest/api/3/issue/${encodeURIComponent(issueKey)}?fields=description`
-    )
-    return res.fields?.description ?? null
+  /**
+   * Campos que a gaveta de detalhe lê ao vivo: descrição como ADF cru (null se
+   * vazia) e relator. O relator vem junto de graça (mesmo GET) e cobre os cards
+   * gravados antes da coluna `reporter_name`, que só é preenchida no sync.
+   */
+  async issueLiveFields(
+    issueKey: string
+  ): Promise<{ description: AdfNode | null; reporter: JiraUserRef | null }> {
+    const res = await this.http.get<{
+      fields?: { description?: AdfNode | null; reporter?: JiraUserRef | null }
+    }>(`/rest/api/3/issue/${encodeURIComponent(issueKey)}?fields=description,reporter`)
+    return {
+      description: res.fields?.description ?? null,
+      reporter: res.fields?.reporter ?? null
+    }
   }
 
   async issueComments(issueKey: string): Promise<JiraComment[]> {
@@ -314,16 +378,21 @@ export class JiraClient {
     })
   }
 
-  /** Configuração de colunas do board (nome + ids de status por coluna). */
+  /**
+   * Configuração de colunas do board (nome + ids de status + limite de WIP por
+   * coluna). `wipMax` vem de `max` só quando o board tem constraint configurada
+   * na coluna — a maioria não tem, e nesse caso é `null`.
+   */
   async boardConfiguration(
     boardId: number
-  ): Promise<{ columns: Array<{ name: string; statusIds: string[] }> }> {
+  ): Promise<{ columns: Array<{ name: string; statusIds: string[]; wipMax: number | null }> }> {
     const res = await this.http.get<JiraBoardConfiguration>(
       `/rest/agile/1.0/board/${boardId}/configuration`
     )
     const columns = (res.columnConfig?.columns ?? []).map((c) => ({
       name: c.name ?? '',
-      statusIds: (c.statuses ?? []).map((s) => s.id)
+      statusIds: (c.statuses ?? []).map((s) => s.id),
+      wipMax: c.max ?? null
     }))
     return { columns }
   }

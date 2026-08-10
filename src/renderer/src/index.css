@@ -1,7 +1,13 @@
 @import 'tailwindcss';
 
+/* Figtree empacotada (Electron roda offline — nunca CDN do Google Fonts) */
+@import '@fontsource-variable/figtree';
+
 /* variante para ajustes pontuais que só valem no tema claro (ex. light:text-indigo-600) */
 @custom-variant light (&:where([data-theme='light'], [data-theme='light'] *));
+
+/* densidade compacta: só padding/line-height (ex. py-2.5 compact:py-1.5) — nunca fonte/hierarquia */
+@custom-variant compact (&:where([data-density='compact'], [data-density='compact'] *));
 
 /*
  * Affordance de clique: o Tailwind 4 mudou o default de <button> para
@@ -30,13 +36,18 @@
 /*
  * Tema: o app foi construído dark-only com classes zinc-* literais. Em vez de
  * trocar ~700 usos por tokens semânticos, a escala zinc é redefinida sobre
- * variáveis (--tone-N) e o tema claro INVERTE a escala (950↔50, 900↔100, …,
- * com superfícies ajustadas à mão). Assim bg-zinc-900 é "superfície" nos dois
- * temas. `inline` faz as utilities emitirem var(--tone-N) em vez do valor.
+ * variáveis (--tone-N) e o tema claro troca os valores (não é a inversão
+ * matemática: são os tons reais do design system da Biud). Assim bg-zinc-900 é
+ * "superfície" nos dois temas. `inline` faz as utilities emitirem
+ * var(--tone-N) em vez do valor.
+ *
+ * O mesmo truque vale para a cor de marca: a escala indigo-* inteira é
+ * redefinida sobre --brand-N (azul #005EB8 do DS, clareado no tema escuro).
+ * Nenhuma tela usa hex — sempre as utilities, senão o tema claro quebra.
  */
 @theme inline {
   --font-sans:
-    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'Figtree Variable', Figtree, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
     sans-serif;
 
   --color-zinc-50: var(--tone-50);
@@ -50,45 +61,106 @@
   --color-zinc-800: var(--tone-800);
   --color-zinc-900: var(--tone-900);
   --color-zinc-950: var(--tone-950);
+
+  --color-indigo-50: var(--brand-50);
+  --color-indigo-100: var(--brand-100);
+  --color-indigo-200: var(--brand-200);
+  --color-indigo-300: var(--brand-300);
+  --color-indigo-400: var(--brand-400);
+  --color-indigo-500: var(--brand-500);
+  --color-indigo-600: var(--brand-600);
+  --color-indigo-700: var(--brand-700);
+  --color-indigo-800: var(--brand-800);
+  --color-indigo-900: var(--brand-900);
+  --color-indigo-950: var(--brand-950);
+
+  /* destaque secundário do DS (crachá de menções) */
+  --color-accent: var(--accent);
+
+  /* raios da direção "Cartões" */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+
+  /* sombra de 1px do cartão; painel in-flow (coluna do quadro, docado) não tem */
+  --shadow-card: var(--card-shadow);
 }
 
-/* escuro (default): escala zinc original do Tailwind */
+/* escuro (default) */
 :root {
-  --tone-50: #fafafa;
-  --tone-100: #f4f4f5;
-  --tone-200: #e4e4e7;
-  --tone-300: #d4d4d8;
-  --tone-400: #a1a1aa;
-  --tone-500: #71717a;
-  --tone-600: #52525b;
-  --tone-700: #3f3f46;
-  --tone-800: #27272a;
-  --tone-900: #18181b;
-  --tone-950: #09090b;
+  --tone-50: #f2f6fb;
+  --tone-100: #e9eff7;
+  --tone-200: #d7e0ec;
+  --tone-300: #c3cfdd;
+  --tone-400: #8497ad;
+  --tone-500: #6b7c92;
+  --tone-600: #566577;
+  --tone-700: #3a4a60;
+  --tone-800: #24303f;
+  --tone-900: #131b26;
+  --tone-950: #0a0f16;
+
+  /*
+   * Dois azuis de propósito: --brand-400 (#4c9aff) é texto/ícone sobre fundo
+   * escuro e reprovaria contraste como fundo de botão com text-white; por isso
+   * --brand-600 preenche e é mais escuro. Casa com o uso já existente no
+   * código: indigo-600 sempre preenche, indigo-400 sempre pinta texto/ícone.
+   */
+  --brand-50: #eef5ff;
+  --brand-100: #dceaff;
+  --brand-200: #c2ddff;
+  --brand-300: #8cc2ff;
+  --brand-400: #4c9aff;
+  --brand-500: #2f8ae8;
+  --brand-600: #0a6ad6;
+  --brand-700: #0b56a8;
+  --brand-800: #17365f;
+  --brand-900: #13294a;
+  --brand-950: #0e1c2e;
+
+  --accent: #f2618f;
 
   /* cores fixas dos gráficos (SVG usa hex, não classes) */
-  --chart-accent: #818cf8;
-  --chart-muted: #71717a;
+  --chart-accent: #4c9aff;
+  --chart-muted: #6b7c92;
+
+  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
 
   color-scheme: dark;
 }
 
-/* claro: escala invertida; 950 (fundo) e 900 (superfície) ajustados à mão */
+/* claro: valores reais do design system (não é a inversão matemática) */
 :root[data-theme='light'] {
-  --tone-50: #09090b;
-  --tone-100: #18181b;
-  --tone-200: #27272a;
-  --tone-300: #3f3f46;
-  --tone-400: #52525b;
-  --tone-500: #71717a;
-  --tone-600: #a1a1aa;
-  --tone-700: #d4d4d8;
-  --tone-800: #e4e4e7;
+  --tone-50: #0b1524;
+  --tone-100: #141e2e;
+  --tone-200: #1e293b;
+  --tone-300: #45566a;
+  --tone-400: #5f6f81;
+  --tone-500: #8a99ab;
+  --tone-600: #a3b0c0;
+  --tone-700: #cbd6e2;
+  --tone-800: #e2e8f0;
   --tone-900: #ffffff;
-  --tone-950: #f4f4f5;
+  --tone-950: #f5f7fa;
 
-  --chart-accent: #4f46e5;
-  --chart-muted: #a1a1aa;
+  --brand-50: #f4f8fd;
+  --brand-100: #e8f1fb;
+  --brand-200: #cfe3f7;
+  --brand-300: #4c9aff;
+  --brand-400: #005eb8;
+  --brand-500: #0a6ad6;
+  --brand-600: #005eb8;
+  --brand-700: #004a93;
+  --brand-800: #c3ddf8;
+  --brand-900: #dbeafc;
+  --brand-950: #eaf2fb;
+
+  --accent: #d6336c;
+
+  --chart-accent: #005eb8;
+  --chart-muted: #8a99ab;
+
+  --card-shadow: 0 1px 3px rgba(16, 24, 40, 0.07), 0 1px 2px rgba(16, 24, 40, 0.04);
 
   color-scheme: light;
 }

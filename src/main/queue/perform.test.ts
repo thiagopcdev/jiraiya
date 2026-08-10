@@ -56,6 +56,7 @@ function insertIssue(db: Database.Database, key: string): void {
     assigneeAccountId: 'acc-1',
     assigneeName: 'Eu',
     reporterAccountId: 'acc-1',
+    reporterName: null,
     storyPoints: 5,
     sprintJiraId: null,
     labels: [],

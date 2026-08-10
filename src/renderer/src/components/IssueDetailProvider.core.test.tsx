@@ -42,7 +42,9 @@ describe('IssueDetailProvider — núcleo (abrir/fechar/navegação)', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText('Este card ainda não foi sincronizado localmente.')
+        screen.getByText(
+          'Este card não está aqui: ainda não sincronizou ou não existe mais no Jira.'
+        )
       ).toBeInTheDocument()
     )
     const openButtons = screen.getAllByRole('button', { name: 'Abrir no Jira' })
@@ -131,6 +133,27 @@ describe('IssueDetailProvider — núcleo (abrir/fechar/navegação)', () => {
 
     fireEvent.keyDown(window, { key: 'Escape' })
     await waitFor(() => expect(screen.queryByText('Card pai')).not.toBeInTheDocument())
+  })
+
+  it('mostra o relator do card', async () => {
+    installMockApi(baseHandlers(makeIssue({ reporterAccountId: 'acc-1', reporterName: 'Ana' })))
+    renderWithProviders(<OpenIssueButton issueKey="BT-1" />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'abrir BT-1' }))
+
+    await waitFor(() => expect(screen.getByText('Relator: Ana')).toBeInTheDocument())
+  })
+
+  it('sem relator local, cai no relator ao vivo da descrição', async () => {
+    installMockApi({
+      ...baseHandlers(makeIssue({ reporterAccountId: 'acc-1' })),
+      'issues:description': () => ({ description: null, markdown: null, reporterName: 'Bruno' })
+    })
+    renderWithProviders(<OpenIssueButton issueKey="BT-1" />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'abrir BT-1' }))
+
+    await waitFor(() => expect(screen.getByText('Relator: Bruno')).toBeInTheDocument())
   })
 
   it('push:open-issue abre a gaveta automaticamente', async () => {

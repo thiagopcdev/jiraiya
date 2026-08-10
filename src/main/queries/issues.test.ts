@@ -3,7 +3,7 @@ import Database from 'better-sqlite3'
 import { runMigrations } from '../db/migrations'
 import { upsertIssue, type IssueUpsert } from '../db/repos/issue'
 import { insertActivities } from '../db/repos/activity'
-import { queryIssues, searchIssues } from './issues'
+import { listInProgressStatuses, normalizeStatus, queryIssues, searchIssues } from './issues'
 
 const ME = 'acc-me'
 // dinâmico: o bucket 'stalled' compara com o relógio real (Date.now())
@@ -24,6 +24,7 @@ function baseIssue(key: string, over: Partial<IssueUpsert> = {}): IssueUpsert {
     assigneeAccountId: ME,
     assigneeName: 'Eu',
     reporterAccountId: 'acc-other',
+    reporterName: null,
     storyPoints: 3,
     sprintJiraId: null,
     labels: [],
@@ -52,6 +53,96 @@ describe('queryIssues buckets', () => {
     db.prepare(
       `INSERT INTO workspace (site_url, email, account_id, created_at) VALUES ('https://x.atlassian.net', 'e', ?, 'now')`
     ).run(ME)
+  })
+
+  describe('inProgress e o recorte por status', () => {
+    /** O fluxo real do usuário: a categoria 'indeterminate' do Jira junta tudo. */
+    const semearFluxo = (): void => {
+      upsertIssue(db, 1, baseIssue('BT-10', { status: 'Em andamento' }))
+      upsertIssue(db, 1, baseIssue('BT-11', { status: 'Pronto para Teste' }))
+      upsertIssue(db, 1, baseIssue('BT-12', { status: 'Code Review' }))
+      // mesmo status, grafia diferente entre projetos
+      upsertIssue(db, 1, baseIssue('BT-13', { status: 'AGUARDANDO DEPLOY HMG' }))
+      upsertIssue(db, 1, baseIssue('BT-14', { status: 'Aguardando Deploy HMG' }))
+      // fora da categoria: nunca entra, com ou sem filtro
+      upsertIssue(db, 1, baseIssue('BT-15', { status: 'To Do', statusCategory: 'new' }))
+    }
+
+    it('sem escolha, mantém o comportamento histórico: toda a categoria', () => {
+      semearFluxo()
+      const rows = queryIssues(ctx(), { ...range, bucket: 'inProgress', stalledDays: 3 })
+      expect(rows.map((i) => i.key).sort()).toEqual(['BT-10', 'BT-11', 'BT-12', 'BT-13', 'BT-14'])
+    })
+
+    it('lista vazia é tratada como "sem filtro", não como "nada"', () => {
+      semearFluxo()
+      const rows = queryIssues(ctx(), {
+        ...range,
+        bucket: 'inProgress',
+        stalledDays: 3,
+        inProgressStatuses: []
+      })
+      expect(rows).toHaveLength(5)
+    })
+
+    it('com escolha, devolve só os status escolhidos', () => {
+      semearFluxo()
+      const rows = queryIssues(ctx(), {
+        ...range,
+        bucket: 'inProgress',
+        stalledDays: 3,
+        inProgressStatuses: ['Em andamento']
+      })
+      expect(rows.map((i) => i.key)).toEqual(['BT-10'])
+    })
+
+    it('casa sem acento e sem caixa — pega as duas grafias de uma vez', () => {
+      semearFluxo()
+      const rows = queryIssues(ctx(), {
+        ...range,
+        bucket: 'inProgress',
+        stalledDays: 3,
+        inProgressStatuses: ['aguardando deploy hmg']
+      })
+      expect(rows.map((i) => i.key).sort()).toEqual(['BT-13', 'BT-14'])
+    })
+
+    it('stalled segue a mesma definição de "em curso"', () => {
+      const velho = new Date(now.getTime() - 30 * 86400000).toISOString()
+      upsertIssue(db, 1, baseIssue('BT-20', { status: 'Em andamento', updatedAt: velho }))
+      upsertIssue(db, 1, baseIssue('BT-21', { status: 'Pronto para Teste', updatedAt: velho }))
+
+      const semFiltro = queryIssues(ctx(), { ...range, bucket: 'stalled', stalledDays: 3 })
+      expect(semFiltro.map((i) => i.key).sort()).toEqual(['BT-20', 'BT-21'])
+
+      const comFiltro = queryIssues(ctx(), {
+        ...range,
+        bucket: 'stalled',
+        stalledDays: 3,
+        inProgressStatuses: ['Em andamento']
+      })
+      expect(comFiltro.map((i) => i.key)).toEqual(['BT-20'])
+    })
+
+    it('listInProgressStatuses agrupa os status existentes, com o que é meu', () => {
+      semearFluxo()
+      upsertIssue(
+        db,
+        1,
+        baseIssue('BT-16', { status: 'Em andamento', assigneeAccountId: 'acc-outro' })
+      )
+
+      const statuses = listInProgressStatuses(ctx())
+      const emAndamento = statuses.find((s) => s.status === 'Em andamento')
+      expect(emAndamento).toEqual({ status: 'Em andamento', total: 2, mine: 1 })
+      // status fora da categoria não aparece na escolha
+      expect(statuses.some((s) => s.status === 'To Do')).toBe(false)
+    })
+
+    it('normalizeStatus tira acento, caixa e espaço das pontas', () => {
+      expect(normalizeStatus('  Aguardando Deploy HMG ')).toBe('aguardando deploy hmg')
+      expect(normalizeStatus('Análise Técnica')).toBe('analise tecnica')
+    })
   })
 
   it('moved: só issues com status_change meu no período', () => {

@@ -9,6 +9,7 @@ const { makeTestContext, seedIssue } = await import('../../testing/handlersKit')
 const { registerIssueHandlers, resolveWithSprint } = await import('./issues')
 const { upsertSprints } = await import('../../db/repos/catalog')
 const { insertActivities } = await import('../../db/repos/activity')
+const { setPrefs } = await import('../../db/repos/misc')
 
 type Ctx = ReturnType<typeof makeTestContext>
 type Fake = Record<string, unknown>
@@ -461,5 +462,99 @@ describe('resolveWithSprint', () => {
     const t = setup()
     const range = resolveWithSprint(t.ctx, 1, { type: 'today' })
     expect(range.start < range.end).toBe(true)
+  })
+})
+
+describe('issues:inProgressStatuses', () => {
+  it('lista os status em progresso do workspace, separando o que é meu', async () => {
+    const t = setup()
+    seedIssue(t.db, 'ABC-1', {
+      assignee_account_id: 'me-1',
+      status: 'Em andamento',
+      status_category: 'indeterminate'
+    })
+    seedIssue(t.db, 'ABC-2', {
+      assignee_account_id: 'outro',
+      status: 'Em andamento',
+      status_category: 'indeterminate'
+    })
+    seedIssue(t.db, 'ABC-3', {
+      assignee_account_id: 'me-1',
+      status: 'Pronto para Teste',
+      status_category: 'indeterminate'
+    })
+    seedIssue(t.db, 'ABC-4', {
+      assignee_account_id: 'me-1',
+      status: 'To Do',
+      status_category: 'new'
+    })
+
+    const data = ok(await invokeHandler('issues:inProgressStatuses', {}))
+
+    expect(data.statuses).toEqual([
+      { status: 'Em andamento', total: 2, mine: 1 },
+      { status: 'Pronto para Teste', total: 1, mine: 1 }
+    ])
+  })
+})
+
+describe('issues:query — recorte de "em andamento" pela preferência', () => {
+  it('no padrão, só a coluna "Em andamento" conta como em curso', async () => {
+    const t = setup()
+    seedIssue(t.db, 'ABC-1', {
+      assignee_account_id: 'me-1',
+      status: 'Em andamento',
+      status_category: 'indeterminate'
+    })
+    seedIssue(t.db, 'ABC-2', {
+      assignee_account_id: 'me-1',
+      status: 'Pronto para Teste',
+      status_category: 'indeterminate'
+    })
+
+    const data = ok(
+      await invokeHandler('issues:query', { period: { type: '7d' }, bucket: 'inProgress' })
+    )
+    expect(data.issues.map((i) => i.key)).toEqual(['ABC-1'])
+  })
+
+  it('marcando todos (lista vazia), volta a valer a categoria inteira do Jira', async () => {
+    const t = setup()
+    seedIssue(t.db, 'ABC-1', {
+      assignee_account_id: 'me-1',
+      status: 'Em andamento',
+      status_category: 'indeterminate'
+    })
+    seedIssue(t.db, 'ABC-2', {
+      assignee_account_id: 'me-1',
+      status: 'Pronto para Teste',
+      status_category: 'indeterminate'
+    })
+    setPrefs(t.db, { inProgressStatuses: [] })
+
+    const data = ok(
+      await invokeHandler('issues:query', { period: { type: '7d' }, bucket: 'inProgress' })
+    )
+    expect(data.issues.map((i) => i.key).sort()).toEqual(['ABC-1', 'ABC-2'])
+  })
+
+  it('com a preferência gravada, só os status escolhidos entram', async () => {
+    const t = setup()
+    seedIssue(t.db, 'ABC-1', {
+      assignee_account_id: 'me-1',
+      status: 'Em andamento',
+      status_category: 'indeterminate'
+    })
+    seedIssue(t.db, 'ABC-2', {
+      assignee_account_id: 'me-1',
+      status: 'Pronto para Teste',
+      status_category: 'indeterminate'
+    })
+    setPrefs(t.db, { inProgressStatuses: ['Em andamento'] })
+
+    const data = ok(
+      await invokeHandler('issues:query', { period: { type: '7d' }, bucket: 'inProgress' })
+    )
+    expect(data.issues.map((i) => i.key)).toEqual(['ABC-1'])
   })
 })

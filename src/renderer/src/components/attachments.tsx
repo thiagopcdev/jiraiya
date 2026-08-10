@@ -57,13 +57,13 @@ function AttachmentImage({
   })
 
   if (isLoading) {
-    return <div className="h-24 w-24 animate-pulse rounded-md bg-zinc-900" />
+    return <div className="h-24 w-24 animate-pulse rounded-md bg-zinc-800/60" />
   }
 
   if (isError || !data?.dataUri) {
     return (
       <div
-        className="flex h-24 w-24 flex-col items-center justify-center gap-1 rounded-md border border-zinc-800 bg-zinc-900/60 p-1.5 text-center"
+        className="flex h-24 w-24 flex-col items-center justify-center gap-1 rounded-md border border-zinc-800 bg-zinc-950/60 p-1.5 text-center"
         title={filename}
       >
         <FileImage size={18} className="text-zinc-600" />
@@ -250,7 +250,7 @@ function AttachmentRow({ attachment }: { attachment: Attachment }): React.JSX.El
   }
 
   return (
-    <div className="rounded-md border border-zinc-800 bg-zinc-900/40 px-2 py-1.5 text-sm">
+    <div className="rounded-md border border-zinc-800 bg-zinc-950/40 px-2 py-1.5 text-sm">
       <div className="flex items-center gap-2">
         <Paperclip size={14} className="shrink-0 text-zinc-500" />
         <span className="min-w-0 flex-1 truncate text-zinc-300" title={attachment.filename}>
@@ -279,7 +279,11 @@ function AttachmentRow({ attachment }: { attachment: Attachment }): React.JSX.El
         </div>
       </div>
       {(savedMsg || error) && (
-        <p className={`mt-1 text-xs ${error ? 'text-amber-400' : 'text-green-400'}`}>
+        <p
+          className={`mt-1 text-xs ${
+            error ? 'text-amber-400 light:text-amber-600' : 'text-green-400 light:text-green-600'
+          }`}
+        >
           {error ?? savedMsg}
         </p>
       )}

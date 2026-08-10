@@ -2,6 +2,8 @@ import Database from 'better-sqlite3'
 import type { PushChannel, PushEvents } from '@shared/ipc-contract'
 import { runMigrations } from '../db/migrations'
 import { AppContext } from '../appContext'
+import { setIssueGoneResolver } from '../ipc/registry'
+import { makeIssueGoneResolver } from '../issues/gone'
 import type { JiraClient } from '../jira/client'
 
 /**
@@ -37,6 +39,10 @@ export function makeTestContext(opts: { client?: Partial<JiraClient> | null } = 
       pushes.push({ channel, payload }),
     scheduler: { trigger: async () => true, reschedule: () => {}, stop: () => {} }
   })
+
+  // mesmo tratamento de card excluído da produção (o resolver é global do
+  // registry; cada contexto de teste reinstala o seu)
+  setIssueGoneResolver(makeIssueGoneResolver(ctx))
 
   return {
     ctx,

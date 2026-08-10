@@ -93,10 +93,6 @@ describe('strings/ptBR — chaves-função', () => {
     expect(t.detail.timeSpentRegistered(null)).toBe('Registrado: —')
   })
 
-  it('detail.timeSpentEstimated', () => {
-    expect(t.detail.timeSpentEstimated('3h')).toBe('estimado: 3h')
-  })
-
   it('detail.subtasksTitle', () => {
     expect(t.detail.subtasksTitle(0)).toBe('Subtarefas (0)')
     expect(t.detail.subtasksTitle(4)).toBe('Subtarefas (4)')

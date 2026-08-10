@@ -153,6 +153,12 @@ export const ipcContract = {
     req: z.object({ id: z.number() }),
     res: undefined as unknown as { ok: true }
   },
+  'issues:inProgressStatuses': {
+    req: z.object({}),
+    res: undefined as unknown as {
+      statuses: Array<{ status: string; total: number; mine: number }>
+    }
+  },
   'prefs:get': {
     req: z.object({}),
     res: undefined as unknown as Prefs
@@ -162,6 +168,7 @@ export const ipcContract = {
       syncIntervalMinutes: z.number().int().min(5).max(120).optional(),
       backfillDays: z.number().int().min(7).max(180).optional(),
       stalledDays: z.number().int().min(1).max(30).optional(),
+      inProgressStatuses: z.array(z.string().trim().min(1)).max(60).optional(),
       syncMode: z.enum(['project', 'personal']).optional(),
       notifyCriticalAlerts: z.boolean().optional(),
       notifyAssignedToMe: z.boolean().optional(),
@@ -181,6 +188,7 @@ export const ipcContract = {
       prIntegration: z.boolean().optional(),
       prSearchScope: z.string().trim().max(200).optional(),
       theme: z.enum(['dark', 'light', 'system']).optional(),
+      density: z.enum(['comfortable', 'compact']).optional(),
       worklogReminder: z.boolean().optional(),
       worklogReminderTime: z
         .string()
@@ -625,6 +633,8 @@ export const ipcContract = {
       description: unknown | null
       /** descrição convertida para markdown (para o editor preservar a formatação) */
       markdown: string | null
+      /** relator ao vivo — cobre cards cujo reporter_name local ainda está vazio */
+      reporterName: string | null
     }
   },
   'issues:comments': {
@@ -683,6 +693,8 @@ export const ipcContract = {
         issues: Issue[]
         /** kanban com Backlog habilitado: o Jira esconde esta coluna do quadro (ausente = não é backlog) */
         isBacklog?: boolean
+        /** limite de WIP da coluna no Jira; ausente/null = board sem constraint configurada (caso comum) */
+        wipMax?: number | null
       }>
       /** cards do escopo cujo status não está em nenhuma coluna */
       unmapped: Issue[]
@@ -978,6 +990,8 @@ export interface PushEvents {
   'push:update-progress': { percent: number }
   /** fila offline mudou (enfileirou, drenou, falhou, descartou) */
   'push:queue-changed': { pending: number; failed: number }
+  /** card não existe mais no Jira e saiu do cache local (excluído ou sem acesso) */
+  'push:issue-gone': { key: string }
 }
 export type PushChannel = keyof PushEvents
 
@@ -991,7 +1005,8 @@ export const PUSH_CHANNELS: PushChannel[] = [
   'push:briefing-ready',
   'push:open-issue',
   'push:update-progress',
-  'push:queue-changed'
+  'push:queue-changed',
+  'push:issue-gone'
 ]
 
 /** Superfície exposta no preload como window.api */

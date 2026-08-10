@@ -48,7 +48,8 @@ export default function TimerWidget(): React.JSX.Element | null {
   }
 
   return (
-    <div className="fixed right-4 bottom-4 z-50 flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900/95 px-3 py-2 text-sm shadow-lg backdrop-blur">
+    // superfície sólida: o /95 com blur sobre a base azul-ardósia suja a cor
+    <div className="fixed right-4 bottom-4 z-50 flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900 px-3 py-2 text-[12.5px] shadow-2xl">
       <Timer
         size={15}
         className={
@@ -57,7 +58,7 @@ export default function TimerWidget(): React.JSX.Element | null {
       />
       <button
         type="button"
-        className="font-medium text-zinc-200 hover:underline"
+        className="font-mono font-medium text-indigo-400 hover:underline light:text-indigo-600"
         onClick={() => openIssue(issueKey)}
       >
         {issueKey}

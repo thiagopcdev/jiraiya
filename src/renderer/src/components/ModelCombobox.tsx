@@ -11,12 +11,15 @@ interface ModelOption {
  * Sem chave configurada não há lista — o hint abaixo do input orienta a digitar o id.
  */
 export function ModelCombobox({
+  id,
   value,
   onChange,
   models,
   hasKey,
   loading = false
 }: {
+  /** liga o input ao <label> da linha de configuração que o hospeda */
+  id?: string
   value: string
   onChange: (id: string) => void
   models: ModelOption[]
@@ -67,7 +70,8 @@ export function ModelCombobox({
   return (
     <div ref={containerRef} className="relative">
       <input
-        className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200 outline-none focus:border-indigo-500"
+        id={id}
+        className="w-full rounded-md border border-zinc-700 bg-zinc-950/60 px-2.5 py-1 text-[12.5px] text-zinc-200 outline-none focus:border-indigo-500"
         placeholder="id do modelo (ex.: anthropic/claude-3.5-sonnet)"
         value={text}
         onFocus={() => setOpen(true)}
@@ -86,14 +90,16 @@ export function ModelCombobox({
         onBlur={() => commit(text)}
       />
       {open && (loading || filtered.length > 0) && (
-        <div className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-zinc-700 bg-zinc-900 shadow-lg">
-          {loading && <div className="px-2 py-1.5 text-xs text-zinc-500">Carregando…</div>}
+        // z-20: o popover fica dentro de um Card (que de propósito não tem
+        // overflow-hidden), mas precisa passar por cima das linhas seguintes
+        <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-zinc-700 bg-zinc-900 shadow-card">
+          {loading && <div className="px-2.5 py-1.5 text-[11.5px] text-zinc-500">Carregando…</div>}
           {!loading &&
             filtered.map((m) => (
               <button
                 key={m.id}
                 type="button"
-                className="block w-full truncate px-2 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800"
+                className="block w-full truncate px-2.5 py-1.5 text-left text-[11.5px] text-zinc-300 hover:bg-zinc-800"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => select(m)}
                 title={m.id}
@@ -104,7 +110,7 @@ export function ModelCombobox({
         </div>
       )}
       {!hasKey && (
-        <p className="mt-1 text-xs text-zinc-500">
+        <p className="mt-1 text-[11.5px] text-zinc-500">
           Salve a chave para listar modelos; você ainda pode digitar um id.
         </p>
       )}

@@ -113,17 +113,40 @@ function parseBlocks(text: string): Block[] {
   return blocks
 }
 
+/**
+ * Escalas de texto do markdown. `chat` é a resposta longa da IA em Perguntar:
+ * 13.5px com entrelinha 1.65, a medida de leitura do handoff — os comentários da
+ * gaveta continuam no `default` de 14px.
+ */
+const variants = {
+  default: {
+    heading: 'text-sm font-semibold text-zinc-200',
+    body: 'text-sm text-zinc-300'
+  },
+  chat: {
+    heading: 'text-[13.5px] font-bold text-zinc-50',
+    body: 'text-[13.5px] leading-[1.65] text-zinc-300'
+  }
+}
+
 /** Markdown leve sem lib externa: headings, listas, negrito e keys de issue clicáveis. */
-export function MarkdownLite({ text }: { text: string }): React.JSX.Element {
+export function MarkdownLite({
+  text,
+  variant = 'default'
+}: {
+  text: string
+  variant?: keyof typeof variants
+}): React.JSX.Element {
   const { openIssue } = useIssueDetail()
   const blocks = parseBlocks(text)
+  const style = variants[variant]
 
   return (
     <div className="space-y-2">
       {blocks.map((block, i) => {
         if (block.type === 'heading') {
           return (
-            <h4 key={i} className="text-sm font-semibold text-zinc-200">
+            <h4 key={i} className={style.heading}>
               {renderInline(block.text, `h${i}`, openIssue)}
             </h4>
           )
@@ -132,7 +155,7 @@ export function MarkdownLite({ text }: { text: string }): React.JSX.Element {
           return (
             <ul key={i} className="list-disc space-y-1 pl-5">
               {block.items.map((item, j) => (
-                <li key={j} className="text-sm text-zinc-300">
+                <li key={j} className={style.body}>
                   {renderInline(item, `l${i}-${j}`, openIssue)}
                 </li>
               ))}
@@ -140,7 +163,7 @@ export function MarkdownLite({ text }: { text: string }): React.JSX.Element {
           )
         }
         return (
-          <p key={i} className="text-sm whitespace-pre-wrap text-zinc-300">
+          <p key={i} className={`whitespace-pre-wrap ${style.body}`}>
             {block.lines.map((line, j) => (
               <span key={j}>
                 {j > 0 && <br />}

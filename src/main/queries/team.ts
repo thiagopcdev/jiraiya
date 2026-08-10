@@ -62,7 +62,8 @@ export function buildTeamSummary(
   db: Database.Database,
   workspace: { id: number; account_id: string; site_url: string },
   range: { start: string; end: string },
-  stalledDays: number
+  stalledDays: number,
+  inProgressStatuses?: string[]
 ): TeamMemberSummary[] {
   const members = discoverMembers(db, workspace.id, range)
   const lastActivity = lastActivityPerIssue(db, workspace.id)
@@ -75,7 +76,7 @@ export function buildTeamSummary(
       accountId: member.accountId,
       siteUrl: workspace.site_url
     }
-    const common = { start: range.start, end: range.end, stalledDays }
+    const common = { start: range.start, end: range.end, stalledDays, inProgressStatuses }
 
     const inProgress = queryIssues(ctx, { ...common, bucket: 'inProgress' })
     const done = queryIssues(ctx, { ...common, bucket: 'done' })

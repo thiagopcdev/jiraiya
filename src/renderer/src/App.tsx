@@ -3,6 +3,7 @@ import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useAuthStatus, usePrefs } from './api/hooks'
 import { applyThemePref } from './lib/theme'
+import { applyDensityPref } from './lib/density'
 import { Spinner } from './components/ui'
 import Shell from './components/Shell'
 import { IssueDetailProvider } from './components/IssueDetailProvider'
@@ -30,11 +31,17 @@ const queryClient = new QueryClient({
   }
 })
 
-/** Mantém o data-theme do <html> em dia com a pref do banco (o boot usa o espelho local). */
+/**
+ * Mantém data-theme e data-density do <html> em dia com a pref do banco
+ * (o boot usa o espelho local em localStorage antes deste efeito rodar).
+ */
 function ThemeSync(): null {
   const { data } = usePrefs()
   useEffect(() => {
     if (data) applyThemePref(data.theme)
+  }, [data])
+  useEffect(() => {
+    if (data) applyDensityPref(data.density)
   }, [data])
   return null
 }

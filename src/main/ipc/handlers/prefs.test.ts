@@ -72,6 +72,16 @@ describe('prefs:get / prefs:set', () => {
     expect(win.calls).toEqual(['#f4f4f5'])
   })
 
+  it('prefs:set com density persiste e sobrevive ao round-trip do prefs:get', async () => {
+    const res = await invokeHandler('prefs:set', { density: 'compact' })
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    expect(res.data.density).toBe('compact')
+
+    const again = await invokeHandler('prefs:get', {})
+    expect(again.ok && again.data.density).toBe('compact')
+  })
+
   it('payload fora do range → INVALID_PAYLOAD', async () => {
     const res = await invokeHandler('prefs:set', { stalledDays: 999 })
     expect(res.ok).toBe(false)

@@ -24,6 +24,7 @@ function issue(key: string, over: Partial<IssueUpsert> = {}): IssueUpsert {
     assigneeAccountId: ME,
     assigneeName: 'Eu',
     reporterAccountId: ME,
+    reporterName: null,
     storyPoints: 3,
     sprintJiraId: null,
     labels: [],
