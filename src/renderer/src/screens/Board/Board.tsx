@@ -8,6 +8,7 @@ import { useIssueDetail } from '../../components/issueDetail'
 import { useOpenIssueKey } from '../../components/IssueDetailProvider'
 import { Badge, EmptyState, ScreenHeader, Spinner } from '../../components/ui'
 import { t } from '../../strings/ptBR'
+import BoardScrollMinimap from './BoardScrollMinimap'
 import { getSessionBoardId, setSessionBoardId } from './boardSession'
 
 type BoardData = IpcResponse<'board:view'>
@@ -54,6 +55,7 @@ export default function Board(): React.JSX.Element {
   const [moveError, setMoveError] = useState<string | null>(null)
   const [dragOverCol, setDragOverCol] = useState<string | null>(null)
   const didDragRef = useRef(false)
+  const columnsRef = useRef<HTMLDivElement>(null)
   const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const queryClient = useQueryClient()
@@ -353,7 +355,7 @@ export default function Board(): React.JSX.Element {
       <div className="flex min-h-0 flex-1">
         {/* p-4 (16px) não é decoração: 1360 − 216 (nav) − 380 (painel) − 32
             (este padding) − 24 (gaps) = 708 = exatamente 3 colunas de 236 */}
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden p-4">
+        <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden p-4">
           {data.columnsSource === 'fallback' && (
             <div className="mb-3 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs text-zinc-500">
               {t.board.fallbackBanner}
@@ -369,7 +371,7 @@ export default function Board(): React.JSX.Element {
           {showNoActiveSprint ? (
             <EmptyState message={t.board.noActiveSprint} />
           ) : (
-            <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto">
+            <div ref={columnsRef} className="flex min-h-0 flex-1 gap-3 overflow-x-auto">
               {data.columns.map((col) => {
                 const issues = filterIssues(col.issues)
                 const sumPoints = issues.reduce((sum, i) => sum + (i.storyPoints ?? 0), 0)
@@ -410,6 +412,14 @@ export default function Board(): React.JSX.Element {
                 />
               )}
             </div>
+          )}
+
+          {/* avisa que há colunas fora do campo de visão (e navega entre elas) */}
+          {!showNoActiveSprint && (
+            <BoardScrollMinimap
+              scrollRef={columnsRef}
+              revision={`${data.columns.map((c) => c.name).join('|')}#${unmappedFiltered.length > 0}`}
+            />
           )}
         </div>
         <DockedPanel />

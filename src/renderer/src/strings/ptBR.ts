@@ -246,6 +246,8 @@ export const t = {
       [board, sprint, `${cards} card${cards === 1 ? '' : 's'}`, `${pointsLeft} sp restantes`]
         .filter(Boolean)
         .join(' · '),
+    /** rótulo do indicador flutuante de rolagem horizontal das colunas */
+    scrollHint: 'Rolagem horizontal do quadro',
     wipLimit: (current: number, limit: number) => `${current}/${limit}`,
     columnSummary: (count: number, points: number) => `${count}·${points}sp`
   },
