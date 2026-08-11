@@ -74,6 +74,8 @@ export const t = {
     syncNow: 'Sincronizar',
     syncing: 'Sincronizando…',
     lastSync: (ago: string) => `Sincronizado ${ago}`,
+    /** `until` já vem formatado pelo compactUntil: "em 6 min", "a qualquer momento" */
+    nextSync: (until: string) => `Próxima sincronização ${until}`,
     never: 'Nunca sincronizado',
     phases: {
       issues: 'Buscando issues…',

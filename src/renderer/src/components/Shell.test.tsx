@@ -11,7 +11,13 @@ beforeEach(() => localStorage.clear())
 
 function baseHandlers(overrides: MockHandlers = {}): MockHandlers {
   return {
-    'sync:status': () => ({ running: false, lastSuccessAt: null, lastError: null, progress: null }),
+    'sync:status': () => ({
+      running: false,
+      lastSuccessAt: null,
+      lastError: null,
+      progress: null,
+      nextRunAt: null
+    }),
     'alerts:list': () => ({ alerts: [] }),
     'mentions:list': () => ({ mentions: [], unreadCount: 0 }),
     'update:check': () => ({
@@ -215,7 +221,8 @@ describe('Shell', () => {
           running: true,
           lastSuccessAt: null,
           lastError: null,
-          progress: { phase: 'issues', done: 1, total: null }
+          progress: { phase: 'issues', done: 1, total: null },
+          nextRunAt: null
         })
       })
     )
@@ -233,7 +240,8 @@ describe('Shell', () => {
           running: false,
           lastSuccessAt: new Date().toISOString(),
           lastError: null,
-          progress: null
+          progress: null,
+          nextRunAt: null
         })
       })
     )
@@ -245,6 +253,46 @@ describe('Shell', () => {
     )
   })
 
+  it('com próximo sync agendado, o rodapé mostra "há X · em Y" e explica no title', async () => {
+    installMockApi(
+      baseHandlers({
+        'sync:status': () => ({
+          running: false,
+          lastSuccessAt: new Date().toISOString(),
+          lastError: null,
+          progress: null,
+          // 5min30s: em 6min exatos a contagem fica na fronteira e alterna
+          nextRunAt: new Date(Date.now() + 5 * 60_000 + 30_000).toISOString()
+        })
+      })
+    )
+    renderWithProviders(<Shell />)
+
+    await waitFor(() => expect(screen.getByText('agora · em 5 min')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'Sincronizar' })).toHaveAttribute(
+      'title',
+      'Sincronizado agora\nPróxima sincronização em 5 min'
+    )
+  })
+
+  it('sync rodando não mostra contagem: o que importa é o progresso', async () => {
+    installMockApi(
+      baseHandlers({
+        'sync:status': () => ({
+          running: true,
+          lastSuccessAt: new Date().toISOString(),
+          lastError: null,
+          progress: null,
+          nextRunAt: new Date(Date.now() + 5 * 60_000 + 30_000).toISOString()
+        })
+      })
+    )
+    renderWithProviders(<Shell />)
+
+    await waitFor(() => expect(screen.getByText('Sincronizando…')).toBeInTheDocument())
+    expect(screen.queryByText(/em \d+ min/)).not.toBeInTheDocument()
+  })
+
   it('mostra erro de sincronização', async () => {
     installMockApi(
       baseHandlers({
@@ -252,7 +300,8 @@ describe('Shell', () => {
           running: false,
           lastSuccessAt: null,
           lastError: 'timeout',
-          progress: null
+          progress: null,
+          nextRunAt: null
         })
       })
     )
@@ -273,7 +322,8 @@ describe('Shell', () => {
           running: false,
           lastSuccessAt: new Date().toISOString(),
           lastError: null,
-          progress: null
+          progress: null,
+          nextRunAt: null
         }),
         'queue:list': () => ({
           actions: [

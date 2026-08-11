@@ -31,7 +31,8 @@ import {
   useSyncStatus
 } from '../api/hooks'
 import { Spinner } from './ui'
-import { compactAgo } from '../lib/relativeTime'
+import { compactAgo, compactUntil } from '../lib/relativeTime'
+import { useNow } from '../lib/useNow'
 import { readNavCollapsed, writeNavCollapsed } from '../lib/nav'
 import { useQueue } from '../lib/queue'
 import { t } from '../strings/ptBR'
@@ -249,7 +250,7 @@ interface SyncView {
  * havendo fila offline ela é a informação mais importante e vem em âmbar, à
  * frente do "há X min".
  */
-function describeSync(sync: SyncData, queueTotal: number): SyncView {
+function describeSync(sync: SyncData, queueTotal: number, now: number): SyncView {
   if (sync?.running) {
     return {
       spinner: true,
@@ -279,14 +280,30 @@ function describeSync(sync: SyncData, queueTotal: number): SyncView {
       title: sync.lastError
     }
   }
+  // "em X" só entra depois do primeiro tique do relógio (now=0 no 1º render);
+  // sem agendador ativo (nextRunAt null) a linha segue sendo só o "há X"
+  const until = sync?.nextRunAt && now > 0 ? compactUntil(sync.nextRunAt, new Date(now)) : null
+
   if (sync?.lastSuccessAt) {
     const ago = compactAgo(sync.lastSuccessAt)
     return {
       spinner: false,
       tone: 'text-green-400 light:text-green-600',
       labelTone: 'text-zinc-400',
-      label: ago,
-      title: t.sync.lastSync(ago)
+      label: until ? `${ago} · ${until}` : ago,
+      title: until ? `${t.sync.lastSync(ago)}\n${t.sync.nextSync(until)}` : t.sync.lastSync(ago)
+    }
+  }
+
+  // nunca sincronizou, mas o agendador já está de pé: o "em X" é a única
+  // informação útil aqui — diz que o app vai tentar sozinho
+  if (until) {
+    return {
+      spinner: false,
+      tone: 'text-zinc-500',
+      labelTone: 'text-zinc-500',
+      label: until,
+      title: `${t.sync.never}\n${t.sync.nextSync(until)}`
     }
   }
   return {
@@ -322,7 +339,10 @@ export default function Shell(): React.JSX.Element {
     alerts: alertsData?.alerts.length ?? 0,
     mentions: mentionsData?.unreadCount ?? 0
   }
-  const syncView = describeSync(sync, pendingCount + failedCount)
+  // passo de 15s: o rótulo é em minutos (só o último minuto mostra segundos) e
+  // um tique por segundo re-renderizaria o Shell inteiro à toa
+  const now = useNow(15_000)
+  const syncView = describeSync(sync, pendingCount + failedCount, now)
 
   // Linha de contexto abaixo do wordmark: projeto acompanhado + sprint ativa,
   // ambos já vindos das queries que o app faz de qualquer jeito.

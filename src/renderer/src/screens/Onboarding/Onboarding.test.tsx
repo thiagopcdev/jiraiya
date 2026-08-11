@@ -35,7 +35,8 @@ function baseHandlers(): MockHandlers {
       running: true,
       lastSuccessAt: null,
       lastError: null,
-      progress: null
+      progress: null,
+      nextRunAt: null
     })
   }
 }
@@ -172,7 +173,8 @@ describe('Onboarding', () => {
           running: true,
           lastSuccessAt: null,
           lastError: null,
-          progress: { phase: 'issues', done: 12, total: 50 }
+          progress: { phase: 'issues', done: 12, total: 50 },
+          nextRunAt: null
         }))
       })
       await reachSyncStep(user)
@@ -189,7 +191,8 @@ describe('Onboarding', () => {
           running: false,
           lastSuccessAt: null,
           lastError: 'Falha na sincronização',
-          progress: null
+          progress: null,
+          nextRunAt: null
         }))
       })
       await reachSyncStep(user)

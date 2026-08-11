@@ -33,7 +33,8 @@ import {
 } from '../../api/hooks'
 import { applyDensityPref } from '../../lib/density'
 import { useQueue } from '../../lib/queue'
-import { compactAgo } from '../../lib/relativeTime'
+import { compactAgo, compactUntil } from '../../lib/relativeTime'
+import { useNow } from '../../lib/useNow'
 import { Badge, Button, Card, ScreenHeader, Spinner, Toggle } from '../../components/ui'
 import { QueueBadge } from '../../components/QueueCenter'
 import { CommandLogModal } from '../../components/CommandLogModal'
@@ -783,6 +784,12 @@ function SyncStateSection(): React.JSX.Element | null {
     ? `${format(new Date(sync.lastSuccessAt), "d 'de' MMMM, HH:mm", { locale: ptBR })} · ${compactAgo(sync.lastSuccessAt)}`
     : 'Ainda não sincronizado nesta máquina.'
 
+  // contagem para o próximo sync automático; now=0 é o render anterior ao
+  // primeiro tique do relógio. Enquanto roda, a próxima é o que menos importa.
+  const now = useNow(15_000)
+  const nextSync =
+    sync?.nextRunAt && now > 0 && !running ? compactUntil(sync.nextRunAt, new Date(now)) : null
+
   return (
     <SettingsCard title="Estado da sincronização" bodyClassName={ROWS_BODY}>
       <SettingRow
@@ -791,6 +798,7 @@ function SyncStateSection(): React.JSX.Element | null {
         hint={
           <>
             {lastSync}
+            {nextSync && <span className="mt-0.5 block">Próxima automática: {nextSync}</span>}
             {sync?.lastError && (
               <span className="mt-0.5 block text-red-400 light:text-red-600">{sync.lastError}</span>
             )}

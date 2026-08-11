@@ -137,6 +137,12 @@ export interface SyncStatus {
   lastSuccessAt: string | null
   lastError: string | null
   progress: { phase: string; done: number; total: number | null } | null
+  /**
+   * Quando o próximo sync automático está agendado (ISO). Null quando o
+   * agendador está parado. É o instante do próximo tique do intervalo — sync
+   * manual não adia o automático, então o contador não reinicia com ele.
+   */
+  nextRunAt: string | null
 }
 
 /** Radar de um membro do time no período (não é placar de produtividade). */

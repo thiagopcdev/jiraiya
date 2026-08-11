@@ -22,6 +22,8 @@ export class SyncScheduler {
   private running = false
   private lastError: string | null = null
   private lastProgress: SyncProgress | null = null
+  /** epoch ms do próximo tique do intervalo; null com o agendador parado */
+  private nextRunAt: number | null = null
 
   constructor(private readonly deps: SchedulerDeps) {}
 
@@ -34,12 +36,20 @@ export class SyncScheduler {
   stop(): void {
     if (this.timer) clearInterval(this.timer)
     this.timer = null
+    this.nextRunAt = null
   }
 
   reschedule(): void {
     this.stop()
     const minutes = getPrefs(this.deps.db).syncIntervalMinutes
-    this.timer = setInterval(() => void this.trigger(), minutes * 60 * 1000)
+    const ms = minutes * 60 * 1000
+    // o instante do próximo tique é remarcado a cada disparo — é ele que a UI
+    // mostra como "próxima em X"
+    this.nextRunAt = Date.now() + ms
+    this.timer = setInterval(() => {
+      this.nextRunAt = Date.now() + ms
+      void this.trigger()
+    }, ms)
   }
 
   status(): SyncStatus {
@@ -48,7 +58,8 @@ export class SyncScheduler {
       running: this.running,
       lastSuccessAt: workspace ? getLastSuccessAt(this.deps.db, workspace.id) : null,
       lastError: this.lastError,
-      progress: this.running ? this.lastProgress : null
+      progress: this.running ? this.lastProgress : null,
+      nextRunAt: this.nextRunAt === null ? null : new Date(this.nextRunAt).toISOString()
     }
   }
 

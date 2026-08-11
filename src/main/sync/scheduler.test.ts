@@ -205,7 +205,9 @@ describe('status', () => {
       running: false,
       lastSuccessAt: null,
       lastError: null,
-      progress: null
+      progress: null,
+      // agendador ainda não iniciado: não há próximo sync para anunciar
+      nextRunAt: null
     })
   })
 
@@ -268,6 +270,45 @@ describe('start / reschedule / stop', () => {
 
     await vi.advanceTimersByTimeAsync(60_000)
     expect(runSyncMock).toHaveBeenCalledTimes(1)
+
+    scheduler.stop()
+  })
+
+  it('nextRunAt marca o próximo tique, é remarcado a cada disparo e some no stop', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-17T12:00:00.000Z'))
+    insertWorkspace()
+    setPrefs(db, { syncIntervalMinutes: 10 })
+    const scheduler = makeScheduler()
+
+    // parado: nada agendado para anunciar
+    expect(scheduler.status().nextRunAt).toBeNull()
+
+    scheduler.reschedule()
+    expect(scheduler.status().nextRunAt).toBe('2026-07-17T12:10:00.000Z')
+
+    // o tique dispara o sync E já remarca a contagem para o seguinte
+    await vi.advanceTimersByTimeAsync(10 * 60_000)
+    expect(runSyncMock).toHaveBeenCalledTimes(1)
+    expect(scheduler.status().nextRunAt).toBe('2026-07-17T12:20:00.000Z')
+
+    scheduler.stop()
+    expect(scheduler.status().nextRunAt).toBeNull()
+  })
+
+  it('trocar o intervalo recalcula o próximo sync a partir de agora', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-17T12:00:00.000Z'))
+    insertWorkspace()
+    setPrefs(db, { syncIntervalMinutes: 30 })
+    const scheduler = makeScheduler()
+
+    scheduler.reschedule()
+    expect(scheduler.status().nextRunAt).toBe('2026-07-17T12:30:00.000Z')
+
+    setPrefs(db, { syncIntervalMinutes: 5 })
+    scheduler.reschedule()
+    expect(scheduler.status().nextRunAt).toBe('2026-07-17T12:05:00.000Z')
 
     scheduler.stop()
   })

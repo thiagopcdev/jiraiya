@@ -14,7 +14,9 @@ export function registerSyncHandlers(ctx: AppContext): void {
         running: false,
         lastSuccessAt: null,
         lastError: null,
-        progress: null
+        progress: null,
+        // sem agendador não há próximo sync agendado para anunciar
+        nextRunAt: null
       }
     )
   })
