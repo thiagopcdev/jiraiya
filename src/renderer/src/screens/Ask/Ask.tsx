@@ -250,7 +250,7 @@ export default function Ask(): React.JSX.Element {
             <p className="max-w-[46ch] text-center text-[13px] text-zinc-500">{t.ask.emptyTitle}</p>
           </div>
         ) : (
-          <div className="flex max-w-[780px] flex-col gap-4">
+          <div className="mx-auto flex max-w-[780px] flex-col gap-4">
             {messages.map((message, i) =>
               message.role === 'user' ? (
                 <div key={i} className="flex justify-end">
@@ -305,7 +305,9 @@ export default function Ask(): React.JSX.Element {
       </div>
 
       <div className="shrink-0 border-t border-zinc-800 bg-zinc-950/60 px-6 py-3">
-        <div className="flex max-w-[780px] flex-col gap-2">
+        {/* mesma coluna de 780px da conversa, e centrada como ela: encostada à
+            esquerda o compositor descolava do estado vazio e das mensagens */}
+        <div className="mx-auto flex max-w-[780px] flex-col gap-2">
           {/* Atalho de partida: some depois da primeira pergunta, quando a conversa
               já dá o contexto e os chips só ocupariam espaço. */}
           {messages.length === 0 && (
