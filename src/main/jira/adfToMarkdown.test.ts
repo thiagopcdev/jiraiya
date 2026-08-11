@@ -92,3 +92,36 @@ describe('adfToMarkdown — nós especiais', () => {
     expect(adfToMarkdown(doc)).toContain('aviso')
   })
 })
+
+describe('menção (round-trip)', () => {
+  it('preserva o accountId: editar e salvar não rebaixa a menção a texto', () => {
+    const md = adfToMarkdown({
+      type: 'doc',
+      version: 1,
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'oi ' },
+            { type: 'mention', attrs: { id: '557058:abc-123', text: '@Thiago Prado' } }
+          ]
+        }
+      ]
+    })
+    expect(md).toBe('oi @[Thiago Prado](557058:abc-123)')
+    // e o caminho de volta reconstrói o mesmo nó
+    expect(markdownToAdf(md).content?.[0].content?.[1]).toEqual({
+      type: 'mention',
+      attrs: { id: '557058:abc-123', text: '@Thiago Prado' }
+    })
+  })
+
+  it('menção sem id (ADF antigo) degrada para @Nome', () => {
+    const md = adfToMarkdown({
+      type: 'doc',
+      version: 1,
+      content: [{ type: 'paragraph', content: [{ type: 'mention', attrs: { text: '@Ana' } }] }]
+    })
+    expect(md).toBe('@Ana')
+  })
+})

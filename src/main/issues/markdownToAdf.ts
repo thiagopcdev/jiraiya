@@ -253,6 +253,12 @@ function parseList(lines: string[], start: number): { node: AdfNode; next: numbe
  * Marcas inline. Ordem de teste por posição: código > **negrito** > ~~riscado~~
  * > *itálico* ou _itálico_ > [link](url). Marca sem fechamento → texto literal.
  */
+/**
+ * `@[Nome](accountId)`. O nome não pode ter colchete (fecharia cedo) e o id do
+ * Jira é alfanumérico com `:` e `-` (contas migradas trazem prefixo).
+ */
+const MENTION_RE = /^@\[([^\]\n]+)\]\(([A-Za-z0-9:_-]+)\)/
+
 function parseInline(text: string): AdfNode[] {
   const nodes: AdfNode[] = []
   let buffer = ''
@@ -266,6 +272,22 @@ function parseInline(text: string): AdfNode[] {
   }
 
   while (i < text.length) {
+    // @[Nome](accountId) — menção. Sem o nó `mention` com o accountId o Jira
+    // trata como texto e NINGUÉM é notificado; por isso o id viaja no próprio
+    // markdown (mesma forma do link, que o compositor já usa).
+    if (text[i] === '@' && text[i + 1] === '[') {
+      const mention = MENTION_RE.exec(text.slice(i))
+      if (mention) {
+        flush()
+        nodes.push({
+          type: 'mention',
+          attrs: { id: mention[2], text: `@${mention[1]}` }
+        })
+        i += mention[0].length
+        continue
+      }
+    }
+
     // `código` — conteúdo literal, sem parse interno
     if (text[i] === '`') {
       const end = text.indexOf('`', i + 1)

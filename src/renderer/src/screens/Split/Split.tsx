@@ -3,6 +3,8 @@ import type { ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, ExternalLink, PanelRight, Sparkles, Trash2 } from 'lucide-react'
 import { invoke, IpcError } from '../../api/client'
+import { MentionTextarea } from '../../components/MentionTextarea'
+import { toMarkdown, type MentionMap } from '../../lib/mentionText'
 import { useAiStatus, useIssueTypes, useIssues, unavailableAiProviderLabel } from '../../api/hooks'
 import {
   Badge,
@@ -56,12 +58,17 @@ function SplitItemCard({
   item,
   index,
   onChange,
-  onRemove
+  onRemove,
+  onPickMention,
+  mentions
 }: {
   item: EditableItem
   index: number
   onChange: (patch: Partial<Pick<EditableItem, 'title' | 'description'>>) => void
   onRemove: () => void
+  onPickMention: (user: { accountId: string; displayName: string }) => void
+  /** mapa da tela: uma pessoa marcada numa subtask fica marcada em todas */
+  mentions: MentionMap
 }): React.JSX.Element {
   return (
     <Card bodyClassName="px-3.5 py-3">
@@ -84,11 +91,13 @@ function SplitItemCard({
           <Trash2 size={14} />
         </button>
       </div>
-      <textarea
+      <MentionTextarea
         aria-label={`${t.split.itemDescriptionLabel} ${index + 1}`}
         className="mt-2 h-[62px] w-full resize-y rounded-md border border-zinc-800 bg-zinc-950/60 px-2.5 py-2 text-[12.5px] leading-[1.55] text-zinc-400 outline-none focus:border-indigo-500"
         value={item.description}
-        onChange={(e) => onChange({ description: e.target.value })}
+        onChange={(description) => onChange({ description })}
+        initialMentions={mentions}
+        onPick={onPickMention}
       />
     </Card>
   )
@@ -109,6 +118,9 @@ export default function Split(): React.JSX.Element {
 
   // Rascunho da divisão
   const [items, setItems] = useState<EditableItem[]>([])
+  // nome → accountId de quem foi marcado em qualquer subtask: as descrições
+  // guardam "@Nome" e o id só entra na hora de criar os cards
+  const [mentions, setMentions] = useState<MentionMap>({})
   const [rationale, setRationale] = useState('')
   const [analyzeBusy, setAnalyzeBusy] = useState(false)
   const [analyzeError, setAnalyzeError] = useState<string | null>(null)
@@ -240,7 +252,10 @@ export default function Split(): React.JSX.Element {
         parentKey: parent.key,
         mode: effectiveMode,
         issueTypeId: effectiveIssueTypeId,
-        items: items.map(({ title, description }) => ({ title, description })),
+        items: items.map(({ title, description }) => ({
+          title,
+          description: toMarkdown(description, mentions)
+        })),
         assignToMe
       })
       setCreatedKeys(res.keys)
@@ -567,6 +582,10 @@ export default function Split(): React.JSX.Element {
                     index={idx}
                     onChange={(patch) => updateItem(item.id, patch)}
                     onRemove={() => removeItem(item.id)}
+                    mentions={mentions}
+                    onPickMention={(user) =>
+                      setMentions((prev) => ({ ...prev, [user.displayName]: user.accountId }))
+                    }
                   />
                 ))}
                 <div>
