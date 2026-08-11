@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compactAgo } from './relativeTime'
+import { compactAgo, compactUntil } from './relativeTime'
 
 const now = new Date('2026-07-17T12:00:00Z')
 const ago = (ms: number): string => new Date(now.getTime() - ms).toISOString()
@@ -20,5 +20,25 @@ describe('compactAgo', () => {
   })
   it('data no futuro não gera negativo', () => {
     expect(compactAgo(ago(-10_000), now)).toBe('agora')
+  })
+})
+
+describe('compactUntil', () => {
+  const until = (ms: number): string => new Date(now.getTime() + ms).toISOString()
+
+  it('segundos', () => {
+    expect(compactUntil(until(45_000), now)).toBe('em 45 s')
+  })
+  it('minutos', () => {
+    expect(compactUntil(until(6 * 60_000), now)).toBe('em 6 min')
+    expect(compactUntil(until(59 * 60_000 + 59_000), now)).toBe('em 59 min')
+  })
+  it('horas e dias', () => {
+    expect(compactUntil(until(2 * 3600_000), now)).toBe('em 2 h')
+    expect(compactUntil(until(3 * 86_400_000), now)).toBe('em 3 d')
+  })
+  it('prazo vencido não conta negativo nem diz "em 0 s"', () => {
+    expect(compactUntil(until(0), now)).toBe('a qualquer momento')
+    expect(compactUntil(until(-90_000), now)).toBe('a qualquer momento')
   })
 })

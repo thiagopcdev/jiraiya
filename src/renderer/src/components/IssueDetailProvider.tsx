@@ -49,6 +49,8 @@ import type {
 } from '@shared/domain'
 import type { IpcRequest, IpcResponse } from '@shared/ipc-contract'
 import { invoke, IpcError } from '../api/client'
+import { MentionTextarea } from './MentionTextarea'
+import { toDisplay, toMarkdown, type MentionMap } from '../lib/mentionText'
 import {
   useAiStatus,
   useAuthStatus,
@@ -631,10 +633,14 @@ function IssueDetailBody({
   const [descExpanded, setDescExpanded] = useState(false)
   // o drawer inteiro remonta por issueKey (veja o `key={topKey}` no provider), então
   // este useState só roda uma vez por card — é o ponto certo pra restaurar o rascunho
-  const [comment, setComment] = useState(() => loadDraft(issueKey) ?? '')
+  // o rascunho é gravado em markdown (com accountId); o campo mostra "@Nome"
+  const [restoredDraft] = useState(() => toDisplay(loadDraft(issueKey) ?? ''))
+  const [comment, setComment] = useState(restoredDraft.text)
   const [draftRestored, setDraftRestored] = useState(() => loadDraft(issueKey) !== null)
   const [commentViewMode, setCommentViewMode] = useState<'edit' | 'preview'>('edit')
   const commentRef = useRef<HTMLTextAreaElement>(null)
+  // o mapa nome→accountId vive aqui porque é o dono que grava rascunho e envia
+  const commentMentions = useRef<MentionMap>({ ...restoredDraft.mentions })
   const [commentBusy, setCommentBusy] = useState(false)
   const [commentError, setCommentError] = useState<string | null>(null)
   const [commentSent, setCommentSent] = useState(false)
@@ -642,7 +648,10 @@ function IssueDetailBody({
   // salva o rascunho do comentário em edição com debounce — não é set-state síncrono,
   // só grava no localStorage após o usuário parar de digitar por ~500ms
   useEffect(() => {
-    const timer = window.setTimeout(() => saveDraft(issueKey, comment), 500)
+    const timer = window.setTimeout(
+      () => saveDraft(issueKey, toMarkdown(comment, commentMentions.current)),
+      500
+    )
     return () => window.clearTimeout(timer)
   }, [issueKey, comment])
 
@@ -732,7 +741,10 @@ function IssueDetailBody({
     setCommentBusy(true)
     setCommentError(null)
     try {
-      const res = await invoke('issues:comment', { issueKey, body: comment.trim() })
+      const res = await invoke('issues:comment', {
+        issueKey,
+        body: toMarkdown(comment, commentMentions.current).trim()
+      })
       setComment('')
       clearDraft(issueKey)
       setDraftRestored(false)
@@ -916,13 +928,15 @@ function IssueDetailBody({
         )}
       </div>
       {commentViewMode === 'edit' ? (
-        <textarea
-          ref={commentRef}
+        <MentionTextarea
+          textareaRef={commentRef}
           className="h-24 w-full resize-y rounded-md border border-zinc-700 bg-zinc-950/60 p-2.5 text-sm text-zinc-100 outline-none focus:border-indigo-500"
           placeholder={t.detail.commentPlaceholder}
           value={comment}
-          onChange={(e) => setComment(e.target.value)}
+          onChange={setComment}
           onPaste={(e) => void handleCommentPaste(e)}
+          initialMentions={restoredDraft.mentions}
+          onPick={(user) => (commentMentions.current[user.displayName] = user.accountId)}
         />
       ) : (
         <div className="h-24 w-full overflow-y-auto rounded-md border border-zinc-800 p-3">
@@ -2057,9 +2071,13 @@ function CommentItem({
   const isMine = myAccountId !== null && comment.authorAccountId === myAccountId
 
   const [mode, setMode] = useState<'view' | 'edit' | 'confirmDelete'>('view')
-  const [body, setBody] = useState(comment.bodyMarkdown)
+  // comentário que já tem menção chega como @[Nome](id): o campo mostra "@Nome"
+  // e o id volta no save — sem isso, editar rebaixaria a menção a texto
+  const [loaded] = useState(() => toDisplay(comment.bodyMarkdown))
+  const [body, setBody] = useState(loaded.text)
   const [editViewMode, setEditViewMode] = useState<'edit' | 'preview'>('edit')
   const bodyRef = useRef<HTMLTextAreaElement>(null)
+  const bodyMentions = useRef<MentionMap>({ ...loaded.mentions })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -2081,7 +2099,7 @@ function CommentItem({
       await invoke('issues:commentUpdate', {
         issueKey,
         commentId: comment.id,
-        body: body.trim()
+        body: toMarkdown(body, bodyMentions.current).trim()
       })
       invalidate()
       setMode('view')
@@ -2176,11 +2194,13 @@ function CommentItem({
             )}
           </div>
           {editViewMode === 'edit' ? (
-            <textarea
-              ref={bodyRef}
+            <MentionTextarea
+              textareaRef={bodyRef}
               className="h-20 w-full resize-y rounded-md border border-zinc-700 bg-zinc-950 p-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
               value={body}
-              onChange={(e) => setBody(e.target.value)}
+              onChange={setBody}
+              initialMentions={loaded.mentions}
+              onPick={(user) => (bodyMentions.current[user.displayName] = user.accountId)}
             />
           ) : (
             <div className="h-20 w-full overflow-y-auto rounded-md border border-zinc-800 p-3">
@@ -2233,15 +2253,20 @@ function DescriptionSection({
 }): React.JSX.Element {
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState(false)
-  const [value, setValue] = useState(liveMarkdown ?? issue.descriptionText ?? '')
+  const [loaded, setLoaded] = useState(() => toDisplay(liveMarkdown ?? issue.descriptionText ?? ''))
+  const [value, setValue] = useState(loaded.text)
   const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit')
   const descriptionRef = useRef<HTMLTextAreaElement>(null)
+  const descMentions = useRef<MentionMap>({ ...loaded.mentions })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const startEdit = (): void => {
     if (descriptionLoading) return
-    setValue(liveMarkdown ?? issue.descriptionText ?? '')
+    const fresh = toDisplay(liveMarkdown ?? issue.descriptionText ?? '')
+    setLoaded(fresh)
+    setValue(fresh.text)
+    descMentions.current = { ...fresh.mentions }
     setViewMode('edit')
     setError(null)
     setEditing(true)
@@ -2251,7 +2276,10 @@ function DescriptionSection({
     setBusy(true)
     setError(null)
     try {
-      await invoke('issues:updateText', { key: issueKey, descriptionMarkdown: value })
+      await invoke('issues:updateText', {
+        key: issueKey,
+        descriptionMarkdown: toMarkdown(value, descMentions.current)
+      })
       void queryClient.invalidateQueries({ queryKey: ['issue-description', issueKey] })
       void queryClient.invalidateQueries({ queryKey: ['issue', issueKey] })
       setEditing(false)
@@ -2283,12 +2311,14 @@ function DescriptionSection({
           )}
         </div>
         {viewMode === 'edit' ? (
-          <textarea
-            ref={descriptionRef}
+          <MentionTextarea
+            textareaRef={descriptionRef}
             className="min-h-40 w-full resize-y rounded-md border border-zinc-700 bg-zinc-950/60 p-2.5 font-mono text-xs text-zinc-100 outline-none focus:border-indigo-500"
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={setValue}
             disabled={busy}
+            initialMentions={loaded.mentions}
+            onPick={(user) => (descMentions.current[user.displayName] = user.accountId)}
           />
         ) : (
           <div className="min-h-40 w-full overflow-y-auto rounded-md border border-zinc-800 p-3">

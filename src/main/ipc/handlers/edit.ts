@@ -1,4 +1,5 @@
 import { AppError, handle } from '../registry'
+import { filterPeople, listKnownPeople } from '../../queries/people'
 import type { AppContext } from '../../appContext'
 import type { StatusCategory } from '@shared/domain'
 import { getWorkspaceRow } from '../../db/repos/workspace'
@@ -241,6 +242,27 @@ export function registerEditHandlers(ctx: AppContext): void {
     }
     const users = await client.assignableUsers(issueKey)
     return { users }
+  })
+
+  handle('users:search', async ({ query }) => {
+    const workspace = requireWorkspace(ctx)
+    const local = (): Array<{ accountId: string; displayName: string }> =>
+      filterPeople(listKnownPeople(ctx.db, workspace.id), query)
+
+    const trimmed = query.trim()
+    // sem termo não há o que perguntar ao Jira: o "@" recém-digitado mostra
+    // quem já apareceu nos dados locais, instantâneo e sem rede
+    if (!trimmed) return { users: local(), offline: true }
+
+    const client = ctx.getClient()
+    if (!client) return { users: local(), offline: true }
+    try {
+      return { users: await client.searchUsers(trimmed), offline: false }
+    } catch {
+      // busca de menção não é operação crítica: sem rede o app oferece quem
+      // conhece em vez de travar o compositor
+      return { users: local(), offline: true }
+    }
   })
 
   handle('issues:logWork', async ({ key, timeSpent, comment }) => {

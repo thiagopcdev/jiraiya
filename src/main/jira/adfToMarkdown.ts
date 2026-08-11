@@ -145,8 +145,15 @@ function renderInlineNode(node: AdfNode): string {
     case 'hardBreak':
       return '\n'
 
-    case 'mention':
-      return String(node.attrs?.text ?? '')
+    case 'mention': {
+      // preserva o accountId no markdown: sem ele, editar e salvar um comentário
+      // que já tinha menção rebaixaria a menção a texto puro, desfazendo o
+      // vínculo com a pessoa no Jira
+      const label = String(node.attrs?.text ?? '').replace(/^@/, '')
+      const id = node.attrs?.id
+      if (!label) return String(node.attrs?.text ?? '')
+      return typeof id === 'string' && id ? `@[${label}](${id})` : `@${label}`
+    }
 
     case 'emoji':
       return String(node.attrs?.shortName ?? node.attrs?.text ?? node.text ?? '')

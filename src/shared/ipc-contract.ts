@@ -548,6 +548,19 @@ export const ipcContract = {
     req: z.object({ key: z.string().trim().min(1).max(64) }),
     res: undefined as unknown as { users: Array<{ accountId: string; displayName: string }> }
   },
+  /**
+   * Candidatos a menção. Query vazia = pessoas já conhecidas dos dados locais
+   * (o usuário acabou de digitar "@"); com texto, busca no Jira e cai para o
+   * local se ele não responder.
+   */
+  'users:search': {
+    req: z.object({ query: z.string().max(100) }),
+    res: undefined as unknown as {
+      users: Array<{ accountId: string; displayName: string }>
+      /** true = veio do cache local (Jira indisponível ou query vazia) */
+      offline: boolean
+    }
+  },
   'issues:children': {
     req: z.object({ key: z.string().trim().min(1).max(64) }),
     res: undefined as unknown as { issues: Issue[] }

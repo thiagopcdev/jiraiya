@@ -435,6 +435,22 @@ export class JiraClient {
       .map((u) => ({ accountId: u.accountId, displayName: u.displayName ?? u.accountId }))
   }
 
+  /**
+   * Busca usuários por nome/e-mail para o seletor de menção.
+   *
+   * Diferente do assignableUsers, não depende de uma issue — serve também para
+   * o Criar/Dividir, onde ainda não existe card. Filtra inativos e contas que
+   * não são de pessoa (app/customer): mencionar um bot não notifica ninguém.
+   */
+  async searchUsers(query: string): Promise<Array<{ accountId: string; displayName: string }>> {
+    const res = await this.http.get<
+      Array<{ accountId: string; displayName?: string; active?: boolean; accountType?: string }>
+    >(`/rest/api/3/user/search?query=${encodeURIComponent(query)}&maxResults=20`)
+    return (res ?? [])
+      .filter((u) => u.active !== false && (u.accountType ?? 'atlassian') === 'atlassian')
+      .map((u) => ({ accountId: u.accountId, displayName: u.displayName ?? u.accountId }))
+  }
+
   /** Links de issue crus (fields.issuelinks). */
   async issueLinks(issueKey: string): Promise<JiraIssueLink[]> {
     const res = await this.http.get<{ fields?: { issuelinks?: JiraIssueLink[] } }>(

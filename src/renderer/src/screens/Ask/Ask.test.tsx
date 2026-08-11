@@ -256,6 +256,19 @@ describe('Ask', () => {
     )
   })
 
+  it('compositor e conversa dividem a mesma coluna de 780px centrada', async () => {
+    const user = userEvent.setup()
+    setup()
+    await waitReady()
+
+    const composer = screen.getByPlaceholderText(/Pergunte algo/).closest('.max-w-\\[780px\\]')
+    expect(composer).toHaveClass('mx-auto')
+
+    await user.type(screen.getByPlaceholderText(/Pergunte algo/), 'oi{enter}')
+    const thread = (await screen.findByText('oi')).closest('.max-w-\\[780px\\]')
+    expect(thread).toHaveClass('mx-auto')
+  })
+
   it('enquanto espera a resposta mostra os pontinhos com rótulo acessível', async () => {
     const user = userEvent.setup()
     setup((mock) => {

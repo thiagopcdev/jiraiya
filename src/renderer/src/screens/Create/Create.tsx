@@ -4,6 +4,8 @@ import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, CheckCircle2, ExternalLink, Sparkles } from 'lucide-react'
 import { invoke, IpcError } from '../../api/client'
+import { MentionTextarea } from '../../components/MentionTextarea'
+import { toMarkdown, type MentionMap } from '../../lib/mentionText'
 import {
   useAiStatus,
   useGlobalSearch,
@@ -91,6 +93,7 @@ export default function Create(): React.JSX.Element {
   const [summary, setSummary] = useState('')
   const [description, setDescription] = useState('')
   const descriptionRef = useRef<HTMLTextAreaElement | null>(null)
+  const mentions = useRef<MentionMap>({})
   const [assignToMe, setAssignToMe] = useState(true)
   const [addToActiveSprint, setAddToActiveSprint] = useState(false)
   const [storyPoints, setStoryPoints] = useState('')
@@ -158,7 +161,7 @@ export default function Create(): React.JSX.Element {
         projectKey,
         issueTypeId: selectedIssueType.id,
         summary,
-        description,
+        description: toMarkdown(description, mentions.current),
         assignToMe,
         addToActiveSprint: activeSprint ? addToActiveSprint : undefined,
         storyPoints: storyPoints.trim() && points > 0 ? points : undefined
@@ -348,12 +351,13 @@ export default function Create(): React.JSX.Element {
                       />
                     </div>
                   </div>
-                  <textarea
-                    ref={descriptionRef}
+                  <MentionTextarea
+                    textareaRef={descriptionRef}
                     aria-label={t.create.description}
                     className="h-[150px] w-full resize-y rounded-md border border-zinc-700 bg-zinc-950/60 px-3 py-2.5 font-mono text-[12.5px] leading-[1.6] text-zinc-300 outline-none focus:border-indigo-500"
                     value={description}
-                    onChange={(e) => setDescription(e.target.value)}
+                    onChange={setDescription}
+                    onPick={(user) => (mentions.current[user.displayName] = user.accountId)}
                   />
                   <span className="mt-1 block text-[11.5px] text-zinc-500">
                     {t.create.descriptionHint}

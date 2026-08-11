@@ -38,7 +38,46 @@ function linkifyIssueKeys(
   return nodes
 }
 
-/** Parser inline: negrito (**texto**) e, dentro de cada segmento, keys de issue viram botões. */
+/**
+ * `@[Nome](accountId)` — a forma que carrega o accountId até o ADF. Na leitura
+ * some a sintaxe e fica só o "@Nome" destacado, como o Jira mostra.
+ */
+const MENTION_RE = /@\[([^\]\n]+)\]\(([A-Za-z0-9:_-]+)\)/g
+
+function renderMentions(
+  text: string,
+  keyPrefix: string,
+  openIssue: (key: string) => void
+): React.ReactNode[] {
+  const nodes: React.ReactNode[] = []
+  let lastIndex = 0
+  let idx = 0
+  MENTION_RE.lastIndex = 0
+  let match: RegExpExecArray | null
+  while ((match = MENTION_RE.exec(text))) {
+    if (match.index > lastIndex) {
+      nodes.push(
+        ...linkifyIssueKeys(text.slice(lastIndex, match.index), `${keyPrefix}-m${idx}p`, openIssue)
+      )
+    }
+    nodes.push(
+      <span
+        key={`${keyPrefix}-m${idx}`}
+        className="rounded bg-indigo-600/14 px-1 font-medium text-indigo-400"
+      >
+        @{match[1]}
+      </span>
+    )
+    idx += 1
+    lastIndex = match.index + match[0].length
+  }
+  if (lastIndex < text.length) {
+    nodes.push(...linkifyIssueKeys(text.slice(lastIndex), `${keyPrefix}-m${idx}p`, openIssue))
+  }
+  return nodes
+}
+
+/** Parser inline: negrito (**texto**) e, dentro de cada segmento, menções e keys de issue. */
 function renderInline(
   text: string,
   keyPrefix: string,
@@ -52,19 +91,19 @@ function renderInline(
   while ((match = BOLD_RE.exec(text))) {
     if (match.index > lastIndex) {
       nodes.push(
-        ...linkifyIssueKeys(text.slice(lastIndex, match.index), `${keyPrefix}-t${idx}`, openIssue)
+        ...renderMentions(text.slice(lastIndex, match.index), `${keyPrefix}-t${idx}`, openIssue)
       )
     }
     nodes.push(
       <strong key={`${keyPrefix}-b${idx}`} className="font-semibold text-zinc-100">
-        {linkifyIssueKeys(match[1], `${keyPrefix}-b${idx}-in`, openIssue)}
+        {renderMentions(match[1], `${keyPrefix}-b${idx}-in`, openIssue)}
       </strong>
     )
     idx += 1
     lastIndex = match.index + match[0].length
   }
   if (lastIndex < text.length) {
-    nodes.push(...linkifyIssueKeys(text.slice(lastIndex), `${keyPrefix}-t${idx}`, openIssue))
+    nodes.push(...renderMentions(text.slice(lastIndex), `${keyPrefix}-t${idx}`, openIssue))
   }
   return nodes
 }

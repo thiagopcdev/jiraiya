@@ -77,7 +77,8 @@ describe('api/hooks — hooks simples (sem args ou com args fixos)', () => {
         running: false,
         lastSuccessAt: null,
         lastError: null,
-        progress: null
+        progress: null,
+        nextRunAt: null
       })
     })
     const res = await runQuery(() => useSyncStatus())

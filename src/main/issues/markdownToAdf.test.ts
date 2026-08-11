@@ -339,3 +339,34 @@ describe('task lists', () => {
     ])
   })
 })
+
+describe('menções', () => {
+  it('@[Nome](accountId) vira nó mention com o accountId — sem isso o Jira não notifica', () => {
+    const doc = markdownToAdf('oi @[Thiago Prado](557058:abc-123), olha isso')
+    expect(doc.content?.[0].content).toEqual([
+      { type: 'text', text: 'oi ' },
+      { type: 'mention', attrs: { id: '557058:abc-123', text: '@Thiago Prado' } },
+      { type: 'text', text: ', olha isso' }
+    ])
+  })
+
+  it('duas menções seguidas', () => {
+    const doc = markdownToAdf('@[Ana](a1) @[Bruno](b2)')
+    const types = (doc.content?.[0].content ?? []).map((n) => n.type)
+    expect(types).toEqual(['mention', 'text', 'mention'])
+  })
+
+  it('"@nome" digitado à mão continua texto puro — menção exige o accountId', () => {
+    const doc = markdownToAdf('manda pro @time e pro @Thiago')
+    expect(doc.content?.[0].content).toEqual([
+      { type: 'text', text: 'manda pro @time e pro @Thiago' }
+    ])
+  })
+
+  it('e-mail não vira menção (o "@" no meio da palavra é ignorado)', () => {
+    const doc = markdownToAdf('fala com thiago@biud.com.br')
+    expect(doc.content?.[0].content).toEqual([
+      { type: 'text', text: 'fala com thiago@biud.com.br' }
+    ])
+  })
+})

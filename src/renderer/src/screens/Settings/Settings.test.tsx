@@ -59,7 +59,8 @@ function baseHandlers(prefsState: Prefs): MockHandlers {
       running: false,
       lastSuccessAt: null,
       lastError: null,
-      progress: null
+      progress: null,
+      nextRunAt: null
     }),
     'sync:run': () => ({ started: true as const }),
     'queue:list': () => ({ actions: [] }),
@@ -568,7 +569,8 @@ describe('Settings', () => {
           running: true,
           lastSuccessAt: null,
           lastError: null,
-          progress: { phase: 'reconcile', done: 0, total: 10 }
+          progress: { phase: 'reconcile', done: 0, total: 10 },
+          nextRunAt: null
         }))
       })
       await waitReady()
@@ -589,7 +591,8 @@ describe('Settings', () => {
           running: false,
           lastSuccessAt: new Date().toISOString(),
           lastError: 'timeout no Jira',
-          progress: null
+          progress: null,
+          nextRunAt: null
         }))
       })
       await waitReady()
@@ -597,6 +600,25 @@ describe('Settings', () => {
 
       expect(await screen.findByText(/última agora/)).toBeInTheDocument()
       expect(screen.getByText('timeout no Jira')).toBeInTheDocument()
+    })
+
+    it('mostra quanto falta para o próximo sync automático', async () => {
+      const user = userEvent.setup()
+      setup((api) => {
+        api.set('sync:status', () => ({
+          running: false,
+          lastSuccessAt: new Date().toISOString(),
+          lastError: null,
+          progress: null,
+          // 10min30s, longe da fronteira: em 11min exatos a contagem oscila
+          // entre "11" e "10" conforme o instante em que o relógio é amostrado
+          nextRunAt: new Date(Date.now() + 10 * 60_000 + 30_000).toISOString()
+        }))
+      })
+      await waitReady()
+      await goTo(user, 'Sincronização')
+
+      expect(await screen.findByText(/Próxima automática: em 10 min/)).toBeInTheDocument()
     })
 
     it('fila offline com ação pendente mostra o badge no lugar de "vazia"', async () => {

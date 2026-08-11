@@ -13,7 +13,8 @@ const IDLE: SyncStatus = {
   running: false,
   lastSuccessAt: null,
   lastError: null,
-  progress: null
+  progress: null,
+  nextRunAt: null
 }
 
 beforeEach(() => {
@@ -58,7 +59,8 @@ describe('sync:status', () => {
       running: true,
       lastSuccessAt: '2026-07-20T10:00:00.000Z',
       lastError: null,
-      progress: null
+      progress: null,
+      nextRunAt: '2026-07-20T10:15:00.000Z'
     }
     Object.assign(t.ctx, { scheduler: { status: () => status } })
 
