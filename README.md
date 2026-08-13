@@ -65,14 +65,14 @@ Nenhuma integração é obrigatória: sem nenhum provider de IA configurado, o a
 
 ## Scripts
 
-| Script              | O que faz                                                                   |
-| ------------------- | --------------------------------------------------------------------------- |
-| `npm run dev`       | App em modo dev com HMR                                                     |
-| `npm test`          | Testes (vitest via runtime do Electron, por causa da ABI do better-sqlite3) |
-| `npm run typecheck` | tsc em main/preload/renderer                                                |
-| `npm run lint`      | eslint                                                                      |
-| `npm run build:mac` | DMG para macOS (arm64)                                                      |
-| `npm run build:win` | Instalador NSIS para Windows                                                |
+| Script                  | O que faz                                                                              |
+| ----------------------- | -------------------------------------------------------------------------------------- |
+| `npm run dev`           | App em modo dev com HMR                                                                |
+| `npm test`              | Testes (vitest via runtime do Electron, por causa da ABI do better-sqlite3)            |
+| `npm run typecheck`     | tsc em main/preload/renderer                                                           |
+| `npm run lint`          | eslint                                                                                 |
+| `npm run build:mac`     | DMG para macOS (arm64)                                                                 |
+| `npm run build:win`     | Instalador NSIS para Windows                                                           |
 | `npm run test:coverage` | Testes com relatório de cobertura (gate: 85% statements/functions/lines, 78% branches) |
 
 ## Fluxo de branches e CI
@@ -81,6 +81,29 @@ Nenhuma integração é obrigatória: sem nenhum provider de IA configurado, o a
 - A `main` é protegida: **só recebe PR vindo da `develop`** — o check `valida-origem` (`.github/workflows/guard-main.yml`) reprova qualquer outra origem, e push direto é bloqueado por ruleset.
 
 Releases: push de uma tag `v*` dispara o workflow que cria a release no GitHub com o `.exe` e o `.dmg`. Os apps instalados avisam sobre a versão nova (boot + a cada 6h) com download direto pelo banner.
+
+### Assinatura do app no macOS
+
+O macOS marca todo arquivo baixado com `com.apple.quarantine` e valida a assinatura na primeira abertura. Isso divide o build em três resultados bem diferentes:
+
+| Assinatura                                   | O que o usuário vê ao abrir                                                                            |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| ad-hoc **incompleta** (recursos não selados) | "está danificado e não pode ser aberto" e sugestão de mover para o Lixo — **sem saída pela interface** |
+| ad-hoc completa                              | "desenvolvedor não pode ser verificado" — resolve com botão direito → _Abrir_                          |
+| Developer ID + notarização                   | abre com dois cliques, como qualquer app                                                               |
+
+A primeira linha era o comportamento até a v3.2.0: sem certificado no keychain o electron-builder **pula** a assinatura e sobra a ad-hoc que o linker põe só no binário, sem selar os recursos — assinatura inválida, não "app sem assinatura". Na máquina que compila nunca aparece, porque a cópia local não recebe quarentena.
+
+`scripts/after-sign-mac.cjs` (hook `afterSign`) elimina esse caso: sem certificado ele aplica `codesign --force --deep --sign -`, e no fim **verifica** o bundle (`codesign --verify --deep --strict`), falhando o build se não passar. Com Developer ID presente ele não intervém.
+
+Para o resultado definitivo (dois cliques em qualquer Mac) faltam credenciais que não vivem no repositório:
+
+1. Assinatura no Apple Developer Program (US$ 99/ano) e um certificado **Developer ID Application** — Xcode → Settings → Accounts → Manage Certificates, ou CSR em developer.apple.com.
+2. Senha específica de app (appleid.apple.com → Segurança) ou chave da App Store Connect API, para o `notarytool`.
+3. Build local: `npm run build:mac:notarized`, com `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` e `APPLE_TEAM_ID` no ambiente. O certificado é achado no keychain.
+4. Build no CI: os mesmos valores como secrets do repositório — `MAC_CERT_P12_BASE64` (o `.p12` exportado em base64), `MAC_CERT_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`. O job de macOS detecta a presença deles e troca para o build notarizado sozinho; sem secrets, segue no ad-hoc.
+
+Conferência rápida do que saiu do build: `syspolicy_check distribution dist/mac-arm64/Jiraiya.app` diz exatamente o que ainda falta para distribuir.
 
 ## Arquitetura
 

@@ -20,7 +20,14 @@ mac:
     - target: zip
       arch: arm64
   entitlementsInherit: build/entitlements.mac.plist
+  # exigidos pela notarização; sem certificado no keychain o electron-builder
+  # pula a assinatura e o afterSign entra com ad-hoc completo (scripts/after-sign-mac.cjs)
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  gatekeeperAssess: false
+  # ligado por CLI quando as credenciais existem: npm run build:mac:notarized
   notarize: false
+afterSign: scripts/after-sign-mac.cjs
 dmg:
   artifactName: ${name}-${version}.${ext}
 win:
