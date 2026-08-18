@@ -408,6 +408,51 @@ describe('listBoardScopeIssues', () => {
       expect(result.map((i) => i.key).sort()).toEqual(['BT-DONE-RECENT', 'BT-OPEN'])
     })
 
+    it('done sem resolved_at (workflow sem Resolução) entra pelo updated_at recente', () => {
+      upsertIssue(
+        db,
+        1,
+        baseIssue('BT-DONE-SEM-RESOLUCAO', {
+          status: 'Concluído',
+          statusCategory: 'done',
+          resolvedAt: null,
+          updatedAt: daysAgo(1)
+        })
+      )
+      const result = listBoardScopeIssues(q(), kanbanBoard, null)
+      expect(result.map((i) => i.key)).toEqual(['BT-DONE-SEM-RESOLUCAO'])
+    })
+
+    it('done sem resolved_at e sem movimento há 30 dias fica fora', () => {
+      upsertIssue(
+        db,
+        1,
+        baseIssue('BT-DONE-VELHO', {
+          status: 'Concluído',
+          statusCategory: 'done',
+          resolvedAt: null,
+          updatedAt: daysAgo(30)
+        })
+      )
+      const result = listBoardScopeIssues(q(), kanbanBoard, null)
+      expect(result).toEqual([])
+    })
+
+    it('done antigo tocado recentemente (resolved_at velho) NÃO volta pelo updated_at', () => {
+      upsertIssue(
+        db,
+        1,
+        baseIssue('BT-DONE-OLD-TOCADO', {
+          status: 'Concluído',
+          statusCategory: 'done',
+          resolvedAt: daysAgo(60),
+          updatedAt: daysAgo(1)
+        })
+      )
+      const result = listBoardScopeIssues(q(), kanbanBoard, null)
+      expect(result).toEqual([])
+    })
+
     it('board type "kanban" (variante) se comporta igual a "simple"', () => {
       const kanbanBoard2: Board = {
         jiraId: 201,

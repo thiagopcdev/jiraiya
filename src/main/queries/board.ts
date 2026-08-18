@@ -118,6 +118,9 @@ export function isReadOnlySprint(
   return active === null || shown.jiraId !== active.jiraId
 }
 
+/** Janela de "recém-concluído" da coluna de concluídos em quadro kanban. */
+const RECENTLY_DONE_DAYS = 14
+
 /**
  * Cards no escopo do board.
  *
@@ -127,7 +130,15 @@ export function isReadOnlySprint(
  * null → [].
  *
  * Kanban/simple: cards do projeto do board ainda abertos ou "recém-concluídos"
- * (resolvidos nos últimos 14 dias, espelhando o comportamento do Jira).
+ * (últimos 14 dias, espelhando o comportamento do Jira).
+ *
+ * A data de conclusão é `resolved_at` (campo `resolutiondate` do Jira) com
+ * fallback para `updated_at`: workflow que não preenche a Resolução deixa
+ * `resolutiondate` NULL mesmo em card concluído, e sem o fallback a coluna de
+ * concluídos ficava SEMPRE vazia no quadro. `updated_at` também cobre o card
+ * que acabou de ser arrastado para concluído aqui (board:move só bumpa
+ * updated_at), que sem isso desapareceria na hora.
+ *
  * `board.projectKey` null → [].
  */
 export function listBoardScopeIssues(
@@ -148,15 +159,18 @@ export function listBoardScopeIssues(
       .all(workspaceId, sprintJiraId) as IssueRow[]
   } else {
     if (board.projectKey === null) return []
+    // cutoff em ISO (não datetime('now')) para comparar com o mesmo formato em
+    // que as datas são gravadas — 'YYYY-MM-DDTHH:MM:SS.sssZ'
+    const cutoff = new Date(Date.now() - RECENTLY_DONE_DAYS * 24 * 60 * 60 * 1000).toISOString()
     rows = db
       .prepare(
         `SELECT * FROM issue
          WHERE workspace_id = ? AND project_key = ?
            AND (status_category != 'done' OR status_category IS NULL
-                OR resolved_at >= datetime('now','-14 days'))
+                OR COALESCE(resolved_at, updated_at) >= ?)
          ORDER BY updated_at DESC`
       )
-      .all(workspaceId, board.projectKey) as IssueRow[]
+      .all(workspaceId, board.projectKey, cutoff) as IssueRow[]
   }
   return rows.map((r) => rowToIssue(r, siteUrl))
 }
