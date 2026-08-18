@@ -62,10 +62,23 @@ export function isBacklogColumn(
 }
 
 /**
- * Distribui as issues nas colunas casando `issue.status` (NOME) contra
- * `statusNames`, normalizando com trim().toLowerCase(). Cada issue entra em no
- * máximo uma coluna (a primeira que casar); sem correspondência vai para
- * `unmapped`.
+ * Distribui as issues nas colunas. Cada issue entra em no máximo uma coluna (a
+ * primeira que casar); sem correspondência vai para `unmapped`.
+ *
+ * O casamento é por ID de status (`issue.statusId` contra `statusIds`), não por
+ * nome: nome de status se repete num site Jira — cada projeto team-managed cria
+ * o seu próprio "Concluído", "Em andamento" etc. Casando por nome, os cards
+ * caíam na primeira coluna de nome igual, que pode pertencer a outro fluxo (foi
+ * assim que cards concluídos apareceram numa coluna que o quadro do Jira nem
+ * mostra).
+ *
+ * Casa por NOME só quando não há id de um dos lados:
+ * - colunas do `fallbackColumns` (não conhecem ids);
+ * - card sincronizado antes da migration 011 (`statusId` null), até o sync
+ *   voltar a tocá-lo.
+ *
+ * Com ids nos dois lados, id que não casa com nenhuma coluna vai para
+ * `unmapped` — sem recair no nome, que é justamente a fonte do erro.
  */
 export function groupIssuesIntoColumns(
   issues: Issue[],
@@ -74,18 +87,20 @@ export function groupIssuesIntoColumns(
   const norm = (s: string | null): string => (s ?? '').trim().toLowerCase()
   const withIssues = columns.map((c) => ({ ...c, issues: [] as Issue[] }))
   const normNames = withIssues.map((c) => new Set(c.statusNames.map((n) => norm(n))))
+  const idSets = withIssues.map((c) => new Set(c.statusIds))
+  const columnsHaveIds = withIssues.some((c) => c.statusIds.length > 0)
   const unmapped: Issue[] = []
   for (const issue of issues) {
-    const key = norm(issue.status)
-    let placed = false
-    for (let i = 0; i < withIssues.length; i++) {
-      if (key !== '' && normNames[i].has(key)) {
-        withIssues[i].issues.push(issue)
-        placed = true
-        break
-      }
+    const statusId = issue.statusId ?? null
+    let target: number
+    if (columnsHaveIds && statusId !== null) {
+      target = idSets.findIndex((ids) => ids.has(statusId))
+    } else {
+      const key = norm(issue.status)
+      target = key === '' ? -1 : normNames.findIndex((names) => names.has(key))
     }
-    if (!placed) unmapped.push(issue)
+    if (target >= 0) withIssues[target].issues.push(issue)
+    else unmapped.push(issue)
   }
   return { columns: withIssues, unmapped }
 }

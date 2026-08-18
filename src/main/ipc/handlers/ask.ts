@@ -126,7 +126,14 @@ async function executeAction(
       } catch (err) {
         rejectJira(err, 'TRANSITION_FAILED', 'O Jira recusou a transição')
       }
-      updateIssueStatus(ctx.db, workspace.id, key, picked.toStatusName, picked.toCategoryKey)
+      updateIssueStatus(
+        ctx.db,
+        workspace.id,
+        key,
+        picked.toStatusName,
+        picked.toCategoryKey,
+        picked.toStatusId
+      )
       return `${key} movido para ${picked.toStatusName}`
     }
 

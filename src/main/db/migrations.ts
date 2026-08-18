@@ -285,6 +285,16 @@ const migrations: string[] = [
   // quando o sync voltar a tocá-los; até lá a gaveta usa o relator ao vivo.
   `
   ALTER TABLE issue ADD COLUMN reporter_name TEXT;
+  `,
+  // 011: id do status do card. O quadro casava card↔coluna pelo NOME do status, e
+  // nome de status se repete num site Jira (cada projeto team-managed cria o seu
+  // próprio "Concluído"), então o card caía na primeira coluna de nome igual —
+  // podia ser a coluna de outro fluxo. Zera o cursor de issues junto: sem isso o
+  // sync incremental nunca voltaria a tocar os cards já em cache e eles ficariam
+  // sem id (casando por nome) para sempre.
+  `
+  ALTER TABLE issue ADD COLUMN status_id TEXT;
+  UPDATE sync_state SET cursor = NULL WHERE resource = 'issues';
   `
 ]
 

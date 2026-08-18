@@ -46,6 +46,7 @@ export function mapIssue(
     descriptionText: descriptionText && descriptionText.length > 0 ? descriptionText : null,
     issueType: f.issuetype?.name ?? null,
     status: f.status?.name ?? null,
+    statusId: f.status?.id ?? null,
     statusCategory: f.status?.statusCategory?.key ?? null,
     priority: f.priority?.name ?? null,
     assigneeAccountId: f.assignee?.accountId ?? null,

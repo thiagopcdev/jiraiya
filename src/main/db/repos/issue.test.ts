@@ -6,7 +6,9 @@ import {
   getIssueByKey,
   listChildIssues,
   purgeIssue,
+  rowToIssue,
   updateIssueFields,
+  updateIssueStatus,
   upsertIssue,
   type IssueUpsert
 } from './issue'
@@ -39,6 +41,45 @@ function baseIssue(key: string, over: Partial<IssueUpsert> = {}): IssueUpsert {
     ...over
   }
 }
+
+describe('status_id do card', () => {
+  let db: Database.Database
+
+  beforeEach(() => {
+    db = new Database(':memory:')
+    runMigrations(db)
+    db.prepare(
+      `INSERT INTO workspace (id, site_url, email, account_id, created_at)
+       VALUES (1, 'https://x.atlassian.net', 'e@x.com', 'acc-1', 'now')`
+    ).run()
+  })
+
+  it('upsert grava statusId e rowToIssue devolve', () => {
+    upsertIssue(db, 1, baseIssue('BT-1', { statusId: '10001' }))
+    const row = getIssueByKey(db, 1, 'BT-1')!
+    expect(row.status_id).toBe('10001')
+    expect(rowToIssue(row, 'https://x.atlassian.net').statusId).toBe('10001')
+  })
+
+  it('upsert sem statusId (fixture antiga) grava NULL em vez de estourar', () => {
+    upsertIssue(db, 1, baseIssue('BT-2'))
+    expect(getIssueByKey(db, 1, 'BT-2')!.status_id).toBeNull()
+  })
+
+  it('updateIssueStatus com id grava o id novo', () => {
+    upsertIssue(db, 1, baseIssue('BT-3', { statusId: '10001' }))
+    updateIssueStatus(db, 1, 'BT-3', 'Concluído', 'done', '10002')
+    const row = getIssueByKey(db, 1, 'BT-3')!
+    expect(row.status).toBe('Concluído')
+    expect(row.status_id).toBe('10002')
+  })
+
+  it('updateIssueStatus sem id ZERA o status_id (id velho apontaria para a coluna errada)', () => {
+    upsertIssue(db, 1, baseIssue('BT-4', { statusId: '10001' }))
+    updateIssueStatus(db, 1, 'BT-4', 'Concluído', 'done')
+    expect(getIssueByKey(db, 1, 'BT-4')!.status_id).toBeNull()
+  })
+})
 
 describe('listChildIssues', () => {
   let db: Database.Database

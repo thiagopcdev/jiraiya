@@ -234,6 +234,47 @@ describe('groupIssuesIntoColumns', () => {
     const { unmapped } = groupIssuesIntoColumns(issues, columns)
     expect(unmapped.map((i) => i.key)).toEqual(['BT-10'])
   })
+
+  // duas colunas do quadro apontam para status de nome IGUAL e id DIFERENTE
+  // (cada projeto team-managed do site tem o seu próprio "Concluído")
+  const homonimas: ResolvedColumn[] = [
+    { name: 'Pronto Prod', statusIds: ['77'], statusNames: ['Concluído'], wipMax: null },
+    { name: 'Itens concluídos', statusIds: ['10001'], statusNames: ['Concluído'], wipMax: null }
+  ]
+
+  it('com statusId, casa por id — coluna homônima anterior não rouba o card', () => {
+    const issues = [fakeIssue({ key: 'BT-1', status: 'Concluído', statusId: '10001' })]
+    const { columns: grouped, unmapped } = groupIssuesIntoColumns(issues, homonimas)
+    expect(grouped.find((c) => c.name === 'Pronto Prod')!.issues).toEqual([])
+    expect(grouped.find((c) => c.name === 'Itens concluídos')!.issues.map((i) => i.key)).toEqual([
+      'BT-1'
+    ])
+    expect(unmapped).toEqual([])
+  })
+
+  it('sem statusId (card sincronizado antes da migration 011) casa por nome', () => {
+    const issues = [fakeIssue({ key: 'BT-2', status: 'Concluído' })]
+    const { columns: grouped } = groupIssuesIntoColumns(issues, homonimas)
+    expect(grouped.find((c) => c.name === 'Pronto Prod')!.issues.map((i) => i.key)).toEqual([
+      'BT-2'
+    ])
+  })
+
+  it('statusId fora de todas as colunas -> unmapped, sem recair no nome', () => {
+    const issues = [fakeIssue({ key: 'BT-3', status: 'Concluído', statusId: '99999' })]
+    const { columns: grouped, unmapped } = groupIssuesIntoColumns(issues, homonimas)
+    for (const c of grouped) expect(c.issues).toEqual([])
+    expect(unmapped.map((i) => i.key)).toEqual(['BT-3'])
+  })
+
+  it('colunas sem ids (fallback) casam por nome mesmo com card que tem statusId', () => {
+    const semIds: ResolvedColumn[] = [
+      { name: 'Concluído', statusIds: [], statusNames: ['Concluído'], wipMax: null }
+    ]
+    const issues = [fakeIssue({ key: 'BT-4', status: 'Concluído', statusId: '10001' })]
+    const { columns: grouped } = groupIssuesIntoColumns(issues, semIds)
+    expect(grouped[0].issues.map((i) => i.key)).toEqual(['BT-4'])
+  })
 })
 
 describe('pickTransition', () => {

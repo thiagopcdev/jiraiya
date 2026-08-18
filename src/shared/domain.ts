@@ -52,6 +52,12 @@ export interface Issue {
   descriptionText: string | null
   issueType: string | null
   status: string | null
+  /**
+   * Id do status no Jira. Opcional: card sincronizado antes da migration 011 só
+   * ganha o id quando o sync voltar a tocá-lo. É o que casa card↔coluna do
+   * quadro — nome de status se repete no site, id não.
+   */
+  statusId?: string | null
   statusCategory: StatusCategory | null
   priority: string | null
   assigneeAccountId: string | null

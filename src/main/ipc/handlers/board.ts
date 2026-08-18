@@ -164,7 +164,14 @@ export function registerBoardHandlers(ctx: AppContext): void {
 
     // readOnly não é validado aqui de propósito: a UI desabilita o drag em
     // sprint fechada; o main confia nessa checagem e não duplica a regra.
-    updateIssueStatus(ctx.db, ws.id, key, picked.toStatusName, picked.toCategoryKey)
+    updateIssueStatus(
+      ctx.db,
+      ws.id,
+      key,
+      picked.toStatusName,
+      picked.toCategoryKey,
+      picked.toStatusId
+    )
     void ctx.scheduler?.trigger({})
     return { newStatus: picked.toStatusName, newStatusCategory: picked.toCategoryKey }
   })

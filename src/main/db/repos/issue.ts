@@ -9,6 +9,8 @@ export interface IssueUpsert {
   descriptionText: string | null
   issueType: string | null
   status: string | null
+  /** ausente em fixture antiga/parcial → gravado como NULL (casa por nome) */
+  statusId?: string | null
   statusCategory: string | null
   priority: string | null
   assigneeAccountId: string | null
@@ -34,6 +36,7 @@ export interface IssueRow {
   description_text: string | null
   issue_type: string | null
   status: string | null
+  status_id: string | null
   status_category: string | null
   priority: string | null
   assignee_account_id: string | null
@@ -60,6 +63,7 @@ export function rowToIssue(row: IssueRow, siteUrl: string): Issue {
     descriptionText: row.description_text,
     issueType: row.issue_type,
     status: row.status,
+    statusId: row.status_id,
     statusCategory: (row.status_category as StatusCategory | null) ?? null,
     priority: row.priority,
     assigneeAccountId: row.assignee_account_id,
@@ -82,19 +86,20 @@ export function upsertIssue(db: Database.Database, workspaceId: number, i: Issue
   db.prepare(
     `INSERT INTO issue (
       workspace_id, jira_id, key, project_key, summary, description_text, issue_type,
-      status, status_category, priority, assignee_account_id, assignee_name,
+      status, status_id, status_category, priority, assignee_account_id, assignee_name,
       reporter_account_id, reporter_name, story_points, sprint_jira_id, labels_json, parent_key,
       flagged, created_at, updated_at, resolved_at, last_synced_at
     ) VALUES (
       @workspaceId, @jiraId, @key, @projectKey, @summary, @descriptionText, @issueType,
-      @status, @statusCategory, @priority, @assigneeAccountId, @assigneeName,
+      @status, @statusId, @statusCategory, @priority, @assigneeAccountId, @assigneeName,
       @reporterAccountId, @reporterName, @storyPoints, @sprintJiraId, @labelsJson, @parentKey,
       @flagged, @createdAt, @updatedAt, @resolvedAt, @now
     )
     ON CONFLICT(workspace_id, key) DO UPDATE SET
       jira_id=excluded.jira_id, project_key=excluded.project_key, summary=excluded.summary,
       description_text=excluded.description_text, issue_type=excluded.issue_type,
-      status=excluded.status, status_category=excluded.status_category, priority=excluded.priority,
+      status=excluded.status, status_id=excluded.status_id,
+      status_category=excluded.status_category, priority=excluded.priority,
       assignee_account_id=excluded.assignee_account_id, assignee_name=excluded.assignee_name,
       reporter_account_id=excluded.reporter_account_id, reporter_name=excluded.reporter_name,
       story_points=excluded.story_points,
@@ -111,6 +116,7 @@ export function upsertIssue(db: Database.Database, workspaceId: number, i: Issue
     descriptionText: i.descriptionText,
     issueType: i.issueType,
     status: i.status,
+    statusId: i.statusId ?? null,
     statusCategory: i.statusCategory,
     priority: i.priority,
     assigneeAccountId: i.assigneeAccountId,
@@ -172,17 +178,23 @@ export function issuesNeedingChangelog(
 }
 
 /** Atualiza status/categoria de um card localmente (após transição no Jira). */
+/**
+ * `statusId` ausente → grava NULL de propósito. Manter o id antigo seria pior que
+ * não ter id: ele aponta para o status ANTERIOR e jogaria o card na coluna errada
+ * do quadro. Com NULL o agrupamento volta a casar por nome até o próximo sync.
+ */
 export function updateIssueStatus(
   db: Database.Database,
   workspaceId: number,
   key: string,
   status: string,
-  statusCategory: StatusCategory
+  statusCategory: StatusCategory,
+  statusId: string | null = null
 ): void {
   db.prepare(
-    `UPDATE issue SET status = ?, status_category = ?, updated_at = ?
+    `UPDATE issue SET status = ?, status_id = ?, status_category = ?, updated_at = ?
      WHERE workspace_id = ? AND key = ?`
-  ).run(status, statusCategory, new Date().toISOString(), workspaceId, key)
+  ).run(status, statusId, statusCategory, new Date().toISOString(), workspaceId, key)
 }
 
 /**
