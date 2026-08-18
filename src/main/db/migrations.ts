@@ -285,6 +285,25 @@ const migrations: string[] = [
   // quando o sync voltar a tocá-los; até lá a gaveta usa o relator ao vivo.
   `
   ALTER TABLE issue ADD COLUMN reporter_name TEXT;
+  `,
+  // 011: id do status do card. O quadro casava card↔coluna pelo NOME do status, e
+  // nome de status se repete num site Jira (cada projeto team-managed cria o seu
+  // próprio "Concluído"), então o card caía na primeira coluna de nome igual —
+  // podia ser a coluna de outro fluxo. Zera o cursor de issues junto: sem isso o
+  // sync incremental nunca voltaria a tocar os cards já em cache e eles ficariam
+  // sem id (casando por nome) para sempre.
+  `
+  ALTER TABLE issue ADD COLUMN status_id TEXT;
+  UPDATE sync_state SET cursor = NULL WHERE resource = 'issues';
+  `,
+  // 012: data em que o card entrou na categoria de status atual
+  // (`statuscategorychangedate`). É a régua do Jira para esconder concluído no
+  // quadro; até aqui a janela caía em `updated_at`, que qualquer comentário
+  // empurra — card concluído em junho voltava ao quadro por ter sido comentado
+  // ontem. Zera o cursor de issues pelo mesmo motivo da 011.
+  `
+  ALTER TABLE issue ADD COLUMN status_category_changed_at TEXT;
+  UPDATE sync_state SET cursor = NULL WHERE resource = 'issues';
   `
 ]
 

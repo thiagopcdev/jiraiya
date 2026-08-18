@@ -180,7 +180,12 @@ export function registerEditHandlers(ctx: AppContext): void {
       )
     }
 
-    let picked: { id: string; toStatusName: string; toCategoryKey: StatusCategory }
+    let picked: {
+      id: string
+      toStatusName: string
+      toStatusId: string
+      toCategoryKey: StatusCategory
+    }
     try {
       const transitions = await client.issueTransitions(issueKey)
       const found = transitions.find((t) => t.id === transitionId)
@@ -220,7 +225,14 @@ export function registerEditHandlers(ctx: AppContext): void {
       throw err
     }
 
-    updateIssueStatus(ctx.db, workspace.id, issueKey, picked.toStatusName, picked.toCategoryKey)
+    updateIssueStatus(
+      ctx.db,
+      workspace.id,
+      issueKey,
+      picked.toStatusName,
+      picked.toCategoryKey,
+      picked.toStatusId
+    )
     void ctx.scheduler?.trigger({})
     return {
       newStatus: picked.toStatusName,

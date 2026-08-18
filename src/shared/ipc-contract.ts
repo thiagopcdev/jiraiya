@@ -168,6 +168,7 @@ export const ipcContract = {
       syncIntervalMinutes: z.number().int().min(5).max(120).optional(),
       backfillDays: z.number().int().min(7).max(180).optional(),
       stalledDays: z.number().int().min(1).max(30).optional(),
+      boardDoneDays: z.number().int().min(1).max(60).optional(),
       inProgressStatuses: z.array(z.string().trim().min(1)).max(60).optional(),
       syncMode: z.enum(['project', 'personal']).optional(),
       notifyCriticalAlerts: z.boolean().optional(),

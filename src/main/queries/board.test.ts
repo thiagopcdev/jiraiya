@@ -234,6 +234,47 @@ describe('groupIssuesIntoColumns', () => {
     const { unmapped } = groupIssuesIntoColumns(issues, columns)
     expect(unmapped.map((i) => i.key)).toEqual(['BT-10'])
   })
+
+  // duas colunas do quadro apontam para status de nome IGUAL e id DIFERENTE
+  // (cada projeto team-managed do site tem o seu próprio "Concluído")
+  const homonimas: ResolvedColumn[] = [
+    { name: 'Pronto Prod', statusIds: ['77'], statusNames: ['Concluído'], wipMax: null },
+    { name: 'Itens concluídos', statusIds: ['10001'], statusNames: ['Concluído'], wipMax: null }
+  ]
+
+  it('com statusId, casa por id — coluna homônima anterior não rouba o card', () => {
+    const issues = [fakeIssue({ key: 'BT-1', status: 'Concluído', statusId: '10001' })]
+    const { columns: grouped, unmapped } = groupIssuesIntoColumns(issues, homonimas)
+    expect(grouped.find((c) => c.name === 'Pronto Prod')!.issues).toEqual([])
+    expect(grouped.find((c) => c.name === 'Itens concluídos')!.issues.map((i) => i.key)).toEqual([
+      'BT-1'
+    ])
+    expect(unmapped).toEqual([])
+  })
+
+  it('sem statusId (card sincronizado antes da migration 011) casa por nome', () => {
+    const issues = [fakeIssue({ key: 'BT-2', status: 'Concluído' })]
+    const { columns: grouped } = groupIssuesIntoColumns(issues, homonimas)
+    expect(grouped.find((c) => c.name === 'Pronto Prod')!.issues.map((i) => i.key)).toEqual([
+      'BT-2'
+    ])
+  })
+
+  it('statusId fora de todas as colunas -> unmapped, sem recair no nome', () => {
+    const issues = [fakeIssue({ key: 'BT-3', status: 'Concluído', statusId: '99999' })]
+    const { columns: grouped, unmapped } = groupIssuesIntoColumns(issues, homonimas)
+    for (const c of grouped) expect(c.issues).toEqual([])
+    expect(unmapped.map((i) => i.key)).toEqual(['BT-3'])
+  })
+
+  it('colunas sem ids (fallback) casam por nome mesmo com card que tem statusId', () => {
+    const semIds: ResolvedColumn[] = [
+      { name: 'Concluído', statusIds: [], statusNames: ['Concluído'], wipMax: null }
+    ]
+    const issues = [fakeIssue({ key: 'BT-4', status: 'Concluído', statusId: '10001' })]
+    const { columns: grouped } = groupIssuesIntoColumns(issues, semIds)
+    expect(grouped[0].issues.map((i) => i.key)).toEqual(['BT-4'])
+  })
 })
 
 describe('pickTransition', () => {
@@ -406,6 +447,102 @@ describe('listBoardScopeIssues', () => {
       )
       const result = listBoardScopeIssues(q(), kanbanBoard, null)
       expect(result.map((i) => i.key).sort()).toEqual(['BT-DONE-RECENT', 'BT-OPEN'])
+    })
+
+    it('janela mede pelo status_category_changed_at, não pelo updated_at (comentário não ressuscita card)', () => {
+      // concluído há 60 dias e comentado ontem: o Jira esconde, o app também
+      upsertIssue(
+        db,
+        1,
+        baseIssue('BT-COMENTADO', {
+          status: 'Concluído',
+          statusCategory: 'done',
+          resolvedAt: null,
+          statusCategoryChangedAt: daysAgo(60),
+          updatedAt: daysAgo(1)
+        })
+      )
+      expect(listBoardScopeIssues(q(), kanbanBoard, null)).toEqual([])
+    })
+
+    it('doneDays da pref encurta a janela (quadro que esconde concluído com mais de 1 semana)', () => {
+      upsertIssue(
+        db,
+        1,
+        baseIssue('BT-9DIAS', {
+          status: 'Pronto para deploy PROD',
+          statusCategory: 'done',
+          resolvedAt: null,
+          statusCategoryChangedAt: daysAgo(9),
+          updatedAt: daysAgo(9)
+        })
+      )
+      // padrão de 14 dias mostra
+      expect(listBoardScopeIssues(q(), kanbanBoard, null).map((i) => i.key)).toEqual(['BT-9DIAS'])
+      // janela de 1 semana esconde, como o quadro do Jira
+      expect(listBoardScopeIssues(q(), kanbanBoard, null, 7)).toEqual([])
+    })
+
+    it('resolved_at vence o status_category_changed_at quando existe', () => {
+      upsertIssue(
+        db,
+        1,
+        baseIssue('BT-RESOLVIDO-HOJE', {
+          status: 'Concluído',
+          statusCategory: 'done',
+          resolvedAt: daysAgo(1),
+          statusCategoryChangedAt: daysAgo(60),
+          updatedAt: daysAgo(60)
+        })
+      )
+      expect(listBoardScopeIssues(q(), kanbanBoard, null).map((i) => i.key)).toEqual([
+        'BT-RESOLVIDO-HOJE'
+      ])
+    })
+
+    it('done sem resolved_at (workflow sem Resolução) entra pelo updated_at recente', () => {
+      upsertIssue(
+        db,
+        1,
+        baseIssue('BT-DONE-SEM-RESOLUCAO', {
+          status: 'Concluído',
+          statusCategory: 'done',
+          resolvedAt: null,
+          updatedAt: daysAgo(1)
+        })
+      )
+      const result = listBoardScopeIssues(q(), kanbanBoard, null)
+      expect(result.map((i) => i.key)).toEqual(['BT-DONE-SEM-RESOLUCAO'])
+    })
+
+    it('done sem resolved_at e sem movimento há 30 dias fica fora', () => {
+      upsertIssue(
+        db,
+        1,
+        baseIssue('BT-DONE-VELHO', {
+          status: 'Concluído',
+          statusCategory: 'done',
+          resolvedAt: null,
+          updatedAt: daysAgo(30)
+        })
+      )
+      const result = listBoardScopeIssues(q(), kanbanBoard, null)
+      expect(result).toEqual([])
+    })
+
+    it('done antigo tocado recentemente (resolved_at velho) NÃO volta pelo updated_at', () => {
+      upsertIssue(
+        db,
+        1,
+        baseIssue('BT-DONE-OLD-TOCADO', {
+          status: 'Concluído',
+          statusCategory: 'done',
+          resolvedAt: daysAgo(60),
+          updatedAt: daysAgo(1)
+        })
+      )
+      const result = listBoardScopeIssues(q(), kanbanBoard, null)
+      expect(result).toEqual([])
     })
 
     it('board type "kanban" (variante) se comporta igual a "simple"', () => {

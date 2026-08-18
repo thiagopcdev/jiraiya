@@ -46,6 +46,7 @@ export function mapIssue(
     descriptionText: descriptionText && descriptionText.length > 0 ? descriptionText : null,
     issueType: f.issuetype?.name ?? null,
     status: f.status?.name ?? null,
+    statusId: f.status?.id ?? null,
     statusCategory: f.status?.statusCategory?.key ?? null,
     priority: f.priority?.name ?? null,
     assigneeAccountId: f.assignee?.accountId ?? null,
@@ -59,6 +60,9 @@ export function mapIssue(
     flagged,
     createdAt: f.created ? new Date(f.created).toISOString() : null,
     updatedAt: f.updated ? new Date(f.updated).toISOString() : null,
-    resolvedAt: f.resolutiondate ? new Date(f.resolutiondate).toISOString() : null
+    resolvedAt: f.resolutiondate ? new Date(f.resolutiondate).toISOString() : null,
+    statusCategoryChangedAt: f.statuscategorychangedate
+      ? new Date(f.statuscategorychangedate).toISOString()
+      : null
   }
 }

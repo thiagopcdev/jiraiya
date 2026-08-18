@@ -43,6 +43,31 @@ describe('mapIssue — flagged', () => {
     expect(mapped.flagged).toBe(false)
   })
 
+  it('id do status vai para statusId (é ele que casa o card com a coluna do quadro)', () => {
+    const mapped = mapIssue(
+      raw({ status: { id: '10001', name: 'Concluído', statusCategory: { key: 'done' } } }),
+      fieldIds
+    )
+    expect(mapped.statusId).toBe('10001')
+    expect(mapped.status).toBe('Concluído')
+  })
+
+  it('status sem id na resposta -> statusId null', () => {
+    expect(mapIssue(raw(), fieldIds).statusId).toBeNull()
+  })
+
+  it('statuscategorychangedate vira statusCategoryChangedAt em ISO', () => {
+    const mapped = mapIssue(
+      raw({ statuscategorychangedate: '2026-08-06T17:57:35.000+0000' }),
+      fieldIds
+    )
+    expect(mapped.statusCategoryChangedAt).toBe('2026-08-06T17:57:35.000Z')
+  })
+
+  it('sem statuscategorychangedate -> null', () => {
+    expect(mapIssue(raw(), fieldIds).statusCategoryChangedAt).toBeNull()
+  })
+
   it('story points e sprint continuam mapeando', () => {
     const mapped = mapIssue(
       raw({ customfield_10016: 5, customfield_10020: [{ id: 77, state: 'active' }] }),

@@ -62,10 +62,23 @@ export function isBacklogColumn(
 }
 
 /**
- * Distribui as issues nas colunas casando `issue.status` (NOME) contra
- * `statusNames`, normalizando com trim().toLowerCase(). Cada issue entra em no
- * máximo uma coluna (a primeira que casar); sem correspondência vai para
- * `unmapped`.
+ * Distribui as issues nas colunas. Cada issue entra em no máximo uma coluna (a
+ * primeira que casar); sem correspondência vai para `unmapped`.
+ *
+ * O casamento é por ID de status (`issue.statusId` contra `statusIds`), não por
+ * nome: nome de status se repete num site Jira — cada projeto team-managed cria
+ * o seu próprio "Concluído", "Em andamento" etc. Casando por nome, os cards
+ * caíam na primeira coluna de nome igual, que pode pertencer a outro fluxo (foi
+ * assim que cards concluídos apareceram numa coluna que o quadro do Jira nem
+ * mostra).
+ *
+ * Casa por NOME só quando não há id de um dos lados:
+ * - colunas do `fallbackColumns` (não conhecem ids);
+ * - card sincronizado antes da migration 011 (`statusId` null), até o sync
+ *   voltar a tocá-lo.
+ *
+ * Com ids nos dois lados, id que não casa com nenhuma coluna vai para
+ * `unmapped` — sem recair no nome, que é justamente a fonte do erro.
  */
 export function groupIssuesIntoColumns(
   issues: Issue[],
@@ -74,18 +87,20 @@ export function groupIssuesIntoColumns(
   const norm = (s: string | null): string => (s ?? '').trim().toLowerCase()
   const withIssues = columns.map((c) => ({ ...c, issues: [] as Issue[] }))
   const normNames = withIssues.map((c) => new Set(c.statusNames.map((n) => norm(n))))
+  const idSets = withIssues.map((c) => new Set(c.statusIds))
+  const columnsHaveIds = withIssues.some((c) => c.statusIds.length > 0)
   const unmapped: Issue[] = []
   for (const issue of issues) {
-    const key = norm(issue.status)
-    let placed = false
-    for (let i = 0; i < withIssues.length; i++) {
-      if (key !== '' && normNames[i].has(key)) {
-        withIssues[i].issues.push(issue)
-        placed = true
-        break
-      }
+    const statusId = issue.statusId ?? null
+    let target: number
+    if (columnsHaveIds && statusId !== null) {
+      target = idSets.findIndex((ids) => ids.has(statusId))
+    } else {
+      const key = norm(issue.status)
+      target = key === '' ? -1 : normNames.findIndex((names) => names.has(key))
     }
-    if (!placed) unmapped.push(issue)
+    if (target >= 0) withIssues[target].issues.push(issue)
+    else unmapped.push(issue)
   }
   return { columns: withIssues, unmapped }
 }
@@ -119,6 +134,14 @@ export function isReadOnlySprint(
 }
 
 /**
+ * Janela de "recém-concluído" do quadro kanban quando a pref não é informada
+ * (14 dias = o padrão do Jira). O quadro do Jira permite outro valor por quadro
+ * ("ocultar itens concluídos com mais de"), e a API de configuração não expõe
+ * esse ajuste — por isso ele é uma pref do app (`boardDoneDays`).
+ */
+const RECENTLY_DONE_DAYS = 14
+
+/**
  * Cards no escopo do board.
  *
  * Scrum: cards da sprint exibida (`sprint_jira_id`). Limitação v1: `sprint_jira_id`
@@ -127,13 +150,25 @@ export function isReadOnlySprint(
  * null → [].
  *
  * Kanban/simple: cards do projeto do board ainda abertos ou "recém-concluídos"
- * (resolvidos nos últimos 14 dias, espelhando o comportamento do Jira).
+ * (`doneDays`, espelhando o comportamento do Jira).
+ *
+ * A data de conclusão sai de `COALESCE(resolved_at, status_category_changed_at,
+ * updated_at)`, nessa ordem:
+ * - `resolved_at` (`resolutiondate`) é o dado mais preciso, mas fica NULL em
+ *   workflow que não preenche a Resolução — sem os fallbacks a coluna de
+ *   concluídos ficava SEMPRE vazia;
+ * - `status_category_changed_at` é a régua que o próprio Jira usa no quadro;
+ * - `updated_at` é último recurso, só para card sincronizado antes da migration
+ *   012. É um proxy ruim (qualquer comentário empurra a data e ressuscita card
+ *   concluído há meses), por isso vem depois dos dois.
+ *
  * `board.projectKey` null → [].
  */
 export function listBoardScopeIssues(
   q: { db: Database.Database; workspaceId: number; siteUrl: string },
   board: Board,
-  sprintJiraId: number | null
+  sprintJiraId: number | null,
+  doneDays: number = RECENTLY_DONE_DAYS
 ): Issue[] {
   const { db, workspaceId, siteUrl } = q
   let rows: IssueRow[]
@@ -148,15 +183,18 @@ export function listBoardScopeIssues(
       .all(workspaceId, sprintJiraId) as IssueRow[]
   } else {
     if (board.projectKey === null) return []
+    // cutoff em ISO (não datetime('now')) para comparar com o mesmo formato em
+    // que as datas são gravadas — 'YYYY-MM-DDTHH:MM:SS.sssZ'
+    const cutoff = new Date(Date.now() - doneDays * 24 * 60 * 60 * 1000).toISOString()
     rows = db
       .prepare(
         `SELECT * FROM issue
          WHERE workspace_id = ? AND project_key = ?
            AND (status_category != 'done' OR status_category IS NULL
-                OR resolved_at >= datetime('now','-14 days'))
+                OR COALESCE(resolved_at, status_category_changed_at, updated_at) >= ?)
          ORDER BY updated_at DESC`
       )
-      .all(workspaceId, board.projectKey) as IssueRow[]
+      .all(workspaceId, board.projectKey, cutoff) as IssueRow[]
   }
   return rows.map((r) => rowToIssue(r, siteUrl))
 }

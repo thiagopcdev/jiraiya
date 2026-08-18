@@ -1,6 +1,6 @@
 {
   "name": "jiraiya",
-  "version": "3.2.1",
+  "version": "3.2.4",
   "description": "Seu histórico de trabalho no Jira, sem planilha",
   "main": "./out/main/index.js",
   "author": "Thiago Prado (Thiago Carvalho, @thiagopcdev)",

@@ -52,6 +52,12 @@ export interface Issue {
   descriptionText: string | null
   issueType: string | null
   status: string | null
+  /**
+   * Id do status no Jira. Opcional: card sincronizado antes da migration 011 só
+   * ganha o id quando o sync voltar a tocá-lo. É o que casa card↔coluna do
+   * quadro — nome de status se repete no site, id não.
+   */
+  statusId?: string | null
   statusCategory: StatusCategory | null
   priority: string | null
   assigneeAccountId: string | null
@@ -66,6 +72,13 @@ export interface Issue {
   createdAt: string | null
   updatedAt: string | null
   resolvedAt: string | null
+  /**
+   * Quando o card entrou na categoria de status atual (`statuscategorychangedate`).
+   * É a régua do quadro para "concluído recente" — `resolvedAt` fica null em
+   * workflow que não preenche a Resolução. Opcional: card sincronizado antes da
+   * migration 012 só ganha o valor quando o sync voltar a tocá-lo.
+   */
+  statusCategoryChangedAt?: string | null
   url: string
 }
 
@@ -238,6 +251,13 @@ export interface Prefs {
   backfillDays: number
   stalledDays: number
   /**
+   * Dias de concluído que o quadro kanban ainda mostra. Espelha o "ocultar itens
+   * concluídos com mais de" do quadro no Jira, que a API de configuração não
+   * expõe — sem esse ajuste o app fica preso em 14 dias e mostra card que o
+   * quadro do Jira já esconde.
+   */
+  boardDoneDays: number
+  /**
    * Nomes de status que contam como trabalho EM CURSO. Vazio = toda a categoria
    * "em progresso" do Jira, que é o comportamento histórico — e que mistura
    * "Em andamento" com "Code Review", "Pronto para Teste" e "Aguardando Deploy".
@@ -346,6 +366,8 @@ export const DEFAULT_PREFS: Prefs = {
   syncIntervalMinutes: 15,
   backfillDays: 30,
   stalledDays: 3,
+  // 14 dias = o padrão do Jira para quadro kanban
+  boardDoneDays: 14,
   // "Em andamento" e não a categoria inteira: o padrão do Jira misturava code
   // review, teste e deploy com trabalho realmente em curso. Quem usa outro nome
   // de coluna reescolhe em Configurações → Sincronização.

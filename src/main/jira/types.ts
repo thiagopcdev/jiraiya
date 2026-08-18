@@ -62,13 +62,14 @@ export interface JiraIssueFields {
   summary: string
   description?: AdfNode | null
   issuetype?: { name?: string }
-  status?: { name?: string; statusCategory?: { key?: string } }
+  status?: { id?: string; name?: string; statusCategory?: { key?: string } }
   priority?: { name?: string }
   assignee?: JiraUserRef | null
   reporter?: JiraUserRef | null
   created?: string
   updated?: string
   resolutiondate?: string | null
+  statuscategorychangedate?: string | null
   labels?: string[]
   parent?: { key?: string }
   project?: { key?: string }
