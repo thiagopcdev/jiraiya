@@ -69,6 +69,7 @@ export interface JiraIssueFields {
   created?: string
   updated?: string
   resolutiondate?: string | null
+  statuscategorychangedate?: string | null
   labels?: string[]
   parent?: { key?: string }
   project?: { key?: string }

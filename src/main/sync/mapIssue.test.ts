@@ -56,6 +56,18 @@ describe('mapIssue — flagged', () => {
     expect(mapIssue(raw(), fieldIds).statusId).toBeNull()
   })
 
+  it('statuscategorychangedate vira statusCategoryChangedAt em ISO', () => {
+    const mapped = mapIssue(
+      raw({ statuscategorychangedate: '2026-08-06T17:57:35.000+0000' }),
+      fieldIds
+    )
+    expect(mapped.statusCategoryChangedAt).toBe('2026-08-06T17:57:35.000Z')
+  })
+
+  it('sem statuscategorychangedate -> null', () => {
+    expect(mapIssue(raw(), fieldIds).statusCategoryChangedAt).toBeNull()
+  })
+
   it('story points e sprint continuam mapeando', () => {
     const mapped = mapIssue(
       raw({ customfield_10016: 5, customfield_10020: [{ id: 77, state: 'active' }] }),

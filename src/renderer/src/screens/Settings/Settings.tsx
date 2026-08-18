@@ -729,6 +729,19 @@ function SyncSection(): React.JSX.Element | null {
         onChange={(v) => void update({ stalledDays: Number(v) })}
       />
       <SelectSetting
+        id="board-done-days"
+        label="Mostrar concluídos do quadro dos últimos"
+        hint='Espelhe aqui o "ocultar itens concluídos com mais de" do seu quadro no Jira — a API não expõe esse ajuste.'
+        value={String(prefs.boardDoneDays)}
+        options={[
+          ['1', '1 dia'],
+          ['7', '1 semana'],
+          ['14', '2 semanas'],
+          ['30', '1 mês']
+        ]}
+        onChange={(v) => void update({ boardDoneDays: Number(v) })}
+      />
+      <SelectSetting
         id="sync-mode"
         label="Modo de sincronização"
         hint="Pessoal traz só o que está ligado a você; por projeto traz o quadro inteiro."

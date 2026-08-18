@@ -25,6 +25,8 @@ export interface IssueUpsert {
   createdAt: string | null
   updatedAt: string | null
   resolvedAt: string | null
+  /** ausente em fixture antiga/parcial → gravado como NULL */
+  statusCategoryChangedAt?: string | null
 }
 
 export interface IssueRow {
@@ -51,6 +53,7 @@ export interface IssueRow {
   created_at: string | null
   updated_at: string | null
   resolved_at: string | null
+  status_category_changed_at: string | null
   changelog_synced_at: string | null
 }
 
@@ -78,6 +81,7 @@ export function rowToIssue(row: IssueRow, siteUrl: string): Issue {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     resolvedAt: row.resolved_at,
+    statusCategoryChangedAt: row.status_category_changed_at,
     url: `${siteUrl.replace(/\/$/, '')}/browse/${row.key}`
   }
 }
@@ -88,12 +92,12 @@ export function upsertIssue(db: Database.Database, workspaceId: number, i: Issue
       workspace_id, jira_id, key, project_key, summary, description_text, issue_type,
       status, status_id, status_category, priority, assignee_account_id, assignee_name,
       reporter_account_id, reporter_name, story_points, sprint_jira_id, labels_json, parent_key,
-      flagged, created_at, updated_at, resolved_at, last_synced_at
+      flagged, created_at, updated_at, resolved_at, status_category_changed_at, last_synced_at
     ) VALUES (
       @workspaceId, @jiraId, @key, @projectKey, @summary, @descriptionText, @issueType,
       @status, @statusId, @statusCategory, @priority, @assigneeAccountId, @assigneeName,
       @reporterAccountId, @reporterName, @storyPoints, @sprintJiraId, @labelsJson, @parentKey,
-      @flagged, @createdAt, @updatedAt, @resolvedAt, @now
+      @flagged, @createdAt, @updatedAt, @resolvedAt, @statusCategoryChangedAt, @now
     )
     ON CONFLICT(workspace_id, key) DO UPDATE SET
       jira_id=excluded.jira_id, project_key=excluded.project_key, summary=excluded.summary,
@@ -106,7 +110,9 @@ export function upsertIssue(db: Database.Database, workspaceId: number, i: Issue
       sprint_jira_id=excluded.sprint_jira_id, labels_json=excluded.labels_json,
       parent_key=excluded.parent_key, flagged=excluded.flagged,
       created_at=excluded.created_at, updated_at=excluded.updated_at,
-      resolved_at=excluded.resolved_at, last_synced_at=excluded.last_synced_at`
+      resolved_at=excluded.resolved_at,
+      status_category_changed_at=excluded.status_category_changed_at,
+      last_synced_at=excluded.last_synced_at`
   ).run({
     workspaceId,
     jiraId: i.jiraId,
@@ -131,6 +137,7 @@ export function upsertIssue(db: Database.Database, workspaceId: number, i: Issue
     createdAt: i.createdAt,
     updatedAt: i.updatedAt,
     resolvedAt: i.resolvedAt,
+    statusCategoryChangedAt: i.statusCategoryChangedAt ?? null,
     now: new Date().toISOString()
   })
 }
@@ -191,10 +198,16 @@ export function updateIssueStatus(
   statusCategory: StatusCategory,
   statusId: string | null = null
 ): void {
+  const now = new Date().toISOString()
   db.prepare(
-    `UPDATE issue SET status = ?, status_id = ?, status_category = ?, updated_at = ?
+    // a data só anda quando a CATEGORIA muda, espelhando o statuscategorychangedate
+    // do Jira: card que anda entre dois status concluídos não renova a janela do quadro
+    `UPDATE issue SET status = ?, status_id = ?,
+       status_category_changed_at =
+         CASE WHEN status_category IS ? THEN status_category_changed_at ELSE ? END,
+       status_category = ?, updated_at = ?
      WHERE workspace_id = ? AND key = ?`
-  ).run(status, statusId, statusCategory, new Date().toISOString(), workspaceId, key)
+  ).run(status, statusId, statusCategory, now, statusCategory, now, workspaceId, key)
 }
 
 /**

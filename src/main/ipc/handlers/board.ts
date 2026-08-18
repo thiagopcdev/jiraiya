@@ -90,7 +90,8 @@ export function registerBoardHandlers(ctx: AppContext): void {
     const issues = listBoardScopeIssues(
       { db, workspaceId: ws.id, siteUrl: ws.site_url },
       board,
-      sprintScopeId
+      sprintScopeId,
+      getPrefs(db).boardDoneDays
     )
 
     // Colunas: cache válido → Jira → fallback (fallback nunca é cacheado).

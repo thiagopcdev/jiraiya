@@ -74,6 +74,37 @@ describe('status_id do card', () => {
     expect(row.status_id).toBe('10002')
   })
 
+  it('updateIssueStatus move a data quando a CATEGORIA muda', () => {
+    upsertIssue(
+      db,
+      1,
+      baseIssue('BT-5', {
+        statusCategory: 'indeterminate',
+        statusCategoryChangedAt: '2026-06-01T00:00:00.000Z'
+      })
+    )
+    updateIssueStatus(db, 1, 'BT-5', 'Concluído', 'done', '10002')
+    expect(getIssueByKey(db, 1, 'BT-5')!.status_category_changed_at).not.toBe(
+      '2026-06-01T00:00:00.000Z'
+    )
+  })
+
+  it('updateIssueStatus PRESERVA a data quando a categoria não muda', () => {
+    upsertIssue(
+      db,
+      1,
+      baseIssue('BT-6', {
+        statusCategory: 'done',
+        statusCategoryChangedAt: '2026-06-01T00:00:00.000Z'
+      })
+    )
+    // "Concluído" -> "Descartado": os dois são done, a janela do quadro não renova
+    updateIssueStatus(db, 1, 'BT-6', 'Descartado', 'done', '10003')
+    expect(getIssueByKey(db, 1, 'BT-6')!.status_category_changed_at).toBe(
+      '2026-06-01T00:00:00.000Z'
+    )
+  })
+
   it('updateIssueStatus sem id ZERA o status_id (id velho apontaria para a coluna errada)', () => {
     upsertIssue(db, 1, baseIssue('BT-4', { statusId: '10001' }))
     updateIssueStatus(db, 1, 'BT-4', 'Concluído', 'done')

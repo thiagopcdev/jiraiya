@@ -133,7 +133,12 @@ export function isReadOnlySprint(
   return active === null || shown.jiraId !== active.jiraId
 }
 
-/** Janela de "recém-concluído" da coluna de concluídos em quadro kanban. */
+/**
+ * Janela de "recém-concluído" do quadro kanban quando a pref não é informada
+ * (14 dias = o padrão do Jira). O quadro do Jira permite outro valor por quadro
+ * ("ocultar itens concluídos com mais de"), e a API de configuração não expõe
+ * esse ajuste — por isso ele é uma pref do app (`boardDoneDays`).
+ */
 const RECENTLY_DONE_DAYS = 14
 
 /**
@@ -145,21 +150,25 @@ const RECENTLY_DONE_DAYS = 14
  * null → [].
  *
  * Kanban/simple: cards do projeto do board ainda abertos ou "recém-concluídos"
- * (últimos 14 dias, espelhando o comportamento do Jira).
+ * (`doneDays`, espelhando o comportamento do Jira).
  *
- * A data de conclusão é `resolved_at` (campo `resolutiondate` do Jira) com
- * fallback para `updated_at`: workflow que não preenche a Resolução deixa
- * `resolutiondate` NULL mesmo em card concluído, e sem o fallback a coluna de
- * concluídos ficava SEMPRE vazia no quadro. `updated_at` também cobre o card
- * que acabou de ser arrastado para concluído aqui (board:move só bumpa
- * updated_at), que sem isso desapareceria na hora.
+ * A data de conclusão sai de `COALESCE(resolved_at, status_category_changed_at,
+ * updated_at)`, nessa ordem:
+ * - `resolved_at` (`resolutiondate`) é o dado mais preciso, mas fica NULL em
+ *   workflow que não preenche a Resolução — sem os fallbacks a coluna de
+ *   concluídos ficava SEMPRE vazia;
+ * - `status_category_changed_at` é a régua que o próprio Jira usa no quadro;
+ * - `updated_at` é último recurso, só para card sincronizado antes da migration
+ *   012. É um proxy ruim (qualquer comentário empurra a data e ressuscita card
+ *   concluído há meses), por isso vem depois dos dois.
  *
  * `board.projectKey` null → [].
  */
 export function listBoardScopeIssues(
   q: { db: Database.Database; workspaceId: number; siteUrl: string },
   board: Board,
-  sprintJiraId: number | null
+  sprintJiraId: number | null,
+  doneDays: number = RECENTLY_DONE_DAYS
 ): Issue[] {
   const { db, workspaceId, siteUrl } = q
   let rows: IssueRow[]
@@ -176,13 +185,13 @@ export function listBoardScopeIssues(
     if (board.projectKey === null) return []
     // cutoff em ISO (não datetime('now')) para comparar com o mesmo formato em
     // que as datas são gravadas — 'YYYY-MM-DDTHH:MM:SS.sssZ'
-    const cutoff = new Date(Date.now() - RECENTLY_DONE_DAYS * 24 * 60 * 60 * 1000).toISOString()
+    const cutoff = new Date(Date.now() - doneDays * 24 * 60 * 60 * 1000).toISOString()
     rows = db
       .prepare(
         `SELECT * FROM issue
          WHERE workspace_id = ? AND project_key = ?
            AND (status_category != 'done' OR status_category IS NULL
-                OR COALESCE(resolved_at, updated_at) >= ?)
+                OR COALESCE(resolved_at, status_category_changed_at, updated_at) >= ?)
          ORDER BY updated_at DESC`
       )
       .all(workspaceId, board.projectKey, cutoff) as IssueRow[]

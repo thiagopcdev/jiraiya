@@ -60,6 +60,9 @@ export function mapIssue(
     flagged,
     createdAt: f.created ? new Date(f.created).toISOString() : null,
     updatedAt: f.updated ? new Date(f.updated).toISOString() : null,
-    resolvedAt: f.resolutiondate ? new Date(f.resolutiondate).toISOString() : null
+    resolvedAt: f.resolutiondate ? new Date(f.resolutiondate).toISOString() : null,
+    statusCategoryChangedAt: f.statuscategorychangedate
+      ? new Date(f.statuscategorychangedate).toISOString()
+      : null
   }
 }

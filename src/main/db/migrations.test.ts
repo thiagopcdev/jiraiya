@@ -35,11 +35,12 @@ describe('migrations', () => {
     db.close()
   })
 
-  it('011: DB que vem da 010 ganha status_id e perde o cursor de issues', () => {
+  it('011/012: DB que vem da 010 ganha status_id e status_category_changed_at, e perde o cursor de issues', () => {
     const db = new Database(':memory:')
     runMigrations(db)
-    // simula o estado pré-011: coluna inexistente, cursor de issues gravado
+    // simula o estado pré-011: colunas inexistentes, cursor de issues gravado
     db.exec('ALTER TABLE issue DROP COLUMN status_id')
+    db.exec('ALTER TABLE issue DROP COLUMN status_category_changed_at')
     db.prepare(
       `INSERT INTO workspace (id, site_url, email, account_id, created_at)
        VALUES (1, 'u', 'e', 'a', 'now')`
@@ -58,11 +59,12 @@ describe('migrations', () => {
       db.prepare(`SELECT name FROM pragma_table_info('issue')`).all() as Array<{ name: string }>
     ).map((c) => c.name)
     expect(cols).toContain('status_id')
+    expect(cols).toContain('status_category_changed_at')
 
     const cursors = db
       .prepare(`SELECT resource, cursor FROM sync_state ORDER BY resource`)
       .all() as Array<{ resource: string; cursor: string | null }>
-    // o backfill precisa reprocessar as issues para preencher status_id;
+    // o backfill precisa reprocessar as issues para preencher as colunas novas;
     // os outros recursos não são afetados
     expect(cursors).toEqual([
       { resource: 'issues', cursor: null },

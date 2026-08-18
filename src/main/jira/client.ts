@@ -51,6 +51,9 @@ const BASE_FIELDS = [
   'created',
   'updated',
   'resolutiondate',
+  // data em que o card entrou na categoria atual: é a régua que o Jira usa para
+  // esconder concluído no quadro (resolutiondate fica NULL em workflow sem Resolução)
+  'statuscategorychangedate',
   'labels',
   'parent',
   'project'

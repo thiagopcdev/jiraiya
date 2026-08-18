@@ -295,6 +295,15 @@ const migrations: string[] = [
   `
   ALTER TABLE issue ADD COLUMN status_id TEXT;
   UPDATE sync_state SET cursor = NULL WHERE resource = 'issues';
+  `,
+  // 012: data em que o card entrou na categoria de status atual
+  // (`statuscategorychangedate`). É a régua do Jira para esconder concluído no
+  // quadro; até aqui a janela caía em `updated_at`, que qualquer comentário
+  // empurra — card concluído em junho voltava ao quadro por ter sido comentado
+  // ontem. Zera o cursor de issues pelo mesmo motivo da 011.
+  `
+  ALTER TABLE issue ADD COLUMN status_category_changed_at TEXT;
+  UPDATE sync_state SET cursor = NULL WHERE resource = 'issues';
   `
 ]
 
